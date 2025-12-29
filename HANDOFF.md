@@ -1,39 +1,19 @@
-# Handoff: Comprehensive Model Routing to Copilot
+# Handoff: Adjusted Copilot Model Aliases
 
 ## Summary
-Updated `opencode.json` to route ALL models referenced in `oh-my-opencode` documentation to use the `copilot` provider. This ensures all agents and tools use your GitHub Copilot subscription.
+Updated `opencode.json` with more specific model mappings to the `copilot` provider.
 
-## Models Routed
-The following models now redirect to `copilot/claude-3-5-sonnet` or `copilot/gpt-4o`:
+## Changes
+- **`gpt-5.2` (Oracle)**: Mapped to **`copilot/o1-preview`** (better reasoning match than gpt-4o).
+- **Gemini Pro/Flash**: Mapped to **`copilot/gpt-4o`** (general purpose fallback).
+- **Claude Sonnet/Opus 4.5**: Remain mapped to **`copilot/claude-3-5-sonnet`**.
+- **Grok Code**: Mapped to **`copilot/gpt-4o`**.
 
-### Anthropic
-- `claude-3-5-sonnet`
-- `claude-3-opus`
-- `claude-sonnet-4-5`
-- `claude-sonnet-4-5-thinking`
-- `claude-opus-4-5`
-- `claude-opus-4-5-thinking`
-- `claude-haiku-4-5`
-- `claude-sonnet-4`
-- `claude-opus-4`
-
-### OpenAI
-- `gpt-4o`
-- `gpt-4`
-- `o1`
-- `o1-preview`
-- `o1-mini`
-- `gpt-5.2` (mapped to gpt-4o)
-
-### Google / Other
-- `gemini-3-pro-high`
-- `gemini-3-pro-medium`
-- `gemini-3-pro-low`
-- `gemini-3-flash`
-- `gemini-3-flash-lite`
-- `gpt-oss-120b-medium`
-- `grok-code`
+## Current Mappings
+- `claude-3-5-sonnet` & variants -> `copilot/claude-3-5-sonnet`
+- `claude-opus-4-5` & variants -> `copilot/claude-3-5-sonnet`
+- `gpt-4o`, `gemini-pro`, `gemini-flash`, `grok` -> `copilot/gpt-4o`
+- `gpt-5.2`, `o1` -> `copilot/o1-preview`
 
 ## Next Steps
-- Verify that agents using these aliases work correctly.
-- Continue with UI implementation for model alias management if desired.
+- Validate agent performance with these specific mappings.
