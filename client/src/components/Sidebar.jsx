@@ -1,6 +1,7 @@
 import { Terminal, Box, Puzzle, FileCode, Edit3 } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 
-export default function Sidebar({ activeTab, setActiveTab, selectedFile }) {
+export default function Sidebar({ selectedFile }) {
   return (
     <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
       <div className="p-4 border-b border-gray-700 flex items-center gap-2">
@@ -9,11 +10,11 @@ export default function Sidebar({ activeTab, setActiveTab, selectedFile }) {
       </div>
       
       <nav className="flex-1 p-4 space-y-2">
-        <SidebarItem icon={<Terminal />} label="MCP Servers" active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} />
-        <SidebarItem icon={<Puzzle />} label="Skills" active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} />
-        <SidebarItem icon={<FileCode />} label="Plugins" active={activeTab === 'plugins'} onClick={() => setActiveTab('plugins')} />
+        <SidebarItem to="/mcp" icon={<Terminal />} label="MCP Servers" />
+        <SidebarItem to="/skills" icon={<Puzzle />} label="Skills" />
+        <SidebarItem to="/plugins" icon={<FileCode />} label="Plugins" />
         {selectedFile && (
-          <SidebarItem icon={<Edit3 />} label={`Editing: ${selectedFile.name}`} active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+          <SidebarItem to="/editor" icon={<Edit3 />} label={`Editing: ${selectedFile.name}`} />
         )}
       </nav>
 
@@ -23,14 +24,14 @@ export default function Sidebar({ activeTab, setActiveTab, selectedFile }) {
   );
 }
 
-function SidebarItem({ icon, label, active, onClick }) {
+function SidebarItem({ icon, label, to }) {
   return (
-    <button 
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
+    <NavLink 
+      to={to}
+      className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
     >
       {icon}
       <span className="text-sm font-medium">{label}</span>
-    </button>
+    </NavLink>
   )
 }
