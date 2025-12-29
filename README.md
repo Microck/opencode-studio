@@ -25,6 +25,32 @@ Opencode Studio is a local GUI application designed to manage your Opencode conf
 4. **Settings**:
    - Manage global configuration, model aliases, permissions, and agent settings.
 
+## Quickstart
+
+To get up and running immediately, use the provided quickstart scripts:
+
+**Windows:**
+```batch
+quickstart.bat
+```
+
+**macOS / Linux:**
+```bash
+chmod +x quickstart.sh
+./quickstart.sh
+```
+
+## Screenshots
+
+### MCP Manager
+![MCP Manager Dashboard](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/mcp-manager.png)
+
+### Skill Editor
+![Skill Editor](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/skill-editor.png)
+
+### Settings
+![Settings Page](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/settings.png)
+
 ## Installation & Usage
 
 ### Prerequisites
