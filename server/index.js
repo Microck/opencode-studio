@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -12,105 +11,203 @@ const PORT = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Auto-detect config path
 const HOME_DIR = os.homedir();
-const CONFIG_DIR = path.join(HOME_DIR, '.config', 'opencode');
-const OPENCODE_JSON = path.join(CONFIG_DIR, 'opencode.json');
-const SKILL_DIR = path.join(CONFIG_DIR, 'skill');
-const PLUGIN_DIR = path.join(CONFIG_DIR, 'plugin');
+const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
 
-console.log(`Looking for config at: ${CONFIG_DIR}`);
+const CANDIDATE_PATHS = [
+    path.join(HOME_DIR, '.config', 'opencode'),
+    path.join(HOME_DIR, '.opencode'),
+    path.join(process.env.APPDATA || '', 'opencode'),
+    path.join(process.env.LOCALAPPDATA || '', 'opencode'),
+    path.join(HOME_DIR, 'AppData', 'Roaming', 'opencode'),
+    path.join(HOME_DIR, 'AppData', 'Local', 'opencode'),
+];
 
-// Helper to read JSON
-const readConfig = () => {
-    if (!fs.existsSync(OPENCODE_JSON)) {
-        return { error: "Config file not found" };
+function detectConfigDir() {
+    for (const candidate of CANDIDATE_PATHS) {
+        const configFile = path.join(candidate, 'opencode.json');
+        if (fs.existsSync(configFile)) {
+            return candidate;
+        }
     }
-    try {
-        const data = fs.readFileSync(OPENCODE_JSON, 'utf8');
-        return JSON.parse(data);
-    } catch (err) {
-        return { error: "Failed to parse config", details: err.message };
-    }
-};
+    return null;
+}
 
-// Helper to write JSON
-const writeConfig = (data) => {
-    try {
-        fs.writeFileSync(OPENCODE_JSON, JSON.stringify(data, null, 2), 'utf8');
-        return { success: true };
-    } catch (err) {
-        return { error: "Failed to write config", details: err.message };
+function loadStudioConfig() {
+    if (fs.existsSync(STUDIO_CONFIG_PATH)) {
+        try {
+            return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, 'utf8'));
+        } catch {
+            return {};
+        }
     }
-};
+    return {};
+}
 
-// GET /api/config
+function saveStudioConfig(config) {
+    const dir = path.dirname(STUDIO_CONFIG_PATH);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+}
+
+function getConfigDir() {
+    const studioConfig = loadStudioConfig();
+    if (studioConfig.configPath && fs.existsSync(studioConfig.configPath)) {
+        return studioConfig.configPath;
+    }
+    return detectConfigDir();
+}
+
+function getPaths() {
+    const configDir = getConfigDir();
+    if (!configDir) return null;
+    return {
+        configDir,
+        opencodeJson: path.join(configDir, 'opencode.json'),
+        skillDir: path.join(configDir, 'skill'),
+        pluginDir: path.join(configDir, 'plugin'),
+    };
+}
+
+console.log(`Detected config at: ${getConfigDir() || 'NOT FOUND'}`);
+
+app.get('/api/paths', (req, res) => {
+    const detected = detectConfigDir();
+    const studioConfig = loadStudioConfig();
+    const current = getConfigDir();
+    
+    res.json({
+        detected,
+        manual: studioConfig.configPath || null,
+        current,
+        candidates: CANDIDATE_PATHS,
+    });
+});
+
+app.post('/api/paths', (req, res) => {
+    const { configPath } = req.body;
+    
+    if (configPath) {
+        const configFile = path.join(configPath, 'opencode.json');
+        if (!fs.existsSync(configFile)) {
+            return res.status(400).json({ error: 'opencode.json not found at specified path' });
+        }
+    }
+    
+    const studioConfig = loadStudioConfig();
+    studioConfig.configPath = configPath || null;
+    saveStudioConfig(studioConfig);
+    
+    res.json({ success: true, current: getConfigDir() });
+});
+
 app.get('/api/config', (req, res) => {
-    res.json(readConfig());
+    const paths = getPaths();
+    if (!paths) {
+        return res.status(404).json({ error: 'Opencode installation not found', notFound: true });
+    }
+    
+    if (!fs.existsSync(paths.opencodeJson)) {
+        return res.status(404).json({ error: 'Config file not found' });
+    }
+    
+    try {
+        const data = fs.readFileSync(paths.opencodeJson, 'utf8');
+        res.json(JSON.parse(data));
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to parse config', details: err.message });
+    }
 });
 
-// POST /api/config
 app.post('/api/config', (req, res) => {
-    const result = writeConfig(req.body);
-    if (result.error) return res.status(500).json(result);
-    res.json(result);
+    const paths = getPaths();
+    if (!paths) {
+        return res.status(404).json({ error: 'Opencode installation not found' });
+    }
+    
+    try {
+        fs.writeFileSync(paths.opencodeJson, JSON.stringify(req.body, null, 2), 'utf8');
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to write config', details: err.message });
+    }
 });
 
-// GET /api/skills
 app.get('/api/skills', (req, res) => {
-    if (!fs.existsSync(SKILL_DIR)) return res.json([]);
-    const files = fs.readdirSync(SKILL_DIR).filter(f => f.endsWith('.md'));
+    const paths = getPaths();
+    if (!paths) return res.json([]);
+    if (!fs.existsSync(paths.skillDir)) return res.json([]);
+    
+    const files = fs.readdirSync(paths.skillDir).filter(f => f.endsWith('.md'));
     res.json(files);
 });
 
-// GET /api/skills/:name
 app.get('/api/skills/:name', (req, res) => {
-    const filePath = path.join(SKILL_DIR, req.params.name);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Skill not found" });
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const filePath = path.join(paths.skillDir, req.params.name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Skill not found' });
+    
     const content = fs.readFileSync(filePath, 'utf8');
     res.json({ name: req.params.name, content });
 });
 
-// POST /api/skills/:name
 app.post('/api/skills/:name', (req, res) => {
-    const filePath = path.join(SKILL_DIR, req.params.name);
-    // Ensure dir exists
-    if (!fs.existsSync(SKILL_DIR)) fs.mkdirSync(SKILL_DIR, { recursive: true });
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
+    if (!fs.existsSync(paths.skillDir)) {
+        fs.mkdirSync(paths.skillDir, { recursive: true });
+    }
+    
+    const filePath = path.join(paths.skillDir, req.params.name);
     fs.writeFileSync(filePath, req.body.content, 'utf8');
     res.json({ success: true });
 });
 
-// DELETE /api/skills/:name
 app.delete('/api/skills/:name', (req, res) => {
-    const filePath = path.join(SKILL_DIR, req.params.name);
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const filePath = path.join(paths.skillDir, req.params.name);
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
     }
     res.json({ success: true });
 });
 
-// GET /api/plugins
 app.get('/api/plugins', (req, res) => {
-    if (!fs.existsSync(PLUGIN_DIR)) return res.json([]);
-    const files = fs.readdirSync(PLUGIN_DIR).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+    const paths = getPaths();
+    if (!paths) return res.json([]);
+    if (!fs.existsSync(paths.pluginDir)) return res.json([]);
+    
+    const files = fs.readdirSync(paths.pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
     res.json(files);
 });
 
-// GET /api/plugins/:name
 app.get('/api/plugins/:name', (req, res) => {
-    const filePath = path.join(PLUGIN_DIR, req.params.name);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Plugin not found" });
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const filePath = path.join(paths.pluginDir, req.params.name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Plugin not found' });
+    
     const content = fs.readFileSync(filePath, 'utf8');
     res.json({ name: req.params.name, content });
 });
 
-// POST /api/plugins/:name
 app.post('/api/plugins/:name', (req, res) => {
-    const filePath = path.join(PLUGIN_DIR, req.params.name);
-    // Ensure dir exists
-    if (!fs.existsSync(PLUGIN_DIR)) fs.mkdirSync(PLUGIN_DIR, { recursive: true });
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
+    if (!fs.existsSync(paths.pluginDir)) {
+        fs.mkdirSync(paths.pluginDir, { recursive: true });
+    }
+    
+    const filePath = path.join(paths.pluginDir, req.params.name);
     fs.writeFileSync(filePath, req.body.content, 'utf8');
     res.json({ success: true });
 });

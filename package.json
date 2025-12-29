@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"cd server && node index.js\" \"cd client && npm run dev\""
+    "start": "concurrently \"cd server && node index.js\" \"cd client-next && npm run dev\""
   },
   "keywords": [],
   "author": "",
