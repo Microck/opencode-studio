@@ -1,29 +1,35 @@
-# Refactor & MCP Feature - Handoff
+# Handoff: Model Alias Configuration Update
 
-## Goal
-Refactor the frontend to use `react-router-dom` for navigation and implement the "Add MCP Server" feature.
+## Summary
+We successfully updated the user's local `opencode.json` configuration to alias standard AI models to the `copilot` provider. This ensures that requests for models like `claude-3-5-sonnet` and `gpt-4o` are routed through GitHub Copilot. We also brainstormed a future UI for managing these aliases.
 
-## Progress
-- [x] Installed `vitest` and set up testing infrastructure.
-- [x] Extracted `Sidebar` component.
-- [x] Implemented proper routing in `App.jsx` using `Routes`, `Route`, and `useNavigate`.
-- [x] Created `MCPManager`, `SkillEditor`, `PluginHub` page components (extracted from `App.jsx`).
-- [x] Implemented `AddMCPModal` for adding new MCP servers.
-- [x] Integrated `AddMCPModal` into `MCPManager`.
-- [x] Updated `App.test.jsx` and `Sidebar.test.jsx` to work with the new router context.
-- [x] Verified tests pass.
+## Accomplishments
+1.  **Configuration Update**:
+    -   Programmatically updated `C:\Users\Microck\.config\opencode\opencode.json`.
+    -   Added `model.aliases` section:
+        ```json
+        "model": {
+          "aliases": {
+            "claude-3-5-sonnet": { "provider": "copilot", "model": "claude-3-5-sonnet" },
+            "gpt-4o": { "provider": "copilot", "model": "gpt-4o" }
+          }
+        }
+        ```
+    -   Verified the write operation was successful.
+2.  **UI Brainstorming**:
+    -   Created a plan for exposing this configuration in the UI.
+    -   Documented in `docs/plans/brainstorm_model_alias_ui.md`.
+    -   Proposed adding a `Settings` page with a "Model Aliases" section.
 
-## What Worked
-- Routing refactor is complete and clean.
-- "Add MCP Server" UI is functional (adds to config in memory/backend via `addMCP` function in App).
-- Navigation to `/editor` works correctly when loading/creating files.
-
-## What Failed / Issues
-- Initial tests failed because components using `useNavigate` or `useLocation` were not wrapped in `<BrowserRouter>` in the test files. This was fixed.
-- `act(...)` warnings in tests, but tests pass.
+## Current State
+-   **Backend**: No changes needed (generic config endpoint works).
+-   **Frontend**: No changes made in this session (UI brainstorming only).
+-   **Configuration**: `opencode.json` now enforces Copilot for specific models.
 
 ## Next Steps
-1.  **Start a new session.**
-2.  **Verify**: Run the app (`npm start`) and test the "Add MCP Server" flow manually to ensure it persists to `opencode.json`.
-3.  **Enhancement**: The `AddMCPModal` currently defaults to `stdio` type. Future work could add SSE support.
-4.  **Enhancement**: Add form validation and better error handling for the "Add MCP Server" modal.
+1.  **Implement Settings Page**:
+    -   Create `client/src/pages/Settings.jsx`.
+    -   Add route `/settings`.
+    -   Implement UI to list, add, edit, and delete model aliases.
+2.  **Enhance Config Safety**:
+    -   Consider more robust backend validation or partial updates to prevent accidental config overwrites on the frontend.

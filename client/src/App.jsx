@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { Save, X } from 'lucide-react';
 import Layout from './components/Layout';
 import MCPManager from './pages/MCPManager';

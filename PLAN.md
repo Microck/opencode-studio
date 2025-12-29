@@ -15,7 +15,9 @@ Opencode Studio is a local GUI application designed to manage your Opencode conf
 1. **MCP Manager**:
    - Visual toggle switches to enable/disable MCP servers.
    - Delete unused MCP configurations.
-   - Add new MCP servers (placeholder UI implemented).
+   - **Add new MCP servers**:
+     - Supports `stdio` (Local) and `sse` (Remote) connection types.
+     - Validates input fields before submission.
 2. **Skill Editor**:
    - Browse existing skills in `.config/opencode/skill`.
    - Create new Markdown skill files.
