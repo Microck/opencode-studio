@@ -1,19 +1,18 @@
-# Handoff: Adjusted Copilot Model Aliases
+# Handoff: Corrected Copilot Model Aliases
 
 ## Summary
-Updated `opencode.json` with more specific model mappings to the `copilot` provider.
+Updated `opencode.json` to map Gemini 3 models to their specific Copilot counterparts (`gemini-1.5-pro` and `gemini-1.5-flash`) instead of `gpt-4o`.
 
 ## Changes
-- **`gpt-5.2` (Oracle)**: Mapped to **`copilot/o1-preview`** (better reasoning match than gpt-4o).
-- **Gemini Pro/Flash**: Mapped to **`copilot/gpt-4o`** (general purpose fallback).
-- **Claude Sonnet/Opus 4.5**: Remain mapped to **`copilot/claude-3-5-sonnet`**.
-- **Grok Code**: Mapped to **`copilot/gpt-4o`**.
+- **Gemini 3 Pro** (High/Medium/Low): Mapped to **`copilot/gemini-1.5-pro`**.
+- **Gemini 3 Flash** (Flash/Lite): Mapped to **`copilot/gemini-1.5-flash`**.
 
 ## Current Mappings
-- `claude-3-5-sonnet` & variants -> `copilot/claude-3-5-sonnet`
-- `claude-opus-4-5` & variants -> `copilot/claude-3-5-sonnet`
-- `gpt-4o`, `gemini-pro`, `gemini-flash`, `grok` -> `copilot/gpt-4o`
-- `gpt-5.2`, `o1` -> `copilot/o1-preview`
+- **Claude Models**: `claude-3-5-sonnet` (Copilot)
+- **GPT-4o/Grok**: `gpt-4o` (Copilot)
+- **GPT-5.2/o1**: `o1-preview` (Copilot)
+- **Gemini Pro Models**: `gemini-1.5-pro` (Copilot)
+- **Gemini Flash Models**: `gemini-1.5-flash` (Copilot)
 
 ## Next Steps
-- Validate agent performance with these specific mappings.
+- Validate that the Copilot provider supports `gemini-1.5-pro` and `gemini-1.5-flash` as aliases.
