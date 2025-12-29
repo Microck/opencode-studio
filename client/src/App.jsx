@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Terminal, Box, Puzzle, FileCode, Settings, Save, Plus, Trash2, Edit3, X } from 'lucide-react';
+import Sidebar from './components/Sidebar';
 
 const API_URL = 'http://localhost:3001/api';
 
@@ -98,23 +99,14 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white font-sans overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
-        <div className="p-4 border-b border-gray-700 flex items-center gap-2">
-          <Box className="w-6 h-6 text-blue-400" />
-          <h1 className="text-xl font-bold">Opencode Studio</h1>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-2">
-          <SidebarItem icon={<Terminal />} label="MCP Servers" active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} />
-          <SidebarItem icon={<Puzzle />} label="Skills" active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} />
-          <SidebarItem icon={<FileCode />} label="Plugins" active={activeTab === 'plugins'} onClick={() => setActiveTab('plugins')} />
-          {selectedFile && (
-            <SidebarItem icon={<Edit3 />} label={`Editing: ${selectedFile.name}`} active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
-          )}
-        </nav>
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        selectedFile={selectedFile} 
+      />
 
-        <div className="p-4 border-t border-gray-700 text-xs text-gray-500 text-center">
+      <div className="w-64 hidden bg-gray-800 border-r border-gray-700 flex-col"> 
+         <div className="p-4 border-t border-gray-700 text-xs text-gray-500 text-center">
             {status && <span className="text-green-400">{status}</span>}
         </div>
       </div>
@@ -228,18 +220,6 @@ function App() {
       </div>
     </div>
   );
-}
-
-function SidebarItem({ icon, label, active, onClick }) {
-    return (
-        <button 
-            onClick={onClick}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
-        >
-            {icon}
-            <span className="text-sm font-medium">{label}</span>
-        </button>
-    )
 }
 
 export default App;
