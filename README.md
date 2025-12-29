@@ -43,13 +43,13 @@ chmod +x quickstart.sh
 ## Screenshots
 
 ### MCP Manager
-![MCP Manager Dashboard](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/mcp-manager.png)
+![MCP Manager Dashboard](docs/screenshots/mcp-manager.png)
 
 ### Skill Editor
-![Skill Editor](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/skill-editor.png)
+![Skill Editor](docs/screenshots/skill-editor.png)
 
 ### Settings
-![Settings Page](https://raw.githubusercontent.com/Microck/opencode-studio/master/docs/screenshots/settings.png)
+![Settings Page](docs/screenshots/settings.png)
 
 ## Installation & Usage
 
