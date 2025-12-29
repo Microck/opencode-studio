@@ -1,15 +1,16 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { BrowserRouter } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import React from 'react';
-import { Terminal } from 'lucide-react';
 
 describe('Sidebar', () => {
   it('renders navigation items', () => {
-    const activeTab = 'mcp';
-    const setActiveTab = vi.fn();
-    
-    render(<Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />);
+    render(
+      <BrowserRouter>
+        <Sidebar />
+      </BrowserRouter>
+    );
     expect(screen.getByText('MCP Servers')).toBeInTheDocument();
   });
 });

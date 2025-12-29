@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { Terminal, Box, Puzzle, FileCode, Settings, Save, Plus, Trash2, Edit3, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Save, X } from 'lucide-react';
 import Layout from './components/Layout';
+import MCPManager from './pages/MCPManager';
+import SkillEditor from './pages/SkillEditor';
+import PluginHub from './pages/PluginHub';
 
 const API_URL = 'http://localhost:3001/api';
 
 function App() {
+  const navigate = useNavigate();
   const [config, setConfig] = useState(null);
   const [skills, setSkills] = useState([]);
   const [plugins, setPlugins] = useState([]);
@@ -65,11 +69,19 @@ function App() {
     saveConfig(newConfig);
   }
 
+  const addMCP = (key, mcpConfig) => {
+    const newConfig = { ...config };
+    if (!newConfig.mcp) newConfig.mcp = {};
+    newConfig.mcp[key] = mcpConfig;
+    saveConfig(newConfig);
+  };
+
   const loadFile = async (type, name) => {
     try {
       const res = await axios.get(`${API_URL}/${type}/${name}`);
       setSelectedFile({ type, name });
       setFileContent(res.data.content);
+      navigate('/editor');
     } catch (err) {
       alert("Failed to load file");
     }
@@ -91,85 +103,20 @@ function App() {
     if (!name) return;
     setSelectedFile({ type, name });
     setFileContent(type === 'skills' ? '# New Skill' : '// New Plugin');
+    navigate('/editor');
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading Opencode Studio...</div>;
 
-  const MCPView = () => (
-    config && (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.entries(config.mcp || {}).map(([key, mcp]) => (
-            <div key={key} className={`p-4 rounded-lg border ${mcp.enabled ? 'border-blue-500 bg-gray-800' : 'border-gray-700 bg-gray-800/50'} relative group`}>
-              <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg">{key}</h3>
-                  <div className="flex gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={mcp.enabled} onChange={() => toggleMCP(key)} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
-                      <button onClick={() => deleteMCP(key)} className="text-gray-500 hover:text-red-500"><Trash2 size={16}/></button>
-                  </div>
-              </div>
-              <p className="text-xs text-gray-400 mb-2 font-mono bg-gray-900 p-1 rounded overflow-hidden text-ellipsis whitespace-nowrap">
-                  {mcp.command && mcp.command.join(' ')}
-              </p>
-              <span className={`text-xs px-2 py-0.5 rounded ${mcp.type === 'local' ? 'bg-purple-900 text-purple-200' : 'bg-green-900 text-green-200'}`}>
-                  {mcp.type}
-              </span>
-            </div>
-          ))}
-            <div className="p-4 rounded-lg border border-gray-700 border-dashed flex flex-col items-center justify-center text-gray-500 hover:bg-gray-800 hover:text-white cursor-pointer transition h-32">
-              <Plus size={24} />
-              <span className="text-sm mt-2">Add MCP Server</span>
-            </div>
-        </div>
-      </div>
-    )
-  );
-
-  const SkillsView = () => (
-    <div>
-        <div className="flex justify-between mb-4">
-            <h3 className="text-xl">My Skills</h3>
-            <button onClick={() => createNewFile('skills')} className="px-3 py-1 bg-green-600 rounded flex items-center gap-2 text-sm"><Plus size={16}/> New Skill</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {skills.map(skill => (
-                <div key={skill} onClick={() => loadFile('skills', skill)} className="p-4 bg-gray-800 border border-gray-700 rounded hover:border-blue-500 cursor-pointer transition">
-                    <div className="flex items-center gap-2 mb-2">
-                        <FileCode className="text-yellow-500" size={20} />
-                        <span className="font-mono text-sm">{skill}</span>
-                    </div>
-                </div>
-            ))}
-              {skills.length === 0 && <p className="text-gray-500 italic">No skills found.</p>}
-        </div>
-    </div>
-  );
-
-  const PluginsView = () => (
-    <div>
-          <div className="flex justify-between mb-4">
-            <h3 className="text-xl">Local Plugins</h3>
-            <button onClick={() => createNewFile('plugins')} className="px-3 py-1 bg-green-600 rounded flex items-center gap-2 text-sm"><Plus size={16}/> New Plugin</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {plugins.map(plugin => (
-                <div key={plugin} onClick={() => loadFile('plugins', plugin)} className="p-4 bg-gray-800 border border-gray-700 rounded hover:border-blue-500 cursor-pointer transition">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Settings className="text-purple-500" size={20} />
-                        <span className="font-mono text-sm">{plugin}</span>
-                    </div>
-                </div>
-            ))}
-              {plugins.length === 0 && <p className="text-gray-500 italic">No local plugins found.</p>}
-        </div>
-    </div>
-  );
-
   const EditorView = () => (
     <div className="h-full flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">{selectedFile ? selectedFile.name : 'Editor'}</h2>
+            <button onClick={saveFile} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium">
+                <Save size={18} /> Save
+            </button>
+        </div>
+        {status && <div className="mb-4 p-2 bg-green-900/50 text-green-200 rounded border border-green-700">{status}</div>}
         <textarea 
             className="flex-1 bg-gray-950 text-gray-200 font-mono p-4 rounded border border-gray-700 focus:border-blue-500 outline-none resize-none"
             value={fileContent}
@@ -183,9 +130,9 @@ function App() {
     <Routes>
       <Route path="/" element={<Layout selectedFile={selectedFile} />}>
         <Route index element={<Navigate to="/mcp" replace />} />
-        <Route path="mcp" element={<MCPView />} />
-        <Route path="skills" element={<SkillsView />} />
-        <Route path="plugins" element={<PluginsView />} />
+        <Route path="mcp" element={<MCPManager config={config} toggleMCP={toggleMCP} deleteMCP={deleteMCP} addMCP={addMCP} />} />
+        <Route path="skills" element={<SkillEditor skills={skills} loadFile={loadFile} createNewFile={createNewFile} />} />
+        <Route path="plugins" element={<PluginHub plugins={plugins} loadFile={loadFile} createNewFile={createNewFile} />} />
         <Route path="editor" element={<EditorView />} />
       </Route>
     </Routes>
