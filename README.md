@@ -9,7 +9,6 @@
 <p align="center">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
   <a href="https://nextjs.org/"><img alt="next.js" src="https://img.shields.io/badge/next.js-16-black.svg" /></a>
-  <a href="https://ui.shadcn.com/"><img alt="shadcn" src="https://img.shields.io/badge/shadcn/ui-latest-black.svg" /></a>
 </p>
 
 ---
