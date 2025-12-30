@@ -158,8 +158,36 @@ app.get('/api/config', (req, res) => {
     }
     
     try {
-        const data = fs.readFileSync(paths.opencodeJson, 'utf8');
-        res.json(JSON.parse(data));
+        const opencodeData = fs.readFileSync(paths.opencodeJson, 'utf8');
+        let opencodeConfig = JSON.parse(opencodeData);
+        let changed = false;
+
+        // Migration: Move root providers to model.providers
+        if (opencodeConfig.providers) {
+            const providers = opencodeConfig.providers;
+            delete opencodeConfig.providers;
+
+            if (typeof opencodeConfig.model === 'string') {
+                // If model is a string, we can't easily put providers inside it without changing it to an object
+                // We'll convert it to { aliases: {}, providers: ... } if needed, or just keep it as is
+                // but for CLI compatibility, if it's a string, it stays a string.
+                // However, we want to keep the providers data.
+                opencodeConfig.model = {
+                    aliases: {},
+                    providers: providers
+                };
+            } else {
+                opencodeConfig.model = {
+                    ...(opencodeConfig.model || {}),
+                    providers: providers
+                };
+            }
+            
+            fs.writeFileSync(paths.opencodeJson, JSON.stringify(opencodeConfig, null, 2), 'utf8');
+            changed = true;
+        }
+
+        res.json(opencodeConfig);
     } catch (err) {
         res.status(500).json({ error: 'Failed to parse config', details: err.message });
     }

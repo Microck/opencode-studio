@@ -39,7 +39,6 @@ import {
   Hash,
   Shield,
   Bot,
-  Cloud,
   Keyboard,
   Monitor,
   FolderCog,
@@ -83,7 +82,6 @@ export default function SettingsPage() {
     aliases: false,
     permissions: false,
     agents: false,
-    providers: false,
     keybinds: false,
     tui: false,
     path: false,
@@ -661,82 +659,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Collapsible open={openSections.providers} onOpenChange={() => toggleSection("providers")}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Cloud className="h-5 w-5" />
-                  <CardTitle>Providers</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.providers ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Configure AI provider settings</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-4 pt-0">
-              {Object.entries(config?.providers || {}).map(([name, provider]) => (
-                <div key={name} className="p-4 bg-muted/50 rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-medium">{name}</Label>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        const rest = { ...(config?.providers || {}) };
-                        delete rest[name];
-                        updateConfig({ providers: rest });
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Base URL</Label>
-                      <Input
-                        value={provider.options?.baseURL || ""}
-                        onChange={(e) => updateConfig({
-                          providers: {
-                            ...config?.providers,
-                            [name]: {
-                              ...provider,
-                              options: { ...provider.options, baseURL: e.target.value || undefined },
-                            },
-                          },
-                        })}
-                        placeholder="https://api.example.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">API Key Env</Label>
-                      <Input
-                        value={provider.env?.[0] || ""}
-                        onChange={(e) => updateConfig({
-                          providers: {
-                            ...config?.providers,
-                            [name]: {
-                              ...provider,
-                              env: e.target.value ? [e.target.value] : undefined,
-                            },
-                          },
-                        })}
-                        placeholder="PROVIDER_API_KEY"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {Object.keys(config?.providers || {}).length === 0 && (
-                <p className="text-center text-muted-foreground py-8">No custom providers configured.</p>
-              )}
             </CardContent>
           </CollapsibleContent>
         </Card>

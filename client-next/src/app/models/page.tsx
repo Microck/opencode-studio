@@ -140,7 +140,14 @@ export default function ModelsPage() {
   const [editingModel, setEditingModel] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ context: "", output: "", attachments: false, reasoning: false });
 
-  const providers = config?.providers || {};
+  const getProviders = () => {
+    if (typeof config?.model === 'object' && config.model !== null) {
+      return config.model.providers || {};
+    }
+    return {};
+  };
+
+  const providers = getProviders();
   const currentModelString = typeof config?.model === "string" ? config.model : "";
 
   const getAllConfiguredModels = (): ConfiguredModel[] => {
@@ -165,7 +172,14 @@ export default function ModelsPage() {
   const updateProviders = async (newProviders: Record<string, ProviderConfig>) => {
     if (!config) return;
     try {
-      await saveConfig({ ...config, providers: newProviders });
+      const modelConfig = typeof config.model === 'object' && config.model !== null ? config.model : {};
+      await saveConfig({ 
+        ...config, 
+        model: {
+          ...modelConfig,
+          providers: newProviders
+        }
+      });
       toast.success("Saved");
     } catch {
       toast.error("Failed to save");

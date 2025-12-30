@@ -168,6 +168,7 @@ export interface ExperimentalConfig {
 
 export interface ModelConfig {
   aliases?: Record<string, ModelAlias>;
+  providers?: Record<string, ProviderConfig>;
 }
 
 export interface OpencodeConfig {
@@ -183,7 +184,6 @@ export interface OpencodeConfig {
   mcp?: Record<string, MCPConfig>;
   permissions?: PermissionConfig;
   agents?: AgentsConfig;
-  providers?: Record<string, ProviderConfig>;
   tools?: Record<string, boolean>;
   tui?: TUIConfig;
   keybinds?: KeybindsConfig;
