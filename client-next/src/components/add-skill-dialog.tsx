@@ -13,20 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle } from "lucide-react";
-import { saveSkill } from "@/lib/api";
+import { Plus, AlertCircle, Link, Loader2 } from "lucide-react";
+import { saveSkill, fetchUrl } from "@/lib/api";
 import { toast } from "sonner";
 
 interface AddSkillDialogProps {
   onSuccess: () => void;
 }
 
-const SKILL_TEMPLATE = `# Skill Name
-
-## Description
-Brief description of what this skill does.
-
-## When to Use
+const SKILL_TEMPLATE = `## When to Use
 - Scenario 1
 - Scenario 2
 
@@ -41,17 +36,144 @@ Example usage here
 \`\`\`
 `;
 
+function isUrl(str: string): boolean {
+  try {
+    const url = new URL(str.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function extractNameFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname;
+    const parts = pathname.split('/').filter(Boolean);
+    const filename = parts.pop() || '';
+    if (filename === 'SKILL.md' && parts.length > 0) {
+      return parts.pop() || '';
+    }
+    return filename.replace(/\.md$/, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function parseFrontmatter(content: string): { name: string; description: string; body: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) {
+    return { name: '', description: '', body: content };
+  }
+  
+  const frontmatter = match[1];
+  const body = content.slice(match[0].length).trim();
+  
+  let name = '';
+  let description = '';
+  
+  for (const line of frontmatter.split(/\r?\n/)) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim();
+      let value = line.slice(colonIdx + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || 
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (key === 'name') name = value;
+      if (key === 'description') description = value;
+    }
+  }
+  
+  return { name, description, body };
+}
+
 export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [content, setContent] = useState(SKILL_TEMPLATE);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const resetForm = () => {
     setName("");
+    setDescription("");
     setContent(SKILL_TEMPLATE);
     setError("");
+    setUrlInput("");
+  };
+
+  const handleFetchUrl = async () => {
+    if (!urlInput.trim()) return;
+    
+    if (!isUrl(urlInput)) {
+      setError("Please enter a valid URL (http:// or https://)");
+      return;
+    }
+
+    try {
+      setFetching(true);
+      setError("");
+      const result = await fetchUrl(urlInput.trim());
+      
+      const parsed = parseFrontmatter(result.content);
+      if (parsed.name || parsed.description) {
+        if (!name && parsed.name) setName(parsed.name);
+        if (!description && parsed.description) setDescription(parsed.description);
+        setContent(parsed.body);
+      } else {
+        setContent(result.content);
+        if (!name) {
+          const extractedName = extractNameFromUrl(urlInput);
+          if (extractedName) setName(extractedName);
+        }
+      }
+      
+      toast.success("Fetched content from URL");
+      setUrlInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch URL");
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (isUrl(pastedText)) {
+      e.preventDefault();
+      setUrlInput(pastedText);
+      try {
+        setFetching(true);
+        setError("");
+        const result = await fetchUrl(pastedText.trim());
+        
+        const parsed = parseFrontmatter(result.content);
+        if (parsed.name || parsed.description) {
+          if (!name && parsed.name) setName(parsed.name);
+          if (!description && parsed.description) setDescription(parsed.description);
+          setContent(parsed.body);
+        } else {
+          setContent(result.content);
+          if (!name) {
+            const extractedName = extractNameFromUrl(pastedText);
+            if (extractedName) setName(extractedName);
+          }
+        }
+        
+        toast.success("Fetched content from URL");
+        setUrlInput("");
+      } catch (err) {
+        setUrlInput(pastedText);
+        setError(err instanceof Error ? err.message : "Failed to fetch URL");
+      } finally {
+        setFetching(false);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,17 +185,32 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
       return;
     }
 
-    const fileName = name.endsWith(".md") ? name : `${name}.md`;
+    if (!description.trim()) {
+      setError("Please enter a skill description (required by OpenCode)");
+      return;
+    }
 
-    if (!/^[a-zA-Z0-9_-]+\.md$/.test(fileName)) {
-      setError("Name can only contain letters, numbers, hyphens, and underscores");
+    const skillName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(skillName)) {
+      setError("Name must be lowercase alphanumeric with single hyphens (e.g., my-skill)");
+      return;
+    }
+
+    if (skillName.length > 64) {
+      setError("Name must be 64 characters or less");
+      return;
+    }
+
+    if (description.length > 1024) {
+      setError("Description must be 1024 characters or less");
       return;
     }
 
     try {
       setLoading(true);
-      await saveSkill(fileName, content);
-      toast.success(`Created ${fileName}`);
+      await saveSkill(skillName, description, content);
+      toast.success(`Created skill: ${skillName}`);
       resetForm();
       setOpen(false);
       onSuccess();
@@ -105,8 +242,35 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2 p-3 rounded-lg border border-dashed">
+            <Label className="flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Import from URL
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Paste URL to a SKILL.md file..."
+                className="flex-1"
+              />
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={handleFetchUrl}
+                disabled={fetching || !urlInput.trim()}
+              >
+                {fetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Paste a URL to automatically fetch skill content (e.g., raw GitHub URL to SKILL.md)
+            </p>
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="skill-name">Skill Name</Label>
+            <Label htmlFor="skill-name">Name *</Label>
             <Input
               id="skill-name"
               value={name}
@@ -114,7 +278,20 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
               placeholder="my-skill"
             />
             <p className="text-xs text-muted-foreground">
-              Will be saved as {name ? (name.endsWith(".md") ? name : `${name}.md`) : "skill-name.md"}
+              Lowercase alphanumeric with hyphens. Will create: skill/{name || "my-skill"}/SKILL.md
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="skill-description">Description *</Label>
+            <Input
+              id="skill-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description of what this skill does"
+            />
+            <p className="text-xs text-muted-foreground">
+              Required by OpenCode. Helps the agent decide when to use this skill.
             </p>
           </div>
 
@@ -124,7 +301,7 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
               id="skill-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-sm min-h-[300px]"
+              className="font-mono text-sm min-h-[250px]"
             />
           </div>
 

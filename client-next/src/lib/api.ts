@@ -46,8 +46,8 @@ export async function getSkill(name: string): Promise<SkillFile> {
   return data;
 }
 
-export async function saveSkill(name: string, content: string): Promise<void> {
-  await api.post(`/skills/${name}`, { content });
+export async function saveSkill(name: string, description: string, content: string): Promise<void> {
+  await api.post(`/skills/${name}`, { description, content });
 }
 
 export async function deleteSkill(name: string): Promise<void> {
@@ -98,6 +98,17 @@ export async function getBackup(): Promise<BackupData> {
 
 export async function restoreBackup(backup: BackupData): Promise<void> {
   await api.post('/restore', backup);
+}
+
+export interface FetchUrlResult {
+  content: string;
+  filename: string;
+  url: string;
+}
+
+export async function fetchUrl(url: string): Promise<FetchUrlResult> {
+  const { data } = await api.post<FetchUrlResult>('/fetch-url', { url });
+  return data;
 }
 
 export default api;

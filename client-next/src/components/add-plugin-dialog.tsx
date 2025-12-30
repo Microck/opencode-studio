@@ -20,46 +20,67 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle } from "lucide-react";
-import { savePlugin } from "@/lib/api";
+import { Plus, AlertCircle, Link, Loader2 } from "lucide-react";
+import { savePlugin, fetchUrl } from "@/lib/api";
 import { toast } from "sonner";
 
 interface AddPluginDialogProps {
   onSuccess: () => void;
 }
 
-const JS_TEMPLATE = `// OpenCode Plugin
-// Export functions to extend OpenCode functionality
+const JS_TEMPLATE = `export const MyPlugin = async ({ project, client, $, directory, worktree }) => {
+  console.log("Plugin initialized!")
 
-export function onMessage(message) {
-  // Called when a message is received
-  console.log("Message:", message);
+  return {
+    event: async ({ event }) => {
+      if (event.type === "session.idle") {
+        console.log("Session completed!")
+      }
+    },
+  }
 }
+`;
 
-export function onResponse(response) {
-  // Called when a response is generated
-  return response;
+const TS_TEMPLATE = `import type { Plugin } from "@opencode-ai/plugin"
+
+export const MyPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  console.log("Plugin initialized!")
+
+  return {
+    event: async ({ event }) => {
+      if (event.type === "session.idle") {
+        console.log("Session completed!")
+      }
+    },
+  }
 }
 `;
 
-const TS_TEMPLATE = `// OpenCode Plugin (TypeScript)
-// Export functions to extend OpenCode functionality
-
-interface Message {
-  role: string;
-  content: string;
+function isUrl(str: string): boolean {
+  try {
+    const url = new URL(str.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
-export function onMessage(message: Message): void {
-  // Called when a message is received
-  console.log("Message:", message);
+function extractNameAndTypeFromUrl(url: string): { name: string; type: "js" | "ts" | null } {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname;
+    const filename = pathname.split('/').pop() || '';
+    
+    if (filename.endsWith('.ts')) {
+      return { name: filename.replace(/\.ts$/, ''), type: 'ts' };
+    } else if (filename.endsWith('.js')) {
+      return { name: filename.replace(/\.js$/, ''), type: 'js' };
+    }
+    return { name: filename, type: null };
+  } catch {
+    return { name: '', type: null };
+  }
 }
-
-export function onResponse(response: string): string {
-  // Called when a response is generated
-  return response;
-}
-`;
 
 export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const [open, setOpen] = useState(false);
@@ -68,17 +89,85 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const [content, setContent] = useState(TS_TEMPLATE);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const resetForm = () => {
     setName("");
     setFileType("ts");
     setContent(TS_TEMPLATE);
     setError("");
+    setUrlInput("");
   };
 
   const handleTypeChange = (type: "js" | "ts") => {
     setFileType(type);
     setContent(type === "ts" ? TS_TEMPLATE : JS_TEMPLATE);
+  };
+
+  const handleFetchUrl = async () => {
+    if (!urlInput.trim()) return;
+    
+    if (!isUrl(urlInput)) {
+      setError("Please enter a valid URL (http:// or https://)");
+      return;
+    }
+
+    try {
+      setFetching(true);
+      setError("");
+      const result = await fetchUrl(urlInput.trim());
+      setContent(result.content);
+      
+      if (!name) {
+        const extracted = extractNameAndTypeFromUrl(urlInput);
+        if (extracted.name) {
+          setName(extracted.name);
+        }
+        if (extracted.type) {
+          setFileType(extracted.type);
+        }
+      }
+      
+      toast.success("Fetched content from URL");
+      setUrlInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch URL");
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (isUrl(pastedText)) {
+      e.preventDefault();
+      setUrlInput(pastedText);
+      try {
+        setFetching(true);
+        setError("");
+        const result = await fetchUrl(pastedText.trim());
+        setContent(result.content);
+        
+        if (!name) {
+          const extracted = extractNameAndTypeFromUrl(pastedText);
+          if (extracted.name) {
+            setName(extracted.name);
+          }
+          if (extracted.type) {
+            setFileType(extracted.type);
+          }
+        }
+        
+        toast.success("Fetched content from URL");
+        setUrlInput("");
+      } catch (err) {
+        setUrlInput(pastedText);
+        setError(err instanceof Error ? err.message : "Failed to fetch URL");
+      } finally {
+        setFetching(false);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,6 +222,33 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2 p-3 rounded-lg border border-dashed">
+            <Label className="flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Import from URL
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Paste URL to a .js or .ts file..."
+                className="flex-1"
+              />
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={handleFetchUrl}
+                disabled={fetching || !urlInput.trim()}
+              >
+                {fetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Paste a URL to automatically fetch plugin content (e.g., raw GitHub URL)
+            </p>
+          </div>
+
           <div className="flex gap-4">
             <div className="flex-1 space-y-2">
               <Label htmlFor="plugin-name">Plugin Name</Label>

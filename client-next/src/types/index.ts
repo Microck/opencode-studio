@@ -198,11 +198,14 @@ export interface OpencodeConfig {
 
 export interface SkillFile {
   name: string;
+  description: string;
   content: string;
+  rawContent: string;
 }
 
 export interface SkillInfo {
   name: string;
+  description: string;
   enabled: boolean;
 }
 

@@ -72,6 +72,42 @@ function getPaths() {
     };
 }
 
+function parseSkillFrontmatter(content) {
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!frontmatterMatch) {
+        return { frontmatter: {}, body: content };
+    }
+    
+    const frontmatterText = frontmatterMatch[1];
+    const body = content.slice(frontmatterMatch[0].length).trim();
+    const frontmatter = {};
+    
+    const lines = frontmatterText.split(/\r?\n/);
+    for (const line of lines) {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+            const key = line.slice(0, colonIndex).trim();
+            let value = line.slice(colonIndex + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || 
+                (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            frontmatter[key] = value;
+        }
+    }
+    
+    return { frontmatter, body };
+}
+
+function createSkillContent(name, description, body) {
+    return `---
+name: ${name}
+description: ${description}
+---
+
+${body}`;
+}
+
 console.log(`Detected config at: ${getConfigDir() || 'NOT FOUND'}`);
 
 app.get('/api/paths', (req, res) => {
@@ -141,14 +177,28 @@ app.get('/api/skills', (req, res) => {
     if (!paths) return res.json([]);
     if (!fs.existsSync(paths.skillDir)) return res.json([]);
     
-    const files = fs.readdirSync(paths.skillDir).filter(f => f.endsWith('.md'));
     const studioConfig = loadStudioConfig();
     const disabledSkills = studioConfig.disabledSkills || [];
+    const skills = [];
     
-    const skills = files.map(f => ({
-        name: f,
-        enabled: !disabledSkills.includes(f),
-    }));
+    const entries = fs.readdirSync(paths.skillDir, { withFileTypes: true });
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            const skillFile = path.join(paths.skillDir, entry.name, 'SKILL.md');
+            if (fs.existsSync(skillFile)) {
+                try {
+                    const content = fs.readFileSync(skillFile, 'utf8');
+                    const { frontmatter } = parseSkillFrontmatter(content);
+                    skills.push({
+                        name: entry.name,
+                        description: frontmatter.description || '',
+                        enabled: !disabledSkills.includes(entry.name),
+                    });
+                } catch {}
+            }
+        }
+    }
+    
     res.json(skills);
 });
 
@@ -171,23 +221,40 @@ app.get('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const filePath = path.join(paths.skillDir, req.params.name);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Skill not found' });
+    const skillDir = path.join(paths.skillDir, req.params.name);
+    const skillFile = path.join(skillDir, 'SKILL.md');
     
-    const content = fs.readFileSync(filePath, 'utf8');
-    res.json({ name: req.params.name, content });
+    if (!fs.existsSync(skillFile)) {
+        return res.status(404).json({ error: 'Skill not found' });
+    }
+    
+    const content = fs.readFileSync(skillFile, 'utf8');
+    const { frontmatter, body } = parseSkillFrontmatter(content);
+    
+    res.json({ 
+        name: req.params.name, 
+        description: frontmatter.description || '',
+        content: body,
+        rawContent: content,
+    });
 });
 
 app.post('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    if (!fs.existsSync(paths.skillDir)) {
-        fs.mkdirSync(paths.skillDir, { recursive: true });
+    const skillName = req.params.name;
+    const { description, content } = req.body;
+    
+    const skillDir = path.join(paths.skillDir, skillName);
+    if (!fs.existsSync(skillDir)) {
+        fs.mkdirSync(skillDir, { recursive: true });
     }
     
-    const filePath = path.join(paths.skillDir, req.params.name);
-    fs.writeFileSync(filePath, req.body.content, 'utf8');
+    const fullContent = createSkillContent(skillName, description || '', content || '');
+    const skillFile = path.join(skillDir, 'SKILL.md');
+    fs.writeFileSync(skillFile, fullContent, 'utf8');
+    
     res.json({ success: true });
 });
 
@@ -195,9 +262,9 @@ app.delete('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const filePath = path.join(paths.skillDir, req.params.name);
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    const skillDir = path.join(paths.skillDir, req.params.name);
+    if (fs.existsSync(skillDir)) {
+        fs.rmSync(skillDir, { recursive: true, force: true });
     }
     res.json({ success: true });
 });
@@ -275,7 +342,7 @@ app.get('/api/backup', (req, res) => {
     }
     
     const backup = {
-        version: 1,
+        version: 2,
         timestamp: new Date().toISOString(),
         studioConfig: loadStudioConfig(),
         opencodeConfig: null,
@@ -290,12 +357,17 @@ app.get('/api/backup', (req, res) => {
     }
     
     if (fs.existsSync(paths.skillDir)) {
-        const skillFiles = fs.readdirSync(paths.skillDir).filter(f => f.endsWith('.md'));
-        for (const file of skillFiles) {
-            try {
-                const content = fs.readFileSync(path.join(paths.skillDir, file), 'utf8');
-                backup.skills.push({ name: file, content });
-            } catch {}
+        const entries = fs.readdirSync(paths.skillDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const skillFile = path.join(paths.skillDir, entry.name, 'SKILL.md');
+                if (fs.existsSync(skillFile)) {
+                    try {
+                        const content = fs.readFileSync(skillFile, 'utf8');
+                        backup.skills.push({ name: entry.name, content });
+                    } catch {}
+                }
+            }
         }
     }
     
@@ -312,6 +384,36 @@ app.get('/api/backup', (req, res) => {
     res.json(backup);
 });
 
+app.post('/api/fetch-url', async (req, res) => {
+    const { url } = req.body;
+    
+    if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'URL is required' });
+    }
+    
+    try {
+        const parsedUrl = new URL(url);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+            return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are allowed' });
+        }
+        
+        const response = await fetch(url, {
+            headers: { 'User-Agent': 'OpenCode-Studio/1.0' },
+        });
+        
+        if (!response.ok) {
+            return res.status(response.status).json({ error: `Failed to fetch: ${response.statusText}` });
+        }
+        
+        const content = await response.text();
+        const filename = parsedUrl.pathname.split('/').pop() || 'file';
+        
+        res.json({ content, filename, url });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch URL', details: err.message });
+    }
+});
+
 app.post('/api/restore', (req, res) => {
     const paths = getPaths();
     if (!paths) {
@@ -320,7 +422,7 @@ app.post('/api/restore', (req, res) => {
     
     const backup = req.body;
     
-    if (!backup || backup.version !== 1) {
+    if (!backup || (backup.version !== 1 && backup.version !== 2)) {
         return res.status(400).json({ error: 'Invalid backup file' });
     }
     
@@ -338,7 +440,19 @@ app.post('/api/restore', (req, res) => {
                 fs.mkdirSync(paths.skillDir, { recursive: true });
             }
             for (const skill of backup.skills) {
-                fs.writeFileSync(path.join(paths.skillDir, skill.name), skill.content, 'utf8');
+                if (backup.version === 2) {
+                    const skillDir = path.join(paths.skillDir, skill.name);
+                    if (!fs.existsSync(skillDir)) {
+                        fs.mkdirSync(skillDir, { recursive: true });
+                    }
+                    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skill.content, 'utf8');
+                } else {
+                    const skillDir = path.join(paths.skillDir, skill.name.replace('.md', ''));
+                    if (!fs.existsSync(skillDir)) {
+                        fs.mkdirSync(skillDir, { recursive: true });
+                    }
+                    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skill.content, 'utf8');
+                }
             }
         }
         

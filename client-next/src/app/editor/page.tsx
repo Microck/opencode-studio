@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Save, ArrowLeft } from "lucide-react";
 import { getSkill, saveSkill, getPlugin, savePlugin } from "@/lib/api";
@@ -17,6 +19,7 @@ function EditorContent() {
   const isNew = searchParams.get("new") === "true";
 
   const [content, setContent] = useState("");
+  const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -27,7 +30,7 @@ function EditorContent() {
     }
 
     if (isNew) {
-      setContent(type === "skills" ? "# New Skill\n\n" : "// New Plugin\n\n");
+      setContent(type === "skills" ? "## When to Use\n\n## Instructions\n\n" : "// New Plugin\n\n");
       setLoading(false);
       return;
     }
@@ -35,10 +38,14 @@ function EditorContent() {
     const loadFile = async () => {
       try {
         setLoading(true);
-        const data = type === "skills" 
-          ? await getSkill(name)
-          : await getPlugin(name);
-        setContent(data.content);
+        if (type === "skills") {
+          const data = await getSkill(name);
+          setContent(data.content);
+          setDescription(data.description || "");
+        } else {
+          const data = await getPlugin(name);
+          setContent(data.content);
+        }
       } catch {
         toast.error("Failed to load file");
         router.back();
@@ -56,7 +63,11 @@ function EditorContent() {
     try {
       setSaving(true);
       if (type === "skills") {
-        await saveSkill(name, content);
+        if (!description.trim()) {
+          toast.error("Description is required for skills");
+          return;
+        }
+        await saveSkill(name, description, content);
       } else {
         await savePlugin(name, content);
       }
@@ -103,10 +114,25 @@ function EditorContent() {
         </Button>
       </div>
 
+      {type === "skills" && (
+        <div className="space-y-2">
+          <Label htmlFor="skill-description">Description</Label>
+          <Input
+            id="skill-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief description of what this skill does"
+          />
+          <p className="text-xs text-muted-foreground">
+            Required. Helps the agent decide when to use this skill.
+          </p>
+        </div>
+      )}
+
       <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        className="flex-1 font-mono text-sm resize-none min-h-[calc(100vh-200px)]"
+        className="flex-1 font-mono text-sm resize-none min-h-[calc(100vh-280px)]"
         spellCheck={false}
       />
     </div>
