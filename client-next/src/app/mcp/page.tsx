@@ -39,7 +39,7 @@ export default function MCPPage() {
   const handleToggle = async (key: string) => {
     try {
       await toggleMCP(key);
-      toast.success(`${key} ${config?.mcp[key]?.enabled ? "disabled" : "enabled"}`);
+      toast.success(`${key} ${config?.mcp?.[key]?.enabled ? "disabled" : "enabled"}`);
     } catch {
       toast.error("Failed to toggle server");
     }

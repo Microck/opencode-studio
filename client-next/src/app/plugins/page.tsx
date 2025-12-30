@@ -8,7 +8,7 @@ import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import { deletePlugin } from "@/lib/api";
+import { deletePlugin, deletePluginFromConfig } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
 
@@ -23,7 +23,8 @@ export default function PluginsPage() {
     return plugins.filter(p => p.name.toLowerCase().includes(q));
   }, [plugins, search]);
 
-  const handleOpen = (name: string) => {
+  const handleOpen = (name: string, type: 'file' | 'npm') => {
+    if (type === 'npm') return;
     router.push(`/editor?type=plugins&name=${encodeURIComponent(name)}`);
   };
 
@@ -37,10 +38,14 @@ export default function PluginsPage() {
     }
   };
 
-  const handleDelete = async (name: string) => {
+  const handleDelete = async (name: string, type: 'file' | 'npm') => {
     if (!confirm(`Delete ${name}?`)) return;
     try {
-      await deletePlugin(name);
+      if (type === 'npm') {
+        await deletePluginFromConfig(name);
+      } else {
+        await deletePlugin(name);
+      }
       toast.success(`${name} deleted`);
       refreshData();
     } catch {
@@ -100,8 +105,8 @@ export default function PluginsPage() {
               key={plugin.name}
               plugin={plugin}
               onToggle={() => handleToggle(plugin.name)}
-              onDelete={() => handleDelete(plugin.name)}
-              onClick={() => handleOpen(plugin.name)}
+              onDelete={() => handleDelete(plugin.name, plugin.type)}
+              onClick={plugin.type === 'file' ? () => handleOpen(plugin.name, plugin.type) : undefined}
             />
           ))}
         </div>

@@ -180,7 +180,7 @@ export interface OpencodeConfig {
   default_agent?: string;
   snapshot?: boolean;
   logLevel?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
-  mcp: Record<string, MCPConfig>;
+  mcp?: Record<string, MCPConfig>;
   permissions?: PermissionConfig;
   agents?: AgentsConfig;
   providers?: Record<string, ProviderConfig>;
@@ -216,6 +216,7 @@ export interface PluginFile {
 
 export interface PluginInfo {
   name: string;
+  type: 'file' | 'npm';
   enabled: boolean;
 }
 

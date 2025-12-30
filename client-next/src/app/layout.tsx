@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { AppProvider } from "@/lib/context";
@@ -11,9 +12,14 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
+const commitMono = localFont({
+  src: [
+    { path: "../../public/fonts/CommitMono-400-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../../public/fonts/CommitMono-400-Italic.ttf", weight: "400", style: "italic" },
+    { path: "../../public/fonts/CommitMono-700-Regular.ttf", weight: "700", style: "normal" },
+    { path: "../../public/fonts/CommitMono-700-Italic.ttf", weight: "700", style: "italic" },
+  ],
+  variable: "--font-commit-mono",
 });
 
 export const metadata: Metadata = {
@@ -32,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${spaceGrotesk.variable} ${commitMono.variable} antialiased`}
       >
         <ThemeProvider
           attribute="class"

@@ -281,16 +281,39 @@ app.delete('/api/skills/:name', (req, res) => {
 app.get('/api/plugins', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.json([]);
-    if (!fs.existsSync(paths.pluginDir)) return res.json([]);
     
-    const files = fs.readdirSync(paths.pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
     const studioConfig = loadStudioConfig();
     const disabledPlugins = studioConfig.disabledPlugins || [];
+    const plugins = [];
     
-    const plugins = files.map(f => ({
-        name: f,
-        enabled: !disabledPlugins.includes(f),
-    }));
+    if (fs.existsSync(paths.pluginDir)) {
+        const files = fs.readdirSync(paths.pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+        for (const f of files) {
+            plugins.push({
+                name: f,
+                type: 'file',
+                enabled: !disabledPlugins.includes(f),
+            });
+        }
+    }
+    
+    if (fs.existsSync(paths.opencodeJson)) {
+        try {
+            const config = JSON.parse(fs.readFileSync(paths.opencodeJson, 'utf8'));
+            if (Array.isArray(config.plugin)) {
+                for (const p of config.plugin) {
+                    if (typeof p === 'string') {
+                        plugins.push({
+                            name: p,
+                            type: 'npm',
+                            enabled: !disabledPlugins.includes(p),
+                        });
+                    }
+                }
+            }
+        } catch {}
+    }
+    
     res.json(plugins);
 });
 
@@ -389,6 +412,36 @@ app.post('/api/plugins/config/add', (req, res) => {
         res.json({ success: true, added, skipped });
     } catch (err) {
         res.status(500).json({ error: 'Failed to update config', details: err.message });
+    }
+});
+
+app.delete('/api/plugins/config/:name', (req, res) => {
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const pluginName = req.params.name;
+    
+    try {
+        let config = {};
+        if (fs.existsSync(paths.opencodeJson)) {
+            config = JSON.parse(fs.readFileSync(paths.opencodeJson, 'utf8'));
+        }
+        
+        if (!Array.isArray(config.plugin)) {
+            return res.status(404).json({ error: 'Plugin not found in config' });
+        }
+        
+        const index = config.plugin.indexOf(pluginName);
+        if (index === -1) {
+            return res.status(404).json({ error: 'Plugin not found in config' });
+        }
+        
+        config.plugin.splice(index, 1);
+        fs.writeFileSync(paths.opencodeJson, JSON.stringify(config, null, 2), 'utf8');
+        
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to remove plugin', details: err.message });
     }
 });
 

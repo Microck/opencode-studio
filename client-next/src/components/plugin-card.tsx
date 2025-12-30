@@ -3,27 +3,32 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Settings, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Settings, Trash2, Package } from "lucide-react";
 import type { PluginInfo } from "@/types";
 
 interface PluginCardProps {
   plugin: PluginInfo;
   onToggle: () => void;
   onDelete: () => void;
-  onClick: () => void;
+  onClick?: () => void;
 }
 
 export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardProps) {
+  const isNpm = plugin.type === 'npm';
+  const Icon = isNpm ? Package : Settings;
+  
   return (
     <Card className={plugin.enabled ? "border-primary/50" : "opacity-60"}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2">
           <div
-            className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer hover:opacity-80"
+            className={`flex items-center gap-2 flex-1 min-w-0 ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
             onClick={onClick}
           >
-            <Settings className="h-5 w-5 text-purple-500 shrink-0" />
+            <Icon className={`h-5 w-5 shrink-0 ${isNpm ? 'text-orange-500' : 'text-purple-500'}`} />
             <span className="font-mono text-sm truncate">{plugin.name}</span>
+            {isNpm && <Badge variant="secondary" className="text-xs">npm</Badge>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch

@@ -160,4 +160,8 @@ export async function addPluginsToConfig(plugins: string[]): Promise<AddPluginsT
   return data;
 }
 
+export async function deletePluginFromConfig(name: string): Promise<void> {
+  await api.delete(`/plugins/config/${encodeURIComponent(name)}`);
+}
+
 export default api;
