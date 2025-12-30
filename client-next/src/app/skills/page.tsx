@@ -1,18 +1,40 @@
 "use client";
 
 import { useApp } from "@/lib/context";
-import { FileCard } from "@/components/file-card";
+import { SkillCard } from "@/components/skill-card";
 import { AddSkillDialog } from "@/components/add-skill-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Puzzle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { deleteSkill } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function SkillsPage() {
-  const { skills, loading, refreshData } = useApp();
+  const { skills, loading, refreshData, toggleSkill } = useApp();
   const router = useRouter();
 
   const handleOpen = (name: string) => {
     router.push(`/editor?type=skills&name=${encodeURIComponent(name)}`);
+  };
+
+  const handleToggle = async (name: string) => {
+    try {
+      await toggleSkill(name);
+      const skill = skills.find(s => s.name === name);
+      toast.success(`${name} ${skill?.enabled ? "disabled" : "enabled"}`);
+    } catch {
+      toast.error("Failed to toggle skill");
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    if (!confirm(`Delete ${name}?`)) return;
+    try {
+      await deleteSkill(name);
+      toast.success(`${name} deleted`);
+      refreshData();
+    } catch {
+      toast.error("Failed to delete skill");
+    }
   };
 
   if (loading) {
@@ -42,11 +64,12 @@ export default function SkillsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {skills.map((skill) => (
-            <FileCard
-              key={skill}
-              name={skill}
-              icon={<Puzzle className="h-5 w-5 text-yellow-500" />}
-              onClick={() => handleOpen(skill)}
+            <SkillCard
+              key={skill.name}
+              skill={skill}
+              onToggle={() => handleToggle(skill.name)}
+              onDelete={() => handleDelete(skill.name)}
+              onClick={() => handleOpen(skill.name)}
             />
           ))}
         </div>

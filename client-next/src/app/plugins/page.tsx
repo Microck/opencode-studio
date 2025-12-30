@@ -1,18 +1,40 @@
 "use client";
 
 import { useApp } from "@/lib/context";
-import { FileCard } from "@/components/file-card";
+import { PluginCard } from "@/components/plugin-card";
 import { AddPluginDialog } from "@/components/add-plugin-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { deletePlugin } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function PluginsPage() {
-  const { plugins, loading, refreshData } = useApp();
+  const { plugins, loading, refreshData, togglePlugin } = useApp();
   const router = useRouter();
 
   const handleOpen = (name: string) => {
     router.push(`/editor?type=plugins&name=${encodeURIComponent(name)}`);
+  };
+
+  const handleToggle = async (name: string) => {
+    try {
+      await togglePlugin(name);
+      const plugin = plugins.find(p => p.name === name);
+      toast.success(`${name} ${plugin?.enabled ? "disabled" : "enabled"}`);
+    } catch {
+      toast.error("Failed to toggle plugin");
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    if (!confirm(`Delete ${name}?`)) return;
+    try {
+      await deletePlugin(name);
+      toast.success(`${name} deleted`);
+      refreshData();
+    } catch {
+      toast.error("Failed to delete plugin");
+    }
   };
 
   if (loading) {
@@ -42,11 +64,12 @@ export default function PluginsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plugins.map((plugin) => (
-            <FileCard
-              key={plugin}
-              name={plugin}
-              icon={<Settings className="h-5 w-5 text-purple-500" />}
-              onClick={() => handleOpen(plugin)}
+            <PluginCard
+              key={plugin.name}
+              plugin={plugin}
+              onToggle={() => handleToggle(plugin.name)}
+              onDelete={() => handleDelete(plugin.name)}
+              onClick={() => handleOpen(plugin.name)}
             />
           ))}
         </div>

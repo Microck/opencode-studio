@@ -1,13 +1,13 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins } from '@/lib/api';
-import type { OpencodeConfig, MCPConfig } from '@/types';
+import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin } from '@/lib/api';
+import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
 
 interface AppContextType {
   config: OpencodeConfig | null;
-  skills: string[];
-  plugins: string[];
+  skills: SkillInfo[];
+  plugins: PluginInfo[];
   loading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
@@ -15,14 +15,16 @@ interface AppContextType {
   toggleMCP: (key: string) => Promise<void>;
   deleteMCP: (key: string) => Promise<void>;
   addMCP: (key: string, mcpConfig: MCPConfig) => Promise<void>;
+  toggleSkill: (name: string) => Promise<void>;
+  togglePlugin: (name: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<OpencodeConfig | null>(null);
-  const [skills, setSkills] = useState<string[]>([]);
-  const [plugins, setPlugins] = useState<string[]>([]);
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +92,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await saveConfigHandler(newConfig);
   }, [config, saveConfigHandler]);
 
+  const toggleSkill = useCallback(async (name: string) => {
+    const result = await apiToggleSkill(name);
+    setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled: result.enabled } : s));
+  }, []);
+
+  const togglePlugin = useCallback(async (name: string) => {
+    const result = await apiTogglePlugin(name);
+    setPlugins(prev => prev.map(p => p.name === name ? { ...p, enabled: result.enabled } : p));
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -103,6 +115,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleMCP,
         deleteMCP,
         addMCP,
+        toggleSkill,
+        togglePlugin,
       }}
     >
       {children}

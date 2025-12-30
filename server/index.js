@@ -9,7 +9,8 @@ const app = express();
 const PORT = 3001;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
@@ -38,10 +39,10 @@ function loadStudioConfig() {
         try {
             return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, 'utf8'));
         } catch {
-            return {};
+            return { disabledSkills: [], disabledPlugins: [] };
         }
     }
-    return {};
+    return { disabledSkills: [], disabledPlugins: [] };
 }
 
 function saveStudioConfig(config) {
@@ -141,7 +142,29 @@ app.get('/api/skills', (req, res) => {
     if (!fs.existsSync(paths.skillDir)) return res.json([]);
     
     const files = fs.readdirSync(paths.skillDir).filter(f => f.endsWith('.md'));
-    res.json(files);
+    const studioConfig = loadStudioConfig();
+    const disabledSkills = studioConfig.disabledSkills || [];
+    
+    const skills = files.map(f => ({
+        name: f,
+        enabled: !disabledSkills.includes(f),
+    }));
+    res.json(skills);
+});
+
+app.post('/api/skills/:name/toggle', (req, res) => {
+    const skillName = req.params.name;
+    const studioConfig = loadStudioConfig();
+    const disabledSkills = studioConfig.disabledSkills || [];
+    
+    if (disabledSkills.includes(skillName)) {
+        studioConfig.disabledSkills = disabledSkills.filter(s => s !== skillName);
+    } else {
+        studioConfig.disabledSkills = [...disabledSkills, skillName];
+    }
+    
+    saveStudioConfig(studioConfig);
+    res.json({ success: true, enabled: !studioConfig.disabledSkills.includes(skillName) });
 });
 
 app.get('/api/skills/:name', (req, res) => {
@@ -185,7 +208,29 @@ app.get('/api/plugins', (req, res) => {
     if (!fs.existsSync(paths.pluginDir)) return res.json([]);
     
     const files = fs.readdirSync(paths.pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
-    res.json(files);
+    const studioConfig = loadStudioConfig();
+    const disabledPlugins = studioConfig.disabledPlugins || [];
+    
+    const plugins = files.map(f => ({
+        name: f,
+        enabled: !disabledPlugins.includes(f),
+    }));
+    res.json(plugins);
+});
+
+app.post('/api/plugins/:name/toggle', (req, res) => {
+    const pluginName = req.params.name;
+    const studioConfig = loadStudioConfig();
+    const disabledPlugins = studioConfig.disabledPlugins || [];
+    
+    if (disabledPlugins.includes(pluginName)) {
+        studioConfig.disabledPlugins = disabledPlugins.filter(p => p !== pluginName);
+    } else {
+        studioConfig.disabledPlugins = [...disabledPlugins, pluginName];
+    }
+    
+    saveStudioConfig(studioConfig);
+    res.json({ success: true, enabled: !studioConfig.disabledPlugins.includes(pluginName) });
 });
 
 app.get('/api/plugins/:name', (req, res) => {
@@ -209,6 +254,17 @@ app.post('/api/plugins/:name', (req, res) => {
     
     const filePath = path.join(paths.pluginDir, req.params.name);
     fs.writeFileSync(filePath, req.body.content, 'utf8');
+    res.json({ success: true });
+});
+
+app.delete('/api/plugins/:name', (req, res) => {
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const filePath = path.join(paths.pluginDir, req.params.name);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
     res.json({ success: true });
 });
 

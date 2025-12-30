@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -36,8 +36,8 @@ export async function saveConfig(config: OpencodeConfig): Promise<void> {
   await api.post('/config', config);
 }
 
-export async function getSkills(): Promise<string[]> {
-  const { data } = await api.get<string[]>('/skills');
+export async function getSkills(): Promise<SkillInfo[]> {
+  const { data } = await api.get<SkillInfo[]>('/skills');
   return data;
 }
 
@@ -54,8 +54,13 @@ export async function deleteSkill(name: string): Promise<void> {
   await api.delete(`/skills/${name}`);
 }
 
-export async function getPlugins(): Promise<string[]> {
-  const { data } = await api.get<string[]>('/plugins');
+export async function toggleSkill(name: string): Promise<{ enabled: boolean }> {
+  const { data } = await api.post<{ success: boolean; enabled: boolean }>(`/skills/${name}/toggle`);
+  return { enabled: data.enabled };
+}
+
+export async function getPlugins(): Promise<PluginInfo[]> {
+  const { data } = await api.get<PluginInfo[]>('/plugins');
   return data;
 }
 
@@ -66,6 +71,15 @@ export async function getPlugin(name: string): Promise<PluginFile> {
 
 export async function savePlugin(name: string, content: string): Promise<void> {
   await api.post(`/plugins/${name}`, { content });
+}
+
+export async function deletePlugin(name: string): Promise<void> {
+  await api.delete(`/plugins/${name}`);
+}
+
+export async function togglePlugin(name: string): Promise<{ enabled: boolean }> {
+  const { data } = await api.post<{ success: boolean; enabled: boolean }>(`/plugins/${name}/toggle`);
+  return { enabled: data.enabled };
 }
 
 export default api;

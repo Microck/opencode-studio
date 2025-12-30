@@ -201,9 +201,19 @@ export interface SkillFile {
   content: string;
 }
 
+export interface SkillInfo {
+  name: string;
+  enabled: boolean;
+}
+
 export interface PluginFile {
   name: string;
   content: string;
+}
+
+export interface PluginInfo {
+  name: string;
+  enabled: boolean;
 }
 
 export interface PathsInfo {
