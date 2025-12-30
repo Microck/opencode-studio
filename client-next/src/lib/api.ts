@@ -82,4 +82,22 @@ export async function togglePlugin(name: string): Promise<{ enabled: boolean }> 
   return { enabled: data.enabled };
 }
 
+export interface BackupData {
+  version: number;
+  timestamp: string;
+  studioConfig: Record<string, unknown>;
+  opencodeConfig: OpencodeConfig | null;
+  skills: { name: string; content: string }[];
+  plugins: { name: string; content: string }[];
+}
+
+export async function getBackup(): Promise<BackupData> {
+  const { data } = await api.get<BackupData>('/backup');
+  return data;
+}
+
+export async function restoreBackup(backup: BackupData): Promise<void> {
+  await api.post('/restore', backup);
+}
+
 export default api;

@@ -268,6 +268,95 @@ app.delete('/api/plugins/:name', (req, res) => {
     res.json({ success: true });
 });
 
+app.get('/api/backup', (req, res) => {
+    const paths = getPaths();
+    if (!paths) {
+        return res.status(404).json({ error: 'Opencode installation not found' });
+    }
+    
+    const backup = {
+        version: 1,
+        timestamp: new Date().toISOString(),
+        studioConfig: loadStudioConfig(),
+        opencodeConfig: null,
+        skills: [],
+        plugins: [],
+    };
+    
+    if (fs.existsSync(paths.opencodeJson)) {
+        try {
+            backup.opencodeConfig = JSON.parse(fs.readFileSync(paths.opencodeJson, 'utf8'));
+        } catch {}
+    }
+    
+    if (fs.existsSync(paths.skillDir)) {
+        const skillFiles = fs.readdirSync(paths.skillDir).filter(f => f.endsWith('.md'));
+        for (const file of skillFiles) {
+            try {
+                const content = fs.readFileSync(path.join(paths.skillDir, file), 'utf8');
+                backup.skills.push({ name: file, content });
+            } catch {}
+        }
+    }
+    
+    if (fs.existsSync(paths.pluginDir)) {
+        const pluginFiles = fs.readdirSync(paths.pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+        for (const file of pluginFiles) {
+            try {
+                const content = fs.readFileSync(path.join(paths.pluginDir, file), 'utf8');
+                backup.plugins.push({ name: file, content });
+            } catch {}
+        }
+    }
+    
+    res.json(backup);
+});
+
+app.post('/api/restore', (req, res) => {
+    const paths = getPaths();
+    if (!paths) {
+        return res.status(404).json({ error: 'Opencode installation not found' });
+    }
+    
+    const backup = req.body;
+    
+    if (!backup || backup.version !== 1) {
+        return res.status(400).json({ error: 'Invalid backup file' });
+    }
+    
+    try {
+        if (backup.studioConfig) {
+            saveStudioConfig(backup.studioConfig);
+        }
+        
+        if (backup.opencodeConfig) {
+            fs.writeFileSync(paths.opencodeJson, JSON.stringify(backup.opencodeConfig, null, 2), 'utf8');
+        }
+        
+        if (backup.skills && backup.skills.length > 0) {
+            if (!fs.existsSync(paths.skillDir)) {
+                fs.mkdirSync(paths.skillDir, { recursive: true });
+            }
+            for (const skill of backup.skills) {
+                fs.writeFileSync(path.join(paths.skillDir, skill.name), skill.content, 'utf8');
+            }
+        }
+        
+        if (backup.plugins && backup.plugins.length > 0) {
+            if (!fs.existsSync(paths.pluginDir)) {
+                fs.mkdirSync(paths.pluginDir, { recursive: true });
+            }
+            for (const plugin of backup.plugins) {
+                fs.writeFileSync(path.join(paths.pluginDir, plugin.name), plugin.content, 'utf8');
+            }
+        }
+        
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to restore backup', details: err.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });

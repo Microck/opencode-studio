@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, type PathsInfo } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, type PathsInfo, type BackupData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -40,6 +40,9 @@ import {
   Monitor,
   FolderCog,
   RotateCcw,
+  Download,
+  Upload,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ModelAlias, PermissionValue, OpencodeConfig, ModelConfig } from "@/types";
@@ -69,6 +72,7 @@ export default function SettingsPage() {
   const [newAlias, setNewAlias] = useState({ key: "", provider: "copilot", model: "" });
   const [pathsInfo, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
@@ -185,6 +189,49 @@ export default function SettingsPage() {
     }
   };
 
+  const handleBackup = async () => {
+    try {
+      const backup = await getBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `opencode-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Backup downloaded");
+    } catch {
+      toast.error("Failed to create backup");
+    }
+  };
+
+  const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const content = await file.text();
+      const backup = JSON.parse(content) as BackupData;
+      
+      if (!backup.version || backup.version !== 1) {
+        toast.error("Invalid backup file format");
+        return;
+      }
+
+      await restoreBackup(backup);
+      await refreshData();
+      toast.success("Backup restored successfully");
+    } catch {
+      toast.error("Failed to restore backup");
+    }
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const getPermissionValue = (key: keyof NonNullable<OpencodeConfig["permissions"]>): PermissionValue => {
     const val = config?.permissions?.[key];
     if (typeof val === "string") return val;
@@ -243,6 +290,10 @@ export default function SettingsPage() {
           <TabsTrigger value="path" className="justify-start w-full">
             <FolderCog className="h-4 w-4 mr-2" />
             Config Path
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="justify-start w-full">
+            <Save className="h-4 w-4 mr-2" />
+            Backup
           </TabsTrigger>
         </TabsList>
 
@@ -820,6 +871,62 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="backup" className="mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle>Backup & Restore</CardTitle>
+                <CardDescription>Export or import your complete OpenCode configuration</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-6 bg-muted/50 rounded-lg space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Download className="h-8 w-8 text-primary" />
+                    <div>
+                      <Label className="text-base">Export Backup</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Download all settings, MCP configs, skills, and plugins
+                      </p>
+                    </div>
+                  </div>
+                  <Button onClick={handleBackup} className="w-full">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Backup
+                  </Button>
+                </div>
+
+                <div className="p-6 bg-muted/50 rounded-lg space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Upload className="h-8 w-8 text-primary" />
+                    <div>
+                      <Label className="text-base">Restore Backup</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Import a previously exported backup file
+                      </p>
+                    </div>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestore}
+                    className="hidden"
+                  />
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Select Backup File
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Warning: This will overwrite your current configuration
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
