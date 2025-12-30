@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/mcp", label: "MCP Servers", icon: Terminal },
   { href: "/skills", label: "Skills", icon: Puzzle },
   { href: "/plugins", label: "Plugins", icon: FileCode },
+  { href: "/auth", label: "Auth", icon: Key },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/config", label: "Raw Config", icon: FileJson },
 ];
@@ -60,8 +62,9 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-border text-xs text-muted-foreground text-center">
-          Opencode Studio v1.0
+        <div className="p-4 border-t border-border flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">v1.0</span>
+          <ThemeToggle />
         </div>
       </div>
     </TooltipProvider>

@@ -1,16 +1,26 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { PluginCard } from "@/components/plugin-card";
 import { AddPluginDialog } from "@/components/add-plugin-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { deletePlugin } from "@/lib/api";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 
 export default function PluginsPage() {
   const { plugins, loading, refreshData, togglePlugin } = useApp();
   const router = useRouter();
+  const [search, setSearch] = useState("");
+
+  const filteredPlugins = useMemo(() => {
+    if (!search.trim()) return plugins;
+    const q = search.toLowerCase();
+    return plugins.filter(p => p.name.toLowerCase().includes(q));
+  }, [plugins, search]);
 
   const handleOpen = (name: string) => {
     router.push(`/editor?type=plugins&name=${encodeURIComponent(name)}`);
@@ -59,11 +69,25 @@ export default function PluginsPage() {
         <AddPluginDialog onSuccess={refreshData} />
       </div>
 
+      {plugins.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search plugins..."
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {plugins.length === 0 ? (
         <p className="text-muted-foreground italic">No plugins found.</p>
+      ) : filteredPlugins.length === 0 ? (
+        <p className="text-muted-foreground italic">No plugins match "{search}"</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {plugins.map((plugin) => (
+          {filteredPlugins.map((plugin) => (
             <PluginCard
               key={plugin.name}
               plugin={plugin}

@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
@@ -14,6 +15,12 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
+
+const AUTH_CANDIDATE_PATHS = [
+    path.join(HOME_DIR, '.local', 'share', 'opencode', 'auth.json'),
+    path.join(process.env.LOCALAPPDATA || '', 'opencode', 'auth.json'),
+    path.join(process.env.APPDATA || '', 'opencode', 'auth.json'),
+];
 
 const CANDIDATE_PATHS = [
     path.join(HOME_DIR, '.config', 'opencode'),
@@ -469,6 +476,144 @@ app.post('/api/restore', (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Failed to restore backup', details: err.message });
     }
+});
+
+// Auth endpoints
+function getAuthFile() {
+    for (const candidate of AUTH_CANDIDATE_PATHS) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function loadAuthConfig() {
+    const authFile = getAuthFile();
+    if (!authFile) return null;
+    
+    try {
+        return JSON.parse(fs.readFileSync(authFile, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function saveAuthConfig(config) {
+    const authFile = getAuthFile();
+    if (!authFile) return false;
+    
+    try {
+        fs.writeFileSync(authFile, JSON.stringify(config, null, 2), 'utf8');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const PROVIDER_DISPLAY_NAMES = {
+    'github-copilot': 'GitHub Copilot',
+    'google': 'Google',
+    'anthropic': 'Anthropic',
+    'openai': 'OpenAI',
+    'zai': 'Z.AI',
+    'xai': 'xAI',
+    'groq': 'Groq',
+    'together': 'Together AI',
+    'mistral': 'Mistral',
+    'deepseek': 'DeepSeek',
+    'openrouter': 'OpenRouter',
+    'amazon-bedrock': 'Amazon Bedrock',
+    'azure': 'Azure OpenAI',
+};
+
+app.get('/api/auth', (req, res) => {
+    const authConfig = loadAuthConfig();
+    const authFile = getAuthFile();
+    
+    if (!authConfig) {
+        return res.json({ 
+            credentials: [], 
+            authFile: null,
+            message: 'No auth file found' 
+        });
+    }
+    
+    const credentials = Object.entries(authConfig).map(([id, config]) => {
+        const isExpired = config.expires ? Date.now() > config.expires : false;
+        return {
+            id,
+            name: PROVIDER_DISPLAY_NAMES[id] || id,
+            type: config.type,
+            isExpired,
+            expiresAt: config.expires || null,
+        };
+    });
+    
+    res.json({ credentials, authFile });
+});
+
+app.post('/api/auth/login', (req, res) => {
+    const { provider } = req.body;
+    
+    if (!provider) {
+        return res.status(400).json({ error: 'Provider is required' });
+    }
+    
+    // Run opencode auth login - this opens browser
+    const child = spawn('opencode', ['auth', 'login', provider], {
+        stdio: 'inherit',
+        shell: true,
+    });
+    
+    child.on('error', (err) => {
+        console.error('Failed to start auth login:', err);
+    });
+    
+    // Return immediately - login happens in browser
+    res.json({ 
+        success: true, 
+        message: `Opening browser for ${provider} login...`,
+        note: 'Complete authentication in your browser, then refresh this page.'
+    });
+});
+
+app.delete('/api/auth/:provider', (req, res) => {
+    const provider = req.params.provider;
+    const authConfig = loadAuthConfig();
+    
+    if (!authConfig) {
+        return res.status(404).json({ error: 'No auth configuration found' });
+    }
+    
+    if (!authConfig[provider]) {
+        return res.status(404).json({ error: `Provider ${provider} not found` });
+    }
+    
+    delete authConfig[provider];
+    
+    if (saveAuthConfig(authConfig)) {
+        res.json({ success: true });
+    } else {
+        res.status(500).json({ error: 'Failed to save auth configuration' });
+    }
+});
+
+// Get available providers for login
+app.get('/api/auth/providers', (req, res) => {
+    const providers = [
+        { id: 'copilot', name: 'GitHub Copilot', type: 'oauth', description: 'Use GitHub Copilot API' },
+        { id: 'google', name: 'Google AI', type: 'oauth', description: 'Use Google Gemini models' },
+        { id: 'anthropic', name: 'Anthropic', type: 'api', description: 'Use Claude models' },
+        { id: 'openai', name: 'OpenAI', type: 'api', description: 'Use GPT models' },
+        { id: 'xai', name: 'xAI', type: 'api', description: 'Use Grok models' },
+        { id: 'groq', name: 'Groq', type: 'api', description: 'Fast inference' },
+        { id: 'together', name: 'Together AI', type: 'api', description: 'Open source models' },
+        { id: 'mistral', name: 'Mistral', type: 'api', description: 'Mistral models' },
+        { id: 'deepseek', name: 'DeepSeek', type: 'api', description: 'DeepSeek models' },
+        { id: 'openrouter', name: 'OpenRouter', type: 'api', description: 'Multiple providers' },
+    ];
+    res.json(providers);
 });
 
 app.listen(PORT, () => {

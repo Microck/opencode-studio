@@ -225,3 +225,24 @@ export interface PathsInfo {
   current: string | null;
   candidates: string[];
 }
+
+export interface AuthCredential {
+  id: string;
+  name: string;
+  type: 'oauth' | 'api';
+  isExpired: boolean;
+  expiresAt: number | null;
+}
+
+export interface AuthInfo {
+  credentials: AuthCredential[];
+  authFile: string | null;
+  message?: string;
+}
+
+export interface AuthProvider {
+  id: string;
+  name: string;
+  type: 'oauth' | 'api';
+  description: string;
+}

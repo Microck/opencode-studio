@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { MCPCard } from "@/components/mcp-card";
 import { AddMCPDialog } from "@/components/add-mcp-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,12 +16,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 
 export default function MCPPage() {
   const { config, loading, toggleMCP, deleteMCP, addMCP } = useApp();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const mcpEntries = Object.entries(config?.mcp || {});
+  
+  const filteredMCPs = useMemo(() => {
+    if (!search.trim()) return mcpEntries;
+    const q = search.toLowerCase();
+    return mcpEntries.filter(([key, mcp]) => 
+      key.toLowerCase().includes(q) || 
+      mcp.command?.some((c: string) => c.toLowerCase().includes(q)) ||
+      mcp.args?.some((arg: string) => arg.toLowerCase().includes(q))
+    );
+  }, [mcpEntries, search]);
 
   const handleToggle = async (key: string) => {
     try {
@@ -60,14 +75,24 @@ export default function MCPPage() {
     );
   }
 
-  const mcpEntries = Object.entries(config?.mcp || {});
-
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">MCP Servers</h1>
 
+      {mcpEntries.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search MCP servers..."
+            className="pl-9"
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {mcpEntries.map(([key, mcp]) => (
+        {filteredMCPs.map(([key, mcp]) => (
           <MCPCard
             key={key}
             name={key}
@@ -78,6 +103,10 @@ export default function MCPPage() {
         ))}
         <AddMCPDialog onAdd={handleAdd} />
       </div>
+
+      {search && filteredMCPs.length === 0 && (
+        <p className="text-muted-foreground italic">No MCP servers match "{search}"</p>
+      )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -109,6 +109,25 @@ export interface FetchUrlResult {
 export async function fetchUrl(url: string): Promise<FetchUrlResult> {
   const { data } = await api.post<FetchUrlResult>('/fetch-url', { url });
   return data;
+}
+
+export async function getAuthInfo(): Promise<AuthInfo> {
+  const { data } = await api.get<AuthInfo>('/auth');
+  return data;
+}
+
+export async function getAuthProviders(): Promise<AuthProvider[]> {
+  const { data } = await api.get<AuthProvider[]>('/auth/providers');
+  return data;
+}
+
+export async function authLogin(provider: string): Promise<{ success: boolean; message: string; note: string }> {
+  const { data } = await api.post('/auth/login', { provider });
+  return data;
+}
+
+export async function authLogout(provider: string): Promise<void> {
+  await api.delete(`/auth/${provider}`);
 }
 
 export default api;

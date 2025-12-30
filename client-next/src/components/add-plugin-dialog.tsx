@@ -28,7 +28,11 @@ interface AddPluginDialogProps {
   onSuccess: () => void;
 }
 
-const JS_TEMPLATE = `export const MyPlugin = async ({ project, client, $, directory, worktree }) => {
+const PLUGIN_TEMPLATES = {
+  basic: {
+    name: "Basic Plugin",
+    description: "Minimal plugin with session.idle event",
+    js: `export const MyPlugin = async ({ project, client, $, directory, worktree }) => {
   console.log("Plugin initialized!")
 
   return {
@@ -39,9 +43,8 @@ const JS_TEMPLATE = `export const MyPlugin = async ({ project, client, $, direct
     },
   }
 }
-`;
-
-const TS_TEMPLATE = `import type { Plugin } from "@opencode-ai/plugin"
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
 
 export const MyPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   console.log("Plugin initialized!")
@@ -54,7 +57,215 @@ export const MyPlugin: Plugin = async ({ project, client, $, directory, worktree
     },
   }
 }
-`;
+`,
+  },
+  toolExecute: {
+    name: "Tool Execution Hook",
+    description: "Run code before/after tool execution",
+    js: `export const ToolHookPlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "tool.execute.before") {
+        console.log("Before tool:", event.tool.name, event.tool.input)
+        // Modify or validate tool input
+        // return { abort: true } to cancel execution
+      }
+      if (event.type === "tool.execute.after") {
+        console.log("After tool:", event.tool.name, event.tool.output)
+        // Process or log tool results
+      }
+    },
+  }
+}
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
+
+export const ToolHookPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "tool.execute.before") {
+        console.log("Before tool:", event.tool.name, event.tool.input)
+        // Modify or validate tool input
+        // return { abort: true } to cancel execution
+      }
+      if (event.type === "tool.execute.after") {
+        console.log("After tool:", event.tool.name, event.tool.output)
+        // Process or log tool results
+      }
+    },
+  }
+}
+`,
+  },
+  fileWatcher: {
+    name: "File Watcher",
+    description: "React to file changes",
+    js: `export const FileWatcherPlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "file.edited") {
+        console.log("File edited:", event.path)
+        // Run linters, formatters, or tests
+      }
+      if (event.type === "file.created") {
+        console.log("File created:", event.path)
+      }
+      if (event.type === "file.deleted") {
+        console.log("File deleted:", event.path)
+      }
+    },
+  }
+}
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
+
+export const FileWatcherPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "file.edited") {
+        console.log("File edited:", event.path)
+        // Run linters, formatters, or tests
+      }
+      if (event.type === "file.created") {
+        console.log("File created:", event.path)
+      }
+      if (event.type === "file.deleted") {
+        console.log("File deleted:", event.path)
+      }
+    },
+  }
+}
+`,
+  },
+  messageHook: {
+    name: "Message Hook",
+    description: "Process user/assistant messages",
+    js: `export const MessagePlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "message.user") {
+        console.log("User message:", event.content)
+        // Preprocess user input
+      }
+      if (event.type === "message.assistant") {
+        console.log("Assistant response:", event.content)
+        // Post-process responses
+      }
+    },
+  }
+}
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
+
+export const MessagePlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "message.user") {
+        console.log("User message:", event.content)
+        // Preprocess user input
+      }
+      if (event.type === "message.assistant") {
+        console.log("Assistant response:", event.content)
+        // Post-process responses
+      }
+    },
+  }
+}
+`,
+  },
+  sessionLifecycle: {
+    name: "Session Lifecycle",
+    description: "Track session start/end events",
+    js: `export const SessionPlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "session.start") {
+        console.log("Session started:", event.sessionId)
+        // Initialize resources, start timers
+      }
+      if (event.type === "session.idle") {
+        console.log("Session idle, cleaning up...")
+        // Cleanup, save state
+      }
+      if (event.type === "session.end") {
+        console.log("Session ended")
+        // Final cleanup
+      }
+    },
+  }
+}
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
+
+export const SessionPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "session.start") {
+        console.log("Session started:", event.sessionId)
+        // Initialize resources, start timers
+      }
+      if (event.type === "session.idle") {
+        console.log("Session idle, cleaning up...")
+        // Cleanup, save state
+      }
+      if (event.type === "session.end") {
+        console.log("Session ended")
+        // Final cleanup
+      }
+    },
+  }
+}
+`,
+  },
+  gitHook: {
+    name: "Git Hook",
+    description: "React to git operations",
+    js: `export const GitPlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "git.commit.before") {
+        console.log("Before commit:", event.message)
+        // Run pre-commit checks
+        // return { abort: true, reason: "..." } to prevent commit
+      }
+      if (event.type === "git.commit.after") {
+        console.log("Committed:", event.hash)
+        // Post-commit actions (e.g., update changelog)
+      }
+      if (event.type === "git.push.before") {
+        console.log("Before push to:", event.remote)
+        // Verify before push
+      }
+    },
+  }
+}
+`,
+    ts: `import type { Plugin } from "@opencode-ai/plugin"
+
+export const GitPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "git.commit.before") {
+        console.log("Before commit:", event.message)
+        // Run pre-commit checks
+        // return { abort: true, reason: "..." } to prevent commit
+      }
+      if (event.type === "git.commit.after") {
+        console.log("Committed:", event.hash)
+        // Post-commit actions (e.g., update changelog)
+      }
+      if (event.type === "git.push.before") {
+        console.log("Before push to:", event.remote)
+        // Verify before push
+      }
+    },
+  }
+}
+`,
+  },
+};
+
+type TemplateKey = keyof typeof PLUGIN_TEMPLATES;
 
 function isUrl(str: string): boolean {
   try {
@@ -86,7 +297,8 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [fileType, setFileType] = useState<"js" | "ts">("ts");
-  const [content, setContent] = useState(TS_TEMPLATE);
+  const [template, setTemplate] = useState<TemplateKey>("basic");
+  const [content, setContent] = useState(PLUGIN_TEMPLATES.basic.ts);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -95,14 +307,20 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const resetForm = () => {
     setName("");
     setFileType("ts");
-    setContent(TS_TEMPLATE);
+    setTemplate("basic");
+    setContent(PLUGIN_TEMPLATES.basic.ts);
     setError("");
     setUrlInput("");
   };
 
   const handleTypeChange = (type: "js" | "ts") => {
     setFileType(type);
-    setContent(type === "ts" ? TS_TEMPLATE : JS_TEMPLATE);
+    setContent(PLUGIN_TEMPLATES[template][type]);
+  };
+
+  const handleTemplateChange = (newTemplate: TemplateKey) => {
+    setTemplate(newTemplate);
+    setContent(PLUGIN_TEMPLATES[newTemplate][fileType]);
   };
 
   const handleFetchUrl = async () => {
@@ -275,6 +493,27 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
           <p className="text-xs text-muted-foreground">
             Will be saved as {name ? (name.endsWith(`.${fileType}`) ? name : `${name}.${fileType}`) : `plugin-name.${fileType}`}
           </p>
+
+          <div className="space-y-2">
+            <Label>Template</Label>
+            <Select value={template} onValueChange={(v) => handleTemplateChange(v as TemplateKey)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PLUGIN_TEMPLATES).map(([key, tmpl]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex flex-col items-start">
+                      <span>{tmpl.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {PLUGIN_TEMPLATES[template].description}
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="plugin-content">Content</Label>
