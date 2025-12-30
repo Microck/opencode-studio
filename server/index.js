@@ -164,27 +164,18 @@ app.get('/api/config', (req, res) => {
 
         // Migration: Move root providers to model.providers
         if (opencodeConfig.providers) {
-            const providers = opencodeConfig.providers;
-            delete opencodeConfig.providers;
+            if (typeof opencodeConfig.model !== 'string') {
+                const providers = opencodeConfig.providers;
+                delete opencodeConfig.providers;
 
-            if (typeof opencodeConfig.model === 'string') {
-                // If model is a string, we can't easily put providers inside it without changing it to an object
-                // We'll convert it to { aliases: {}, providers: ... } if needed, or just keep it as is
-                // but for CLI compatibility, if it's a string, it stays a string.
-                // However, we want to keep the providers data.
-                opencodeConfig.model = {
-                    aliases: {},
-                    providers: providers
-                };
-            } else {
                 opencodeConfig.model = {
                     ...(opencodeConfig.model || {}),
                     providers: providers
                 };
+                
+                fs.writeFileSync(paths.opencodeJson, JSON.stringify(opencodeConfig, null, 2), 'utf8');
+                changed = true;
             }
-            
-            fs.writeFileSync(paths.opencodeJson, JSON.stringify(opencodeConfig, null, 2), 'utf8');
-            changed = true;
         }
 
         res.json(opencodeConfig);
