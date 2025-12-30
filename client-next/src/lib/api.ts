@@ -111,6 +111,26 @@ export async function fetchUrl(url: string): Promise<FetchUrlResult> {
   return data;
 }
 
+export interface BulkFetchResult {
+  url: string;
+  success: boolean;
+  error?: string;
+  content?: string;
+  body?: string;
+  filename?: string;
+  name?: string;
+  description?: string;
+}
+
+export interface BulkFetchResponse {
+  results: BulkFetchResult[];
+}
+
+export async function bulkFetchUrls(urls: string[]): Promise<BulkFetchResponse> {
+  const { data } = await api.post<BulkFetchResponse>('/bulk-fetch', { urls });
+  return data;
+}
+
 export async function getAuthInfo(): Promise<AuthInfo> {
   const { data } = await api.get<AuthInfo>('/auth');
   return data;

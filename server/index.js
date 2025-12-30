@@ -228,7 +228,8 @@ app.get('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const skillDir = path.join(paths.skillDir, req.params.name);
+    const skillName = path.basename(req.params.name);
+    const skillDir = path.join(paths.skillDir, skillName);
     const skillFile = path.join(skillDir, 'SKILL.md');
     
     if (!fs.existsSync(skillFile)) {
@@ -239,7 +240,7 @@ app.get('/api/skills/:name', (req, res) => {
     const { frontmatter, body } = parseSkillFrontmatter(content);
     
     res.json({ 
-        name: req.params.name, 
+        name: skillName, 
         description: frontmatter.description || '',
         content: body,
         rawContent: content,
@@ -250,7 +251,7 @@ app.post('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const skillName = req.params.name;
+    const skillName = path.basename(req.params.name);
     const { description, content } = req.body;
     
     const skillDir = path.join(paths.skillDir, skillName);
@@ -269,7 +270,8 @@ app.delete('/api/skills/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const skillDir = path.join(paths.skillDir, req.params.name);
+    const skillName = path.basename(req.params.name);
+    const skillDir = path.join(paths.skillDir, skillName);
     if (fs.existsSync(skillDir)) {
         fs.rmSync(skillDir, { recursive: true, force: true });
     }
@@ -311,11 +313,12 @@ app.get('/api/plugins/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const filePath = path.join(paths.pluginDir, req.params.name);
+    const pluginName = path.basename(req.params.name);
+    const filePath = path.join(paths.pluginDir, pluginName);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Plugin not found' });
     
     const content = fs.readFileSync(filePath, 'utf8');
-    res.json({ name: req.params.name, content });
+    res.json({ name: pluginName, content });
 });
 
 app.post('/api/plugins/:name', (req, res) => {
@@ -326,7 +329,8 @@ app.post('/api/plugins/:name', (req, res) => {
         fs.mkdirSync(paths.pluginDir, { recursive: true });
     }
     
-    const filePath = path.join(paths.pluginDir, req.params.name);
+    const pluginName = path.basename(req.params.name);
+    const filePath = path.join(paths.pluginDir, pluginName);
     fs.writeFileSync(filePath, req.body.content, 'utf8');
     res.json({ success: true });
 });
@@ -335,7 +339,8 @@ app.delete('/api/plugins/:name', (req, res) => {
     const paths = getPaths();
     if (!paths) return res.status(404).json({ error: 'Opencode not found' });
     
-    const filePath = path.join(paths.pluginDir, req.params.name);
+    const pluginName = path.basename(req.params.name);
+    const filePath = path.join(paths.pluginDir, pluginName);
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
     }
@@ -421,6 +426,71 @@ app.post('/api/fetch-url', async (req, res) => {
     }
 });
 
+app.post('/api/bulk-fetch', async (req, res) => {
+    const { urls } = req.body;
+    
+    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        return res.status(400).json({ error: 'urls array is required' });
+    }
+    
+    if (urls.length > 50) {
+        return res.status(400).json({ error: 'Maximum 50 URLs allowed per request' });
+    }
+    
+    const results = [];
+    
+    for (const url of urls) {
+        if (!url || typeof url !== 'string') {
+            results.push({ url, success: false, error: 'Invalid URL' });
+            continue;
+        }
+        
+        try {
+            const parsedUrl = new URL(url.trim());
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+                results.push({ url, success: false, error: 'Only HTTP/HTTPS allowed' });
+                continue;
+            }
+            
+            const response = await fetch(url.trim(), {
+                headers: { 'User-Agent': 'OpenCode-Studio/1.0' },
+            });
+            
+            if (!response.ok) {
+                results.push({ url, success: false, error: `HTTP ${response.status}` });
+                continue;
+            }
+            
+            const content = await response.text();
+            const filename = parsedUrl.pathname.split('/').pop() || 'file';
+            const { frontmatter, body } = parseSkillFrontmatter(content);
+            
+            const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+            let extractedName = '';
+            const filenameIdx = pathParts.length - 1;
+            if (pathParts[filenameIdx]?.toLowerCase() === 'skill.md' && filenameIdx > 0) {
+                extractedName = pathParts[filenameIdx - 1];
+            } else {
+                extractedName = filename.replace(/\.(md|js|ts)$/i, '').toLowerCase();
+            }
+            
+            results.push({
+                url,
+                success: true,
+                content,
+                body,
+                filename,
+                name: frontmatter.name || extractedName,
+                description: frontmatter.description || '',
+            });
+        } catch (err) {
+            results.push({ url, success: false, error: err.message });
+        }
+    }
+    
+    res.json({ results });
+});
+
 app.post('/api/restore', (req, res) => {
     const paths = getPaths();
     if (!paths) {
@@ -447,19 +517,12 @@ app.post('/api/restore', (req, res) => {
                 fs.mkdirSync(paths.skillDir, { recursive: true });
             }
             for (const skill of backup.skills) {
-                if (backup.version === 2) {
-                    const skillDir = path.join(paths.skillDir, skill.name);
-                    if (!fs.existsSync(skillDir)) {
-                        fs.mkdirSync(skillDir, { recursive: true });
-                    }
-                    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skill.content, 'utf8');
-                } else {
-                    const skillDir = path.join(paths.skillDir, skill.name.replace('.md', ''));
-                    if (!fs.existsSync(skillDir)) {
-                        fs.mkdirSync(skillDir, { recursive: true });
-                    }
-                    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skill.content, 'utf8');
+                const skillName = path.basename(skill.name.replace('.md', ''));
+                const skillDir = path.join(paths.skillDir, skillName);
+                if (!fs.existsSync(skillDir)) {
+                    fs.mkdirSync(skillDir, { recursive: true });
                 }
+                fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skill.content, 'utf8');
             }
         }
         
@@ -468,7 +531,8 @@ app.post('/api/restore', (req, res) => {
                 fs.mkdirSync(paths.pluginDir, { recursive: true });
             }
             for (const plugin of backup.plugins) {
-                fs.writeFileSync(path.join(paths.pluginDir, plugin.name), plugin.content, 'utf8');
+                const pluginName = path.basename(plugin.name);
+                fs.writeFileSync(path.join(paths.pluginDir, pluginName), plugin.content, 'utf8');
             }
         }
         
@@ -559,11 +623,14 @@ app.post('/api/auth/login', (req, res) => {
     if (!provider) {
         return res.status(400).json({ error: 'Provider is required' });
     }
+
+    if (!PROVIDER_DISPLAY_NAMES[provider]) {
+        return res.status(400).json({ error: 'Invalid provider' });
+    }
     
     // Run opencode auth login - this opens browser
     const child = spawn('opencode', ['auth', 'login', provider], {
         stdio: 'inherit',
-        shell: true,
     });
     
     child.on('error', (err) => {
@@ -602,7 +669,7 @@ app.delete('/api/auth/:provider', (req, res) => {
 // Get available providers for login
 app.get('/api/auth/providers', (req, res) => {
     const providers = [
-        { id: 'copilot', name: 'GitHub Copilot', type: 'oauth', description: 'Use GitHub Copilot API' },
+        { id: 'github-copilot', name: 'GitHub Copilot', type: 'oauth', description: 'Use GitHub Copilot API' },
         { id: 'google', name: 'Google AI', type: 'oauth', description: 'Use Google Gemini models' },
         { id: 'anthropic', name: 'Anthropic', type: 'api', description: 'Use Claude models' },
         { id: 'openai', name: 'OpenAI', type: 'api', description: 'Use GPT models' },
@@ -612,6 +679,8 @@ app.get('/api/auth/providers', (req, res) => {
         { id: 'mistral', name: 'Mistral', type: 'api', description: 'Mistral models' },
         { id: 'deepseek', name: 'DeepSeek', type: 'api', description: 'DeepSeek models' },
         { id: 'openrouter', name: 'OpenRouter', type: 'api', description: 'Multiple providers' },
+        { id: 'amazon-bedrock', name: 'Amazon Bedrock', type: 'api', description: 'AWS models' },
+        { id: 'azure', name: 'Azure OpenAI', type: 'api', description: 'Azure GPT models' },
     ];
     res.json(providers);
 });

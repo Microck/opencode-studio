@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { PluginCard } from "@/components/plugin-card";
 import { AddPluginDialog } from "@/components/add-plugin-dialog";
+import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -66,7 +67,14 @@ export default function PluginsPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Plugins</h1>
-        <AddPluginDialog onSuccess={refreshData} />
+        <div className="flex gap-2">
+          <BulkImportDialog 
+            type="plugins" 
+            existingNames={plugins.map(p => p.name)} 
+            onSuccess={refreshData} 
+          />
+          <AddPluginDialog onSuccess={refreshData} />
+        </div>
       </div>
 
       {plugins.length > 0 && (

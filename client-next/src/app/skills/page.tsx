@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { SkillCard } from "@/components/skill-card";
 import { AddSkillDialog } from "@/components/add-skill-dialog";
+import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -69,7 +70,14 @@ export default function SkillsPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Skills</h1>
-        <AddSkillDialog onSuccess={refreshData} />
+        <div className="flex gap-2">
+          <BulkImportDialog 
+            type="skills" 
+            existingNames={skills.map(s => s.name)} 
+            onSuccess={refreshData} 
+          />
+          <AddSkillDialog onSuccess={refreshData} />
+        </div>
       </div>
 
       {skills.length > 0 && (
