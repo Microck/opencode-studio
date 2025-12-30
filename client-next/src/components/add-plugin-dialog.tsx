@@ -21,8 +21,20 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, AlertCircle, Link, Loader2 } from "lucide-react";
-import { savePlugin, fetchUrl } from "@/lib/api";
+import { savePlugin, fetchUrl, addPluginsToConfig } from "@/lib/api";
 import { toast } from "sonner";
+
+function tryParsePluginConfig(text: string): string[] | null {
+  try {
+    const parsed = JSON.parse(text.trim());
+    if (parsed && Array.isArray(parsed.plugin) && parsed.plugin.every((p: unknown) => typeof p === 'string')) {
+      return parsed.plugin;
+    }
+  } catch {
+    // Not valid JSON
+  }
+  return null;
+}
 
 interface AddPluginDialogProps {
   onSuccess: () => void;
@@ -303,6 +315,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [configImporting, setConfigImporting] = useState(false);
 
   const resetForm = () => {
     setName("");
@@ -356,8 +369,39 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
     }
   };
 
+  const handleConfigPaste = async (plugins: string[]) => {
+    try {
+      setConfigImporting(true);
+      setError("");
+      const result = await addPluginsToConfig(plugins);
+      
+      if (result.added.length > 0) {
+        toast.success(`Added ${result.added.length} plugin(s) to config`);
+      }
+      if (result.skipped.length > 0) {
+        toast.info(`Skipped ${result.skipped.length} already existing`);
+      }
+      
+      resetForm();
+      setOpen(false);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add plugins to config");
+    } finally {
+      setConfigImporting(false);
+    }
+  };
+
   const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pastedText = e.clipboardData.getData('text');
+    
+    const configPlugins = tryParsePluginConfig(pastedText);
+    if (configPlugins && configPlugins.length > 0) {
+      e.preventDefault();
+      await handleConfigPaste(configPlugins);
+      return;
+    }
+    
     if (isUrl(pastedText)) {
       e.preventDefault();
       setUrlInput(pastedText);

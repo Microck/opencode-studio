@@ -347,6 +347,51 @@ app.delete('/api/plugins/:name', (req, res) => {
     res.json({ success: true });
 });
 
+// Add npm-style plugins to opencode.json config
+app.post('/api/plugins/config/add', (req, res) => {
+    const paths = getPaths();
+    if (!paths) return res.status(404).json({ error: 'Opencode not found' });
+    
+    const { plugins } = req.body;
+    
+    if (!plugins || !Array.isArray(plugins) || plugins.length === 0) {
+        return res.status(400).json({ error: 'plugins array is required' });
+    }
+    
+    try {
+        let config = {};
+        if (fs.existsSync(paths.opencodeJson)) {
+            config = JSON.parse(fs.readFileSync(paths.opencodeJson, 'utf8'));
+        }
+        
+        if (!config.plugin) {
+            config.plugin = [];
+        }
+        
+        const added = [];
+        const skipped = [];
+        
+        for (const plugin of plugins) {
+            if (typeof plugin !== 'string') continue;
+            const trimmed = plugin.trim();
+            if (!trimmed) continue;
+            
+            if (config.plugin.includes(trimmed)) {
+                skipped.push(trimmed);
+            } else {
+                config.plugin.push(trimmed);
+                added.push(trimmed);
+            }
+        }
+        
+        fs.writeFileSync(paths.opencodeJson, JSON.stringify(config, null, 2), 'utf8');
+        
+        res.json({ success: true, added, skipped });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update config', details: err.message });
+    }
+});
+
 app.get('/api/backup', (req, res) => {
     const paths = getPaths();
     if (!paths) {

@@ -150,4 +150,14 @@ export async function authLogout(provider: string): Promise<void> {
   await api.delete(`/auth/${provider}`);
 }
 
+export interface AddPluginsToConfigResult {
+  added: string[];
+  skipped: string[];
+}
+
+export async function addPluginsToConfig(plugins: string[]): Promise<AddPluginsToConfigResult> {
+  const { data } = await api.post<AddPluginsToConfigResult>('/plugins/config/add', { plugins });
+  return data;
+}
+
 export default api;
