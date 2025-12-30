@@ -336,11 +336,40 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
     setContent(PLUGIN_TEMPLATES[newTemplate][fileType]);
   };
 
+  const handleConfigPaste = async (plugins: string[]) => {
+    try {
+      setConfigImporting(true);
+      setError("");
+      const result = await addPluginsToConfig(plugins);
+      
+      if (result.added.length > 0) {
+        toast.success(`Added ${result.added.length} plugin(s) to config`);
+      }
+      if (result.skipped.length > 0) {
+        toast.info(`Skipped ${result.skipped.length} already existing`);
+      }
+      
+      resetForm();
+      setOpen(false);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add plugins to config");
+    } finally {
+      setConfigImporting(false);
+    }
+  };
+
   const handleFetchUrl = async () => {
     if (!urlInput.trim()) return;
     
+    const configPlugins = tryParsePluginConfig(urlInput);
+    if (configPlugins && configPlugins.length > 0) {
+      await handleConfigPaste(configPlugins);
+      return;
+    }
+    
     if (!isUrl(urlInput)) {
-      setError("Please enter a valid URL (http:// or https://)");
+      setError("Please enter a valid URL (http:// or https://) or JSON config");
       return;
     }
 
@@ -366,29 +395,6 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       setError(err instanceof Error ? err.message : "Failed to fetch URL");
     } finally {
       setFetching(false);
-    }
-  };
-
-  const handleConfigPaste = async (plugins: string[]) => {
-    try {
-      setConfigImporting(true);
-      setError("");
-      const result = await addPluginsToConfig(plugins);
-      
-      if (result.added.length > 0) {
-        toast.success(`Added ${result.added.length} plugin(s) to config`);
-      }
-      if (result.skipped.length > 0) {
-        toast.info(`Skipped ${result.skipped.length} already existing`);
-      }
-      
-      resetForm();
-      setOpen(false);
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add plugins to config");
-    } finally {
-      setConfigImporting(false);
     }
   };
 
