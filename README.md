@@ -35,8 +35,11 @@ open http://localhost:3000
 - **mcp manager:** toggle servers on/off, add new ones by pasting npx commands, delete unused configs
 - **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
+- **models:** configure context windows + output limits for any model, reference data for 35+ models
+- **commands:** browse and manage custom slash commands
+- **editor config:** customize editor settings (font, theme, keybinds)
 - **auth:** view connected providers, login via oauth/api key, track token expiration
-- **settings:** model aliases, permissions, agents, backup/restore, theme toggle
+- **settings:** collapsible sections for model aliases, permissions, agents, providers, backup/restore
 - **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
 
 ---
@@ -85,6 +88,25 @@ flowchart LR
          → click to edit
 ```
 
+#### models
+```
+/models → configure context window + max output for any model
+        → double-click reference model to append to prefix (e.g. github-copilot/)
+        → 35+ reference models with specs (claude, gpt, gemini, deepseek, etc.)
+```
+
+#### commands
+```
+/commands → browse custom slash commands
+          → view command content
+```
+
+#### editor
+```
+/editor → customize editor font, size, theme
+        → configure vim mode, word wrap, minimap
+```
+
 #### auth
 ```
 /auth → view connected providers
@@ -115,7 +137,7 @@ works for both skills and plugins.
 opencode-studio/
 ├── client-next/           # next.js 16 frontend
 │   ├── src/
-│   │   ├── app/           # pages (mcp, skills, plugins, auth, settings)
+│   │   ├── app/           # pages (mcp, skills, plugins, models, commands, editor, auth, settings)
 │   │   ├── components/    # ui components
 │   │   └── lib/           # api client, context
 │   └── public/
