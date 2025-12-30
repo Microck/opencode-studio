@@ -36,6 +36,13 @@ function tryParsePluginConfig(text: string): string[] | null {
   return null;
 }
 
+function isNpmPackageName(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.includes(' ') || trimmed.includes('\n')) return false;
+  // Match: package-name, @scope/package, package@version, @scope/package@version
+  return /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[^\s]+)?$/i.test(trimmed);
+}
+
 interface AddPluginDialogProps {
   onSuccess: () => void;
 }
@@ -368,8 +375,13 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       return;
     }
     
+    if (isNpmPackageName(urlInput)) {
+      await handleConfigPaste([urlInput.trim()]);
+      return;
+    }
+    
     if (!isUrl(urlInput)) {
-      setError("Please enter a valid URL (http:// or https://) or JSON config");
+      setError("Enter a URL, npm package name, or JSON config");
       return;
     }
 
@@ -405,6 +417,12 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
     if (configPlugins && configPlugins.length > 0) {
       e.preventDefault();
       await handleConfigPaste(configPlugins);
+      return;
+    }
+    
+    if (isNpmPackageName(pastedText)) {
+      e.preventDefault();
+      await handleConfigPaste([pastedText.trim()]);
       return;
     }
     
