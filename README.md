@@ -52,20 +52,6 @@ chmod +x quickstart.sh
 ./quickstart.sh
 ```
 
-## Screenshots
-
-### MCP Manager
-![MCP Manager Dashboard](docs/screenshots/mcp-manager.png)
-
-### Skill Editor
-![Skill Editor](docs/screenshots/skill-editor.png)
-
-### Authentication
-![Authentication](docs/screenshots/auth.png)
-
-### Settings
-![Settings Page](docs/screenshots/settings.png)
-
 ## Installation & Usage
 
 ### Prerequisites
