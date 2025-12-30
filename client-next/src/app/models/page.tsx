@@ -484,7 +484,7 @@ export default function ModelsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Default Model Limits</CardTitle>
-          <CardDescription>Reference values (click to pre-fill model name)</CardDescription>
+          <CardDescription>Double-click to append model to prefix (e.g., type "github-copilot/" then double-click)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -492,9 +492,17 @@ export default function ModelsPage() {
               <button
                 key={model}
                 onClick={() => {
-                  setNewModel(newModel || model);
-                  if (!newContext) setNewContext(limits.context.toString());
-                  if (!newOutput && limits.output) setNewOutput(limits.output.toString());
+                  if (!newModel) {
+                    setNewModel(model);
+                    if (!newContext) setNewContext(limits.context.toString());
+                    if (!newOutput && limits.output) setNewOutput(limits.output.toString());
+                  }
+                }}
+                onDoubleClick={() => {
+                  const prefix = newModel.endsWith("/") ? newModel : (newModel ? newModel + "/" : "");
+                  setNewModel(prefix + model);
+                  setNewContext(limits.context.toString());
+                  if (limits.output) setNewOutput(limits.output.toString());
                 }}
                 className="flex items-center justify-between p-2 bg-muted/50 hover:bg-muted rounded text-sm text-left transition-colors gap-2"
               >
