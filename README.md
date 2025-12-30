@@ -134,11 +134,11 @@ config location: `~/.config/opencode/` (auto-detected)
 
 | mcp manager | skill editor |
 |:---:|:---:|
-| ![mcp](docs/screenshots/mcp-manager.png) | ![skills](docs/screenshots/skill-editor.png) |
+| ![mcp](https://github.com/user-attachments/assets/503670e5-cdc0-4486-821b-87852003d335) | ![skills](https://github.com/user-attachments/assets/03963331-786a-4351-982a-434b76fed5d2) |
 
 | auth | settings |
 |:---:|:---:|
-| ![auth](docs/screenshots/auth.png) | ![settings](docs/screenshots/settings.png) |
+| ![auth](https://github.com/user-attachments/assets/628eaed2-626e-4524-94ea-e994b4637663) | ![settings](https://github.com/user-attachments/assets/7aad53ac-00a6-42f8-b526-2c52d1be9cc4) |
 
 ---
 
