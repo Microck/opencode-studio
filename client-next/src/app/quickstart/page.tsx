@@ -132,14 +132,14 @@ export default function QuickstartPage() {
     
     const geminiModel = providerChoices.gemini === "github-copilot" ? "gemini-3-pro-preview" : "gemini-3-pro-high";
     const geminiFlash = providerChoices.gemini === "github-copilot" ? "gemini-3-flash-preview" : "gemini-3-flash";
-    const multimodalModel = providerChoices.gemini === "github-copilot" ? "gemini-2.5-pro" : "gemini-3-flash";
+    const multimodalModel = providerChoices.gemini === "github-copilot" ? "gemini-3-flash-preview" : "gemini-3-flash";
     const grokModel = providerChoices.grok === "github-copilot" ? "grok-code-fast-1" : "grok-code";
     
     return JSON.stringify({
       agents: {
-        "Sisyphus": { model: `${claudePrefix}claude-opus-4-5` },
+        "Sisyphus": { model: `${claudePrefix}claude-opus-4.5` },
         "oracle": { model: `${gptPrefix}gpt-5.2` },
-        "librarian": { model: `${claudePrefix}claude-sonnet-4-5` },
+        "librarian": { model: `${claudePrefix}claude-sonnet-4.5` },
         "frontend-ui-ux-engineer": { model: `${geminiPrefix}${geminiModel}` },
         "document-writer": { model: `${geminiPrefix}${geminiFlash}` },
         "multimodal-looker": { model: `${geminiPrefix}${multimodalModel}` },
