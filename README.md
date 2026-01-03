@@ -22,20 +22,17 @@
 npm install -g opencode-studio-server
 ```
 
-2. visit the public site: [opencode-studio.vercel.app](https://opencode-studio.vercel.app)
+2. visit [opencode-studio.vercel.app](https://opencode-studio.vercel.app)
 
-3. click "Launch Backend" in the sidebar → backend starts automatically
+3. click "Launch Backend" - backend starts automatically
 
 #### option 2: fully local
 
-**windows**
-```batch
-quickstart.bat
-```
-
-**macos / linux**
 ```bash
-chmod +x quickstart.sh
+# windows
+quickstart.bat
+
+# macos / linux
 ./quickstart.sh
 ```
 
@@ -45,186 +42,49 @@ open http://localhost:3000
 
 ### features
 
-- **mcp manager:** toggle servers on/off, add new ones by pasting npx commands, delete unused configs
-- **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
-- **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
-- **models:** configure context windows + output limits for any model, reference data for 35+ models
-- **commands:** browse and manage custom slash commands
-- **editor config:** customize editor settings (font, theme, keybinds)
-- **auth:** view connected providers, login via oauth/api key, track token expiration
-- **settings:** collapsible sections for model aliases, permissions, agents, providers, backup/restore
-- **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
+- **mcp manager:** toggle servers on/off, add new ones, delete unused configs
+- **skill editor:** browse/edit skills, create from templates, import from url, bulk import
+- **plugin hub:** manage js/ts plugins, multiple templates, bulk import
+- **models:** configure context windows + output limits, 35+ reference models
+- **commands:** browse custom slash commands
+- **editor config:** font, theme, vim mode, keybinds
+- **auth:** view providers, oauth login, token expiration
+- **settings:** model aliases, permissions, agents, providers, backup/restore
 
 ---
 
 ### how it works
 
-#### public mode
-```mermaid
-flowchart LR
-    A[Public Site] -->|opencodestudio://| B[Protocol Handler]
-    B -->|Starts| C(Express API :3001)
-    C -->|Read/Write| D[~/.config/opencode/]
-    A -->|HTTP to localhost| C
-```
-
-#### local mode
 ```mermaid
 flowchart LR
     A[Browser] -->|HTTP| B(Express API :3001)
     B -->|Read/Write| C[~/.config/opencode/]
-    C --> D[opencode.json]
-    C --> E[skill/]
-    C --> F[plugin/]
-    A -->|UI| G(Next.js :3000)
-    G -->|Fetch| B
 ```
 
-1. **detect:** server finds your opencode config directory automatically
-2. **read:** loads `opencode.json`, skills, plugins, auth
-3. **edit:** make changes through the ui
-4. **save:** writes back to disk instantly
+1. server finds your opencode config directory
+2. loads `opencode.json`, skills, plugins, auth
+3. make changes through the ui
+4. writes back to disk instantly
 
 ---
 
-### usage
+### deep links
 
-#### mcp servers
-```
-/mcp → toggle switches to enable/disable
-     → [Add] paste npx command or configure manually
-     → search/filter by name
-```
-
-#### skills
-```
-/skills → [New Skill] create from template
-        → [Bulk Import] paste multiple urls
-        → click card to edit in monaco editor
-        → toggle enable/disable
-```
-
-#### plugins
-```
-/plugins → [New Plugin] pick template (basic, hooks, watcher, etc.)
-         → [Bulk Import] paste multiple urls
-         → click to edit
-```
-
-#### models
-```
-/models → configure context window + max output for any model
-        → double-click reference model to append to prefix (e.g. copilot/)
-        → 35+ reference models with specs (claude, gpt, gemini, deepseek, etc.)
-```
-
-#### commands
-```
-/commands → browse custom slash commands
-          → view command content
-```
-
-#### editor
-```
-/editor → customize editor font, size, theme
-        → configure vim mode, word wrap, minimap
-```
-
-#### auth
-```
-/auth → view connected providers
-      → [Login] opens browser oauth
-      → remove credentials
-```
-
----
-
-### bulk import
-
-paste multiple raw github urls (one per line):
-```
-https://raw.githubusercontent.com/.../skills/brainstorming/SKILL.md
-https://raw.githubusercontent.com/.../skills/debugging/SKILL.md
-https://raw.githubusercontent.com/.../skills/tdd/SKILL.md
-```
-
-click fetch → preview table with checkboxes → existing items unchecked by default → import selected
-
-works for both skills and plugins.
-
----
-
-### deep links (protocol handler)
-
-opencode studio supports deep links for one-click installs from external sites.
-
-#### available protocols
+one-click installs from external sites:
 
 | protocol | description |
 |:---|:---|
-| `opencodestudio://launch` | start backend only |
-| `opencodestudio://launch?open=local` | start backend + open localhost:3000 |
-| `opencodestudio://install-mcp?name=NAME&cmd=COMMAND` | install mcp server |
-| `opencodestudio://import-skill?url=URL` | import skill from url |
-| `opencodestudio://import-plugin?url=URL` | import plugin from url |
+| `opencodestudio://launch` | start backend |
+| `opencodestudio://install-mcp?name=X&cmd=Y` | install mcp server |
+| `opencodestudio://import-skill?url=X` | import skill |
+| `opencodestudio://import-plugin?url=X` | import plugin |
 
-#### examples
-
-**add mcp server button (for docs/repos):**
+example button for docs:
 ```html
 <a href="opencodestudio://install-mcp?name=my-server&cmd=npx%20-y%20%40my%2Fmcp-server">
   Add to OpenCode
 </a>
 ```
-
-**import skill button:**
-```html
-<a href="opencodestudio://import-skill?url=https%3A%2F%2Fraw.githubusercontent.com%2F...%2FSKILL.md">
-  Import Skill
-</a>
-```
-
-**with environment variables:**
-```
-opencodestudio://install-mcp?name=api-server&cmd=npx%20-y%20my-mcp&env=%7B%22API_KEY%22%3A%22%22%7D
-```
-
-#### url encoding
-
-parameters must be url-encoded:
-- spaces → `%20`
-- `/` → `%2F`
-- `:` → `%3A`
-- `{` → `%7B`
-- `}` → `%7D`
-
-#### security
-
-when clicking deep links, users see a confirmation dialog showing:
-- command to be executed (for mcp)
-- source url (for skills/plugins)
-- warning about trusting the source
-
----
-
-### project structure
-
-```
-opencode-studio/
-├── client-next/           # next.js 16 frontend
-│   ├── src/
-│   │   ├── app/           # pages (mcp, skills, plugins, models, commands, editor, auth, settings)
-│   │   ├── components/    # ui components
-│   │   └── lib/           # api client, context
-│   └── public/
-├── server/
-│   └── index.js           # express api
-├── quickstart.bat
-├── quickstart.sh
-└── package.json           # runs both with concurrently
-```
-
-config location: `~/.config/opencode/` (auto-detected)
 
 ---
 
@@ -240,96 +100,14 @@ config location: `~/.config/opencode/` (auto-detected)
 
 ---
 
-### manual install
-
-#### backend only (for public site)
-```bash
-npm install -g opencode-studio-server
-opencode-studio-server
-```
-
-#### full local setup
-```bash
-git clone https://github.com/Microck/opencode-studio.git
-cd opencode-studio
-
-./install.sh   # or install.bat on windows
-./start.sh     # or start.bat on windows
-```
-
-- frontend: http://localhost:3000
-- api: http://localhost:3001
-
----
-
 ### troubleshooting
 
 | problem | fix |
 |:---|:---|
 | "opencode not found" | ensure `~/.config/opencode/opencode.json` exists |
-| port 3000/3001 in use | kill existing processes or change ports |
-| skills not showing | check `~/.config/opencode/skill/` has SKILL.md files |
-| bulk import fails | ensure urls are raw github links (raw.githubusercontent.com) |
+| port 3000/3001 in use | kill existing processes |
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
 | protocol handler not registered | run `opencode-studio-server --register` as admin |
-
----
-
-### publishing the server package
-
-for maintainers who need to publish the `opencode-studio-server` npm package:
-
-#### prerequisites
-- npm account at https://www.npmjs.com/signup
-- 2FA enabled (recommended)
-
-#### steps
-
-```bash
-# 1. login to npm
-npm login
-
-# 2. verify login
-npm whoami
-
-# 3. navigate to server
-cd server
-
-# 4. dry run to check files
-npm publish --dry-run
-
-# 5. publish
-npm publish
-
-# 6. verify
-npm view opencode-studio-server
-```
-
-#### version bumping
-
-before publishing updates:
-```bash
-cd server
-npm version patch  # or minor/major
-npm publish
-```
-
-#### common issues
-
-| error | solution |
-|:---|:---|
-| `ENEEDAUTH` | run `npm login` first |
-| `E403` | package name taken or not logged in |
-| `EPUBLISHCONFLICT` | version exists, run `npm version patch` |
-| `E402` | for scoped packages, add `--access public` |
-
----
-
-### tech stack
-
-- **frontend:** next.js 16, tailwind css v4, shadcn/ui, geist font
-- **backend:** express, node.js
-- **storage:** filesystem (reads/writes opencode config directly)
 
 ---
 
