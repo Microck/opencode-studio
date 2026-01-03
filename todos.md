@@ -61,7 +61,7 @@ Dual mode support:
 - [x] Set env var in Vercel: `NEXT_PUBLIC_API_URL=http://localhost:3001/api`
 - [x] Test full public flow (partial - frontend works, backend needs npm publish)
 
-**Deployed URL:** https://client-next-nu.vercel.app
+**Deployed URL:** https://opencode-studio.vercel.app
 
 **To complete npm publish, run:**
 ```

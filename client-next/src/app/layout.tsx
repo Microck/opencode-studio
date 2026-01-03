@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
+import { AppShell } from "@/components/app-shell";
 import { AppProvider } from "@/lib/context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -48,12 +48,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <main className="flex-1 overflow-auto p-6">
-                {children}
-              </main>
-            </div>
+            <AppShell>
+              {children}
+            </AppShell>
             <PendingActionDialog />
             <Toaster />
           </AppProvider>
