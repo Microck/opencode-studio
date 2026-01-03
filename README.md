@@ -154,6 +154,59 @@ works for both skills and plugins.
 
 ---
 
+### deep links (protocol handler)
+
+opencode studio supports deep links for one-click installs from external sites.
+
+#### available protocols
+
+| protocol | description |
+|:---|:---|
+| `opencodestudio://launch` | start backend only |
+| `opencodestudio://launch?open=local` | start backend + open localhost:3000 |
+| `opencodestudio://install-mcp?name=NAME&cmd=COMMAND` | install mcp server |
+| `opencodestudio://import-skill?url=URL` | import skill from url |
+| `opencodestudio://import-plugin?url=URL` | import plugin from url |
+
+#### examples
+
+**add mcp server button (for docs/repos):**
+```html
+<a href="opencodestudio://install-mcp?name=my-server&cmd=npx%20-y%20%40my%2Fmcp-server">
+  Add to OpenCode
+</a>
+```
+
+**import skill button:**
+```html
+<a href="opencodestudio://import-skill?url=https%3A%2F%2Fraw.githubusercontent.com%2F...%2FSKILL.md">
+  Import Skill
+</a>
+```
+
+**with environment variables:**
+```
+opencodestudio://install-mcp?name=api-server&cmd=npx%20-y%20my-mcp&env=%7B%22API_KEY%22%3A%22%22%7D
+```
+
+#### url encoding
+
+parameters must be url-encoded:
+- spaces → `%20`
+- `/` → `%2F`
+- `:` → `%3A`
+- `{` → `%7B`
+- `}` → `%7D`
+
+#### security
+
+when clicking deep links, users see a confirmation dialog showing:
+- command to be executed (for mcp)
+- source url (for skills/plugins)
+- warning about trusting the source
+
+---
+
 ### project structure
 
 ```
@@ -219,6 +272,56 @@ cd opencode-studio
 | bulk import fails | ensure urls are raw github links (raw.githubusercontent.com) |
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
 | protocol handler not registered | run `opencode-studio-server --register` as admin |
+
+---
+
+### publishing the server package
+
+for maintainers who need to publish the `opencode-studio-server` npm package:
+
+#### prerequisites
+- npm account at https://www.npmjs.com/signup
+- 2FA enabled (recommended)
+
+#### steps
+
+```bash
+# 1. login to npm
+npm login
+
+# 2. verify login
+npm whoami
+
+# 3. navigate to server
+cd server
+
+# 4. dry run to check files
+npm publish --dry-run
+
+# 5. publish
+npm publish
+
+# 6. verify
+npm view opencode-studio-server
+```
+
+#### version bumping
+
+before publishing updates:
+```bash
+cd server
+npm version patch  # or minor/major
+npm publish
+```
+
+#### common issues
+
+| error | solution |
+|:---|:---|
+| `ENEEDAUTH` | run `npm login` first |
+| `E403` | package name taken or not logged in |
+| `EPUBLISHCONFLICT` | version exists, run `npm version patch` |
+| `E402` | for scoped packages, add `--access public` |
 
 ---
 

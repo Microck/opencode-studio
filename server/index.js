@@ -30,6 +30,39 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
+const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
+
+let pendingActionMemory = null;
+
+function loadPendingAction() {
+    if (pendingActionMemory) return pendingActionMemory;
+    
+    if (fs.existsSync(PENDING_ACTION_PATH)) {
+        try {
+            const action = JSON.parse(fs.readFileSync(PENDING_ACTION_PATH, 'utf8'));
+            if (action.timestamp && Date.now() - action.timestamp < 60000) {
+                pendingActionMemory = action;
+                fs.unlinkSync(PENDING_ACTION_PATH);
+                return action;
+            }
+            fs.unlinkSync(PENDING_ACTION_PATH);
+        } catch {
+            try { fs.unlinkSync(PENDING_ACTION_PATH); } catch {}
+        }
+    }
+    return null;
+}
+
+function clearPendingAction() {
+    pendingActionMemory = null;
+    if (fs.existsSync(PENDING_ACTION_PATH)) {
+        try { fs.unlinkSync(PENDING_ACTION_PATH); } catch {}
+    }
+}
+
+function setPendingAction(action) {
+    pendingActionMemory = { ...action, timestamp: Date.now() };
+}
 
 const AUTH_CANDIDATE_PATHS = [
     path.join(HOME_DIR, '.local', 'share', 'opencode', 'auth.json'),
@@ -134,6 +167,26 @@ console.log(`Detected config at: ${getConfigDir() || 'NOT FOUND'}`);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+app.get('/api/pending-action', (req, res) => {
+    const action = loadPendingAction();
+    res.json({ action });
+});
+
+app.delete('/api/pending-action', (req, res) => {
+    clearPendingAction();
+    res.json({ success: true });
+});
+
+app.post('/api/pending-action', (req, res) => {
+    const { action } = req.body;
+    if (action && action.type) {
+        setPendingAction(action);
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: 'Invalid action' });
+    }
 });
 
 app.get('/api/paths', (req, res) => {

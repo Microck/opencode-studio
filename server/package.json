@@ -4,7 +4,7 @@
   "description": "Backend server for OpenCode Studio - manages opencode configurations",
   "main": "index.js",
   "bin": {
-    "opencode-studio-server": "./cli.js"
+    "opencode-studio-server": "cli.js"
   },
   "scripts": {
     "start": "node index.js",
@@ -21,7 +21,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Microck/opencode-studio.git"
+    "url": "git+https://github.com/Microck/opencode-studio.git"
   },
   "type": "commonjs",
   "dependencies": {

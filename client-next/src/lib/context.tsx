@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth } from '@/lib/api';
+import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, getPendingAction, clearPendingAction, type PendingAction } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
 
 interface AppContextType {
@@ -11,6 +11,7 @@ interface AppContextType {
   loading: boolean;
   error: string | null;
   connected: boolean;
+  pendingAction: PendingAction | null;
   refreshData: () => Promise<void>;
   saveConfig: (config: OpencodeConfig) => Promise<void>;
   toggleMCP: (key: string) => Promise<void>;
@@ -18,6 +19,7 @@ interface AppContextType {
   addMCP: (key: string, mcpConfig: MCPConfig) => Promise<void>;
   toggleSkill: (name: string) => Promise<void>;
   togglePlugin: (name: string) => Promise<void>;
+  dismissPendingAction: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -29,7 +31,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const checkedPendingRef = useRef(false);
 
   const refreshData = useCallback(async () => {
     try {
@@ -53,19 +57,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const checkForPendingAction = useCallback(async () => {
+    if (checkedPendingRef.current) return;
+    checkedPendingRef.current = true;
+    
+    const action = await getPendingAction();
+    if (action) {
+      setPendingAction(action);
+    }
+  }, []);
+
   useEffect(() => {
     const pollHealth = async () => {
       const isHealthy = await checkHealth();
       if (isHealthy && !connected) {
         setConnected(true);
         refreshData();
+        checkForPendingAction();
       } else if (!isHealthy && connected) {
         setConnected(false);
         setError('Backend disconnected');
+        checkedPendingRef.current = false;
       }
     };
 
-    refreshData();
+    refreshData().then(() => {
+      if (connected) {
+        checkForPendingAction();
+      }
+    });
     healthCheckRef.current = setInterval(pollHealth, 3000);
 
     return () => {
@@ -73,7 +93,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearInterval(healthCheckRef.current);
       }
     };
-  }, [refreshData, connected]);
+  }, [refreshData, connected, checkForPendingAction]);
+
+  const dismissPendingAction = useCallback(async () => {
+    await clearPendingAction();
+    setPendingAction(null);
+  }, []);
 
   const saveConfigHandler = useCallback(async (newConfig: OpencodeConfig) => {
     await apiSaveConfig(newConfig);
@@ -134,6 +159,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loading,
         error,
         connected,
+        pendingAction,
         refreshData,
         saveConfig: saveConfigHandler,
         toggleMCP,
@@ -141,6 +167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addMCP,
         toggleSkill,
         togglePlugin,
+        dismissPendingAction,
       }}
     >
       {children}

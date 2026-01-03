@@ -107,17 +107,17 @@ export default function QuickstartPage() {
     starterkit: false,
   });
   
-  type Provider = "copilot" | "anthropic" | "openai" | "google" | "opencode";
+  type Provider = "github-copilot" | "anthropic" | "openai" | "google" | "opencode";
   const [providerChoices, setProviderChoices] = useState<{
     claude: Provider;
     gpt: Provider;
     gemini: Provider;
     grok: Provider;
   }>({
-    claude: "copilot",
-    gpt: "copilot",
-    gemini: "copilot",
-    grok: "copilot",
+    claude: "github-copilot",
+    gpt: "github-copilot",
+    gemini: "github-copilot",
+    grok: "github-copilot",
   });
 
   const setProvider = (key: keyof typeof providerChoices, value: Provider) => {
@@ -125,15 +125,15 @@ export default function QuickstartPage() {
   };
 
   const ohmyopencodeConfig = useMemo(() => {
-    const claudePrefix = providerChoices.claude === "copilot" ? "copilot/" : "anthropic/";
-    const gptPrefix = providerChoices.gpt === "copilot" ? "copilot/" : "openai/";
-    const geminiPrefix = providerChoices.gemini === "copilot" ? "copilot/" : "google/";
-    const grokPrefix = providerChoices.grok === "copilot" ? "copilot/" : "opencode/";
+    const claudePrefix = providerChoices.claude === "github-copilot" ? "github-copilot/" : "anthropic/";
+    const gptPrefix = providerChoices.gpt === "github-copilot" ? "github-copilot/" : "openai/";
+    const geminiPrefix = providerChoices.gemini === "github-copilot" ? "github-copilot/" : "google/";
+    const grokPrefix = providerChoices.grok === "github-copilot" ? "github-copilot/" : "opencode/";
     
-    const geminiModel = providerChoices.gemini === "copilot" ? "gemini-3-pro-preview" : "gemini-3-pro-high";
-    const geminiFlash = providerChoices.gemini === "copilot" ? "gemini-3-flash-preview" : "gemini-3-flash";
-    const multimodalModel = providerChoices.gemini === "copilot" ? "gemini-2.5-pro" : "gemini-3-flash";
-    const grokModel = providerChoices.grok === "copilot" ? "grok-code-fast-1" : "grok-code";
+    const geminiModel = providerChoices.gemini === "github-copilot" ? "gemini-3-pro-preview" : "gemini-3-pro-high";
+    const geminiFlash = providerChoices.gemini === "github-copilot" ? "gemini-3-flash-preview" : "gemini-3-flash";
+    const multimodalModel = providerChoices.gemini === "github-copilot" ? "gemini-2.5-pro" : "gemini-3-flash";
+    const grokModel = providerChoices.grok === "github-copilot" ? "grok-code-fast-1" : "grok-code";
     
     return JSON.stringify({
       agents: {
@@ -341,7 +341,7 @@ export default function QuickstartPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="copilot">GitHub Copilot</SelectItem>
+                          <SelectItem value="github-copilot">GitHub Copilot</SelectItem>
                           <SelectItem value="anthropic">Anthropic</SelectItem>
                         </SelectContent>
                       </Select>
@@ -354,7 +354,7 @@ export default function QuickstartPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="copilot">GitHub Copilot</SelectItem>
+                          <SelectItem value="github-copilot">GitHub Copilot</SelectItem>
                           <SelectItem value="openai">OpenAI</SelectItem>
                         </SelectContent>
                       </Select>
@@ -367,7 +367,7 @@ export default function QuickstartPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="copilot">GitHub Copilot</SelectItem>
+                          <SelectItem value="github-copilot">GitHub Copilot</SelectItem>
                           <SelectItem value="google">Google</SelectItem>
                         </SelectContent>
                       </Select>
@@ -380,7 +380,7 @@ export default function QuickstartPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="copilot">GitHub Copilot</SelectItem>
+                          <SelectItem value="github-copilot">GitHub Copilot</SelectItem>
                           <SelectItem value="opencode">OpenCode (free)</SelectItem>
                         </SelectContent>
                       </Select>

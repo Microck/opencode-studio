@@ -12,6 +12,42 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
+export function buildProtocolUrl(action: string, params?: Record<string, string>): string {
+  let url = `opencodestudio://${action}`;
+  if (params && Object.keys(params).length > 0) {
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      searchParams.set(key, value);
+    }
+    url += `?${searchParams.toString()}`;
+  }
+  return url;
+}
+
+export interface PendingAction {
+  type: 'install-mcp' | 'import-skill' | 'import-plugin';
+  name?: string;
+  command?: string;
+  url?: string;
+  env?: Record<string, string>;
+  timestamp: number;
+}
+
+export async function getPendingAction(): Promise<PendingAction | null> {
+  try {
+    const { data } = await api.get<{ action: PendingAction | null }>('/pending-action');
+    return data.action;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearPendingAction(): Promise<void> {
+  try {
+    await api.delete('/pending-action');
+  } catch {}
+}
+
 export async function checkHealth(): Promise<boolean> {
   try {
     await api.get('/health', { timeout: 3000 });

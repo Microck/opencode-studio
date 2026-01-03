@@ -51,7 +51,7 @@ import {
 import { toast } from "sonner";
 import type { ModelAlias, PermissionValue, OpencodeConfig, ModelConfig } from "@/types";
 
-const PROVIDERS = ["copilot", "openai", "anthropic", "gemini", "ollama", "xai", "deepseek"];
+const PROVIDERS = ["github-copilot", "openai", "anthropic", "gemini", "ollama", "xai", "deepseek"];
 const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR"] as const;
 const THEMES = ["dark", "light", "auto"] as const;
 const SHARE_OPTIONS = ["manual", "auto", "disabled"] as const;
@@ -73,7 +73,7 @@ export default function SettingsPage() {
   const { config, loading, saveConfig, refreshData } = useApp();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ provider: string; model: string }>({ provider: "", model: "" });
-  const [newAlias, setNewAlias] = useState({ key: "", provider: "copilot", model: "" });
+  const [newAlias, setNewAlias] = useState({ key: "", provider: "github-copilot", model: "" });
   const [pathsInfo, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,7 +129,7 @@ export default function SettingsPage() {
 
     try {
       await saveConfig(newConfig);
-      setNewAlias({ key: "", provider: "copilot", model: "" });
+      setNewAlias({ key: "", provider: "github-copilot", model: "" });
       toast.success(`Added ${newAlias.key}`);
     } catch {
       toast.error("Failed to add alias");

@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar";
 import { AppProvider } from "@/lib/context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { PendingActionDialog } from "@/components/pending-action-dialog";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -53,6 +54,7 @@ export default function RootLayout({
                 {children}
               </main>
             </div>
+            <PendingActionDialog />
             <Toaster />
           </AppProvider>
         </ThemeProvider>
