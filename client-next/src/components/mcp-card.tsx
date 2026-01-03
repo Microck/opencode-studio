@@ -43,7 +43,7 @@ export function MCPCard({ name, config, onToggle, onDelete }: MCPCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        <code className="block text-xs bg-muted p-2 rounded overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-mono">
+        <code className="block text-xs bg-background p-2 rounded overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-mono">
           {fullCommand}
         </code>
         <Badge variant={config.type === "local" ? "default" : "secondary"}>

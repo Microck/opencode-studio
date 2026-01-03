@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu, Rocket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -23,6 +23,10 @@ const navItems = [
   { href: "/auth", label: "Auth", icon: Key },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/config", label: "Raw Config", icon: FileJson },
+];
+
+const bottomNavItems = [
+  { href: "/quickstart", label: "Quickstart", icon: Rocket },
 ];
 
 export function Sidebar() {
@@ -63,6 +67,34 @@ export function Sidebar() {
             );
           })}
         </nav>
+
+        <div className="p-4 space-y-1">
+          {bottomNavItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start gap-3",
+                      isActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                    asChild
+                  >
+                    <Link href={item.href}>
+                      <item.icon className="h-4 w-4" />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{item.label}</p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
 
         <div className="p-4 border-t border-border flex items-center justify-between">
           <span className="text-xs text-muted-foreground">v1.0</span>

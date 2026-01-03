@@ -256,7 +256,7 @@ export default function CommandsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-muted/50 p-3 rounded-md max-h-32 overflow-auto">
+                <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-background p-3 rounded-md max-h-32 overflow-auto">
                   {cmd.template}
                 </pre>
               </CardContent>

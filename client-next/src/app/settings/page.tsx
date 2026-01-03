@@ -371,7 +371,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
                 <div>
                   <Label>Auto Update</Label>
                   <p className="text-sm text-muted-foreground">Automatically update OpenCode</p>
@@ -382,7 +382,7 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
                 <div>
                   <Label>Snapshot</Label>
                   <p className="text-sm text-muted-foreground">Enable conversation snapshots</p>
@@ -413,7 +413,7 @@ export default function SettingsPage() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-6 pt-0">
-              <div className="flex gap-4 items-end p-4 bg-muted/50 rounded-lg">
+              <div className="flex gap-4 items-end p-4 bg-background rounded-lg">
                 <div className="flex-1 space-y-2">
                   <Label className="text-xs text-muted-foreground">Alias Key</Label>
                   <Input
@@ -504,7 +504,7 @@ export default function SettingsPage() {
                         <>
                           <TableCell className="font-mono text-primary">{key}</TableCell>
                           <TableCell>
-                            <code className="px-2 py-1 bg-muted rounded text-xs">{alias.provider}</code>
+                            <code className="px-2 py-1 bg-background rounded text-xs">{alias.provider}</code>
                           </TableCell>
                           <TableCell className="font-mono text-muted-foreground">{alias.model}</TableCell>
                           <TableCell className="text-right">
@@ -552,7 +552,7 @@ export default function SettingsPage() {
           <CollapsibleContent>
             <CardContent className="space-y-4 pt-0">
               {(["edit", "bash", "skill", "webfetch", "doom_loop", "external_directory"] as const).map((perm) => (
-                <div key={perm} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div key={perm} className="flex items-center justify-between p-4 bg-background rounded-lg">
                   <div>
                     <Label className="capitalize">{perm.replace("_", " ")}</Label>
                     <p className="text-sm text-muted-foreground">
@@ -598,7 +598,7 @@ export default function SettingsPage() {
           <CollapsibleContent>
             <CardContent className="space-y-4 pt-0">
               {AGENT_NAMES.map((agent) => (
-                <div key={agent} className="p-4 bg-muted/50 rounded-lg space-y-4">
+                <div key={agent} className="p-4 bg-background rounded-lg space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium capitalize">{agent}</Label>
                     <Switch
@@ -695,7 +695,7 @@ export default function SettingsPage() {
                   ["editor_open", "Open editor"],
                   ["model_selector", "Model selector"],
                 ].map(([key, label]) => (
-                  <div key={key} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div key={key} className="flex items-center justify-between p-3 bg-background rounded-lg">
                     <Label className="text-sm">{label}</Label>
                     <Input
                       value={config?.keybinds?.[key] || ""}
@@ -760,7 +760,7 @@ export default function SettingsPage() {
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
                 <div>
                   <Label>Scroll Acceleration</Label>
                   <p className="text-sm text-muted-foreground">Enable smooth scroll acceleration</p>
@@ -797,13 +797,13 @@ export default function SettingsPage() {
           <CollapsibleContent>
             <CardContent className="space-y-6 pt-0">
               <div className="space-y-4">
-                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                <div className="p-4 bg-background rounded-lg space-y-2">
                   <Label className="text-xs text-muted-foreground">Current Path</Label>
                   <p className="font-mono text-sm break-all">{pathsInfo?.current || "Not found"}</p>
                 </div>
 
                 {pathsInfo?.manual && (
-                  <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <div className="p-4 bg-background rounded-lg space-y-2">
                     <Label className="text-xs text-muted-foreground">Manual Override</Label>
                     <div className="flex items-center justify-between">
                       <p className="font-mono text-sm break-all">{pathsInfo.manual}</p>
@@ -816,7 +816,7 @@ export default function SettingsPage() {
                 )}
 
                 {pathsInfo?.detected && pathsInfo.detected !== pathsInfo.current && (
-                  <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <div className="p-4 bg-background rounded-lg space-y-2">
                     <Label className="text-xs text-muted-foreground">Auto-Detected</Label>
                     <p className="font-mono text-sm break-all">{pathsInfo.detected}</p>
                   </div>
@@ -872,7 +872,7 @@ export default function SettingsPage() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-6 pt-0">
-              <div className="p-6 bg-muted/50 rounded-lg space-y-4">
+              <div className="p-6 bg-background rounded-lg space-y-4">
                 <div className="flex items-center gap-4">
                   <Download className="h-8 w-8 text-primary" />
                   <div>
@@ -888,7 +888,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              <div className="p-6 bg-muted/50 rounded-lg space-y-4">
+              <div className="p-6 bg-background rounded-lg space-y-4">
                 <div className="flex items-center gap-4">
                   <Upload className="h-8 w-8 text-primary" />
                   <div>

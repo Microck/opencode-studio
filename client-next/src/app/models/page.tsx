@@ -305,7 +305,7 @@ export default function ModelsPage() {
             Add Model Configuration
           </CardTitle>
           <CardDescription>
-            Enter model as <code className="text-xs bg-muted px-1.5 py-0.5 rounded">provider/model-name</code> (e.g., github-copilot/claude-opus-4.5, anthropic/claude-sonnet-4)
+            Enter model as <code className="text-xs bg-background px-1.5 py-0.5 rounded">provider/model-name</code> (e.g., github-copilot/claude-opus-4.5, anthropic/claude-sonnet-4)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -458,10 +458,10 @@ export default function ModelsPage() {
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
                           {model.config.attachments && (
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded">Files</span>
+                            <span className="text-xs bg-background px-2 py-0.5 rounded">Files</span>
                           )}
                           {model.config.reasoning && (
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded">Reasoning</span>
+                            <span className="text-xs bg-background px-2 py-0.5 rounded">Reasoning</span>
                           )}
                           {!model.config.attachments && !model.config.reasoning && (
                             <span className="text-muted-foreground">-</span>

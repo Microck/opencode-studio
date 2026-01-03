@@ -229,7 +229,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2 p-3 bg-muted/50 rounded-lg border border-dashed">
+          <div className="space-y-2 p-3 bg-background rounded-lg border border-dashed">
             <Label className="flex items-center gap-2 text-sm">
               <Wand2 className="h-4 w-4" />
               Quick Add - Paste npx command
