@@ -91,7 +91,7 @@ flowchart LR
 #### models
 ```
 /models → configure context window + max output for any model
-        → double-click reference model to append to prefix (e.g. github-copilot/)
+        → double-click reference model to append to prefix (e.g. copilot/)
         → 35+ reference models with specs (claude, gpt, gemini, deepseek, etc.)
 ```
 

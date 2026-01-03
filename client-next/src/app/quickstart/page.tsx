@@ -125,10 +125,10 @@ export default function QuickstartPage() {
   };
 
   const ohmyopencodeConfig = useMemo(() => {
-    const claudePrefix = providerChoices.claude === "copilot" ? "github-copilot/" : "anthropic/";
-    const gptPrefix = providerChoices.gpt === "copilot" ? "github-copilot/" : "openai/";
-    const geminiPrefix = providerChoices.gemini === "copilot" ? "github-copilot/" : "google/";
-    const grokPrefix = providerChoices.grok === "copilot" ? "github-copilot/" : "opencode/";
+    const claudePrefix = providerChoices.claude === "copilot" ? "copilot/" : "anthropic/";
+    const gptPrefix = providerChoices.gpt === "copilot" ? "copilot/" : "openai/";
+    const geminiPrefix = providerChoices.gemini === "copilot" ? "copilot/" : "google/";
+    const grokPrefix = providerChoices.grok === "copilot" ? "copilot/" : "opencode/";
     
     const geminiModel = providerChoices.gemini === "copilot" ? "gemini-3-pro-preview" : "gemini-3-pro-high";
     const geminiFlash = providerChoices.gemini === "copilot" ? "gemini-3-flash-preview" : "gemini-3-flash";

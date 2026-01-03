@@ -188,7 +188,7 @@ export default function ModelsPage() {
 
   const handleAddModel = async () => {
     if (!newModel.trim()) {
-      toast.error("Enter a model (e.g., github-copilot/claude-opus-4.5)");
+      toast.error("Enter a model (e.g., copilot/claude-opus-4.5)");
       return;
     }
     if (!newContext && !newOutput) {
@@ -305,7 +305,7 @@ export default function ModelsPage() {
             Add Model Configuration
           </CardTitle>
           <CardDescription>
-            Enter model as <code className="text-xs bg-background px-1.5 py-0.5 rounded">provider/model-name</code> (e.g., github-copilot/claude-opus-4.5, anthropic/claude-sonnet-4)
+            Enter model as <code className="text-xs bg-background px-1.5 py-0.5 rounded">provider/model-name</code> (e.g., copilot/claude-opus-4.5, anthropic/claude-sonnet-4)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -315,7 +315,7 @@ export default function ModelsPage() {
               <Input
                 value={newModel}
                 onChange={(e) => setNewModel(e.target.value)}
-                placeholder="github-copilot/claude-opus-4.5"
+                placeholder="copilot/claude-opus-4.5"
                 className="font-mono"
                 onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
               />
@@ -498,7 +498,7 @@ export default function ModelsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Default Model Limits</CardTitle>
-          <CardDescription>Double-click to append model to prefix (e.g., type "github-copilot/" then double-click)</CardDescription>
+          <CardDescription>Double-click to append model to prefix (e.g., type "copilot/" then double-click)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
