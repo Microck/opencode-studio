@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu, Rocket } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu, Rocket, Circle, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useApp } from "@/lib/context";
+import { PROTOCOL_URL } from "@/lib/api";
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +33,11 @@ const bottomNavItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { connected } = useApp();
+
+  const handleLaunchBackend = () => {
+    window.location.href = PROTOCOL_URL;
+  };
 
   return (
     <TooltipProvider>
@@ -97,7 +104,24 @@ export function Sidebar() {
         </div>
 
         <div className="p-4 border-t border-border flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">v1.0</span>
+          <div className="flex items-center gap-2">
+            <Circle className={cn("h-2 w-2 fill-current", connected ? "text-green-500" : "text-red-500")} />
+            <span className="text-xs text-muted-foreground">
+              {connected ? "Connected" : "Disconnected"}
+            </span>
+          </div>
+          {!connected && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleLaunchBackend}>
+                  <Play className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Launch Backend</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           <ThemeToggle />
         </div>
       </div>

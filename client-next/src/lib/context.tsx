@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin } from '@/lib/api';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
 
 interface AppContextType {
@@ -10,6 +10,7 @@ interface AppContextType {
   plugins: PluginInfo[];
   loading: boolean;
   error: string | null;
+  connected: boolean;
   refreshData: () => Promise<void>;
   saveConfig: (config: OpencodeConfig) => Promise<void>;
   toggleMCP: (key: string) => Promise<void>;
@@ -27,6 +28,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshData = useCallback(async () => {
     try {
@@ -40,8 +43,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConfig(configData);
       setSkills(skillsData);
       setPlugins(pluginsData);
+      setConnected(true);
     } catch (err) {
       setError('Failed to connect to backend');
+      setConnected(false);
       console.error(err);
     } finally {
       setLoading(false);
@@ -49,8 +54,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const pollHealth = async () => {
+      const isHealthy = await checkHealth();
+      if (isHealthy && !connected) {
+        setConnected(true);
+        refreshData();
+      } else if (!isHealthy && connected) {
+        setConnected(false);
+        setError('Backend disconnected');
+      }
+    };
+
     refreshData();
-  }, [refreshData]);
+    healthCheckRef.current = setInterval(pollHealth, 3000);
+
+    return () => {
+      if (healthCheckRef.current) {
+        clearInterval(healthCheckRef.current);
+      }
+    };
+  }, [refreshData, connected]);
 
   const saveConfigHandler = useCallback(async (newConfig: OpencodeConfig) => {
     await apiSaveConfig(newConfig);
@@ -110,6 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         plugins,
         loading,
         error,
+        connected,
         refreshData,
         saveConfig: saveConfigHandler,
         toggleMCP,

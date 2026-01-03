@@ -1,0 +1,5 @@
+../server/
+../*.bat
+../*.sh
+../CHANGELOG.md
+../todos.md

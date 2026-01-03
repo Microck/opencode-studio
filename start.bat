@@ -1,0 +1,3 @@
+@echo off
+echo Starting Opencode Studio...
+npm start

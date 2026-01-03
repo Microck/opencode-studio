@@ -10,6 +10,17 @@ const api = axios.create({
   },
 });
 
+export const PROTOCOL_URL = 'opencodestudio://launch';
+
+export async function checkHealth(): Promise<boolean> {
+  try {
+    await api.get('/health', { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface PathsInfo {
   detected: string | null;
   manual: string | null;

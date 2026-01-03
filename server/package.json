@@ -1,14 +1,28 @@
 {
-  "name": "server",
+  "name": "opencode-studio-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend server for OpenCode Studio - manages opencode configurations",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "opencode-studio-server": "./cli.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "start": "node index.js",
+    "register": "node register-protocol.js",
+    "postinstall": "node register-protocol.js"
+  },
+  "keywords": [
+    "opencode",
+    "studio",
+    "config",
+    "manager"
+  ],
+  "author": "Microck",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Microck/opencode-studio.git"
+  },
   "type": "commonjs",
   "dependencies": {
     "body-parser": "^2.2.1",

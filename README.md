@@ -15,6 +15,19 @@
 
 ### quickstart
 
+#### option 1: public site + local backend (recommended)
+
+1. install the backend globally:
+```bash
+npm install -g opencode-studio-server
+```
+
+2. visit the public site: [opencode-studio.vercel.app](https://opencode-studio.vercel.app)
+
+3. click "Launch Backend" in the sidebar → backend starts automatically
+
+#### option 2: fully local
+
 **windows**
 ```batch
 quickstart.bat
@@ -46,6 +59,16 @@ open http://localhost:3000
 
 ### how it works
 
+#### public mode
+```mermaid
+flowchart LR
+    A[Public Site] -->|opencodestudio://| B[Protocol Handler]
+    B -->|Starts| C(Express API :3001)
+    C -->|Read/Write| D[~/.config/opencode/]
+    A -->|HTTP to localhost| C
+```
+
+#### local mode
 ```mermaid
 flowchart LR
     A[Browser] -->|HTTP| B(Express API :3001)
@@ -166,16 +189,19 @@ config location: `~/.config/opencode/` (auto-detected)
 
 ### manual install
 
+#### backend only (for public site)
+```bash
+npm install -g opencode-studio-server
+opencode-studio-server
+```
+
+#### full local setup
 ```bash
 git clone https://github.com/Microck/opencode-studio.git
 cd opencode-studio
 
-npm install
-cd client-next && npm install
-cd ../server && npm install
-cd ..
-
-npm start
+./install.sh   # or install.bat on windows
+./start.sh     # or start.bat on windows
 ```
 
 - frontend: http://localhost:3000
@@ -191,6 +217,8 @@ npm start
 | port 3000/3001 in use | kill existing processes or change ports |
 | skills not showing | check `~/.config/opencode/skill/` has SKILL.md files |
 | bulk import fails | ensure urls are raw github links (raw.githubusercontent.com) |
+| "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
+| protocol handler not registered | run `opencode-studio-server --register` as admin |
 
 ---
 

@@ -9,7 +9,22 @@ const { exec, spawn } = require('child_process');
 const app = express();
 const PORT = 3001;
 
-app.use(cors());
+const ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    /\.vercel\.app$/,
+];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowed = ALLOWED_ORIGINS.some(o => 
+            o instanceof RegExp ? o.test(origin) : o === origin
+        );
+        callback(null, allowed);
+    },
+    credentials: true,
+}));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
@@ -116,6 +131,10 @@ ${body}`;
 }
 
 console.log(`Detected config at: ${getConfigDir() || 'NOT FOUND'}`);
+
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: Date.now() });
+});
 
 app.get('/api/paths', (req, res) => {
     const detected = detectConfigDir();
