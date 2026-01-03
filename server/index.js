@@ -8,6 +8,26 @@ const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+let lastActivityTime = Date.now();
+let idleTimer = null;
+
+function resetIdleTimer() {
+    lastActivityTime = Date.now();
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+        console.log('Server idle for 30 minutes, shutting down...');
+        process.exit(0);
+    }, IDLE_TIMEOUT_MS);
+}
+
+resetIdleTimer();
+
+app.use((req, res, next) => {
+    resetIdleTimer();
+    next();
+});
 
 const ALLOWED_ORIGINS = [
     'http://localhost:3000',
