@@ -1,13 +1,32 @@
 const { exec } = require('child_process');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 
 const PROTOCOL = 'opencodestudio';
 
 function registerWindows() {
-    const nodePath = process.execPath.replace(/\\/g, '\\\\');
-    const scriptPath = path.join(__dirname, 'cli.js').replace(/\\/g, '\\\\');
-    const command = `"${nodePath}" "${scriptPath}" "%1"`;
+    const nodePath = process.execPath;
+    const scriptPath = path.join(__dirname, 'cli.js');
+    
+    // Create a VBScript launcher that runs node hidden
+    const vbsPath = path.join(__dirname, 'launcher.vbs');
+    const vbsContent = `Set WshShell = CreateObject("WScript.Shell")
+args = ""
+If WScript.Arguments.Count > 0 Then
+    args = " """ & WScript.Arguments(0) & """"
+End If
+WshShell.Run """${nodePath.replace(/\\/g, '\\\\')}""" & " ""${scriptPath.replace(/\\/g, '\\\\')}"" " & args, 0, False
+`;
+    
+    try {
+        fs.writeFileSync(vbsPath, vbsContent);
+    } catch (err) {
+        console.error('Failed to create launcher.vbs:', err.message);
+    }
+    
+    // Register protocol to use wscript with the VBS launcher
+    const command = `wscript.exe "${vbsPath.replace(/\\/g, '\\\\')}" "%1"`;
     
     const regCommands = [
         `reg add "HKCU\\Software\\Classes\\${PROTOCOL}" /ve /d "URL:OpenCode Studio Protocol" /f`,
