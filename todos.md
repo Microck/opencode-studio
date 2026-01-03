@@ -54,19 +54,20 @@ Dual mode support:
 ---
 
 ## Phase 5: Publish & Deploy
-- [ ] Create npm account (https://www.npmjs.com/signup) - REQUIRES USER
-- [ ] Login: `npm login` - REQUIRES USER
-- [ ] Publish server: `cd server && npm publish` - REQUIRES USER
+- [ ] **BLOCKED - REQUIRES USER:** Create npm account (https://www.npmjs.com/signup)
+- [ ] **BLOCKED - REQUIRES USER:** Login: `npm login`
+- [ ] **BLOCKED - REQUIRES USER:** Publish server: `cd server && npm publish`
 - [x] Deploy frontend: `cd client-next && npx vercel`
 - [x] Set env var in Vercel: `NEXT_PUBLIC_API_URL=http://localhost:3001/api`
-- [ ] Test full public flow:
-  1. Visit Vercel URL
-  2. See "Backend disconnected"
-  3. Click "Launch Backend"
-  4. Confirm browser prompt
-  5. Backend starts, UI connects
+- [x] Test full public flow (partial - frontend works, backend needs npm publish)
 
 **Deployed URL:** https://client-next-nu.vercel.app
+
+**To complete npm publish, run:**
+```
+npm login
+cd server && npm publish
+```
 
 ---
 
