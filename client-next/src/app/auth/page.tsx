@@ -271,9 +271,6 @@ export default function AuthPage() {
             <Plus className="h-5 w-5" />
             Add Provider
           </CardTitle>
-          <CardDescription>
-            Login to a new AI provider to use their models
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
@@ -299,58 +296,39 @@ export default function AuthPage() {
               <ExternalLink className="h-4 w-4 ml-2" />
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            This will open your browser to complete authentication
-          </p>
         </CardContent>
       </Card>
 
-      <Card className="border-primary/30 bg-primary/5 hover-lift">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Gemini OAuth Plugin
-          </CardTitle>
-          <CardDescription>
-            Use your Google account to access Gemini models (free tier included)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {hasGeminiAuthPlugin ? (
-                <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <Check className="h-4 w-4" />
-                  Plugin installed
-                </span>
-              ) : (
-                <span>Add the plugin, then run <code className="bg-muted px-1 rounded">opencode auth login</code> and select Google OAuth</span>
-              )}
+      {!hasGeminiAuthPlugin && (
+        <div className="flex items-center justify-between p-4 rounded-lg border border-dashed">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Want free Gemini access?</p>
+              <p className="text-xs text-muted-foreground">
+                <a 
+                  href="https://github.com/jenslys/opencode-gemini-auth" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  opencode-gemini-auth
+                </a>
+                {" "}lets you use Google OAuth
+              </p>
             </div>
-            {!hasGeminiAuthPlugin && (
-              <Button onClick={handleAddGeminiPlugin} disabled={addingGeminiPlugin} variant="outline">
-                {addingGeminiPlugin ? "Adding..." : "Add Plugin"}
-              </Button>
-            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            <a 
-              href="https://github.com/jenslys/opencode-gemini-auth" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="underline hover:text-foreground"
-            >
-              Learn more about opencode-gemini-auth
-            </a>
-          </p>
-        </CardContent>
-      </Card>
+          <Button onClick={handleAddGeminiPlugin} disabled={addingGeminiPlugin} variant="outline" size="sm">
+            {addingGeminiPlugin ? "Adding..." : "Add Plugin"}
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Connected Providers</h2>
+        <h2 className="text-lg font-semibold">Connected</h2>
         
         {credentials.length === 0 ? (
-          <p className="text-muted-foreground italic">No providers configured.</p>
+          <p className="text-muted-foreground text-sm">No providers connected yet.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {credentials.map((cred) => {
@@ -359,7 +337,7 @@ export default function AuthPage() {
               const isExpanded = expandedProfiles[cred.id];
               
               return (
-                <Card key={cred.id} className={`hover-lift ${cred.isExpired ? "border-destructive/50" : ""}`}>
+                <Card key={cred.id} className="hover-lift">
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -380,14 +358,7 @@ export default function AuthPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm text-muted-foreground">
-                        {cred.type === "oauth" ? (
-                          <span>OAuth (auto-refreshes)</span>
-                        ) : (
-                          <span>API Key</span>
-                        )}
-                      </div>
+                    <div className="flex justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
