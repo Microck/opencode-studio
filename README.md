@@ -53,7 +53,7 @@ open http://localhost:3000
 - **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
 - **commands:** browse and manage custom slash commands
-- **auth:** view connected providers, login via oauth/api key, **multi-account support** (save/switch between accounts per provider)
+- **auth:** view connected providers, login via oauth/api key, **multi-account support**, and **Gemini plugin detection**
 - **settings:** permissions, agents config, keybinds, tui settings, backup/restore
 - **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
 
