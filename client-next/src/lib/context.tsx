@@ -17,6 +17,7 @@ interface AppContextType {
   toggleMCP: (key: string) => Promise<void>;
   deleteMCP: (key: string) => Promise<void>;
   addMCP: (key: string, mcpConfig: MCPConfig) => Promise<void>;
+  updateMCP: (key: string, mcpConfig: MCPConfig) => Promise<void>;
   toggleSkill: (name: string) => Promise<void>;
   togglePlugin: (name: string) => Promise<void>;
   dismissPendingAction: () => Promise<void>;
@@ -140,6 +141,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await saveConfigHandler(newConfig);
   }, [config, saveConfigHandler]);
 
+  const updateMCP = useCallback(async (key: string, mcpConfig: MCPConfig) => {
+    if (!config) return;
+    const newConfig = {
+      ...config,
+      mcp: {
+        ...config.mcp,
+        [key]: mcpConfig,
+      },
+    };
+    await saveConfigHandler(newConfig);
+  }, [config, saveConfigHandler]);
+
   const toggleSkill = useCallback(async (name: string) => {
     const result = await apiToggleSkill(name);
     setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled: result.enabled } : s));
@@ -165,6 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleMCP,
         deleteMCP,
         addMCP,
+        updateMCP,
         toggleSkill,
         togglePlugin,
         dismissPendingAction,

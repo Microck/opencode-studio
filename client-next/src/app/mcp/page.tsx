@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 
 export default function MCPPage() {
-  const { config, loading, toggleMCP, deleteMCP, addMCP } = useApp();
+  const { config, loading, toggleMCP, deleteMCP, addMCP, updateMCP } = useApp();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -62,6 +62,11 @@ export default function MCPPage() {
     toast.success(`${name} added`);
   };
 
+  const handleEdit = async (key: string, mcpConfig: Parameters<typeof updateMCP>[1]) => {
+    await updateMCP(key, mcpConfig);
+    toast.success(`${key} updated`);
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -99,6 +104,7 @@ export default function MCPPage() {
             config={mcp}
             onToggle={() => handleToggle(key)}
             onDelete={() => setDeleteTarget(key)}
+            onEdit={(newConfig) => handleEdit(key, newConfig)}
           />
         ))}
         <AddMCPDialog onAdd={handleAdd} />

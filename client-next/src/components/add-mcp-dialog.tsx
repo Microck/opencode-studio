@@ -20,9 +20,58 @@ interface AddMCPDialogProps {
   onAdd: (name: string, config: MCPConfig) => Promise<void>;
 }
 
-function parseCommand(input: string): { name: string; config: MCPConfig } | null {
+function normalizeCommand(cmd: string | string[] | undefined): string[] {
+  if (!cmd) return [];
+  if (Array.isArray(cmd)) return cmd;
+  return [cmd];
+}
+
+function parseInput(input: string): { name: string; config: MCPConfig } | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      
+      if (parsed.mcpServers && typeof parsed.mcpServers === "object") {
+        const serverNames = Object.keys(parsed.mcpServers);
+        if (serverNames.length > 0) {
+          const serverName = serverNames[0];
+          const serverConfig = parsed.mcpServers[serverName];
+          return {
+            name: serverName,
+            config: {
+              command: normalizeCommand(serverConfig.command),
+              args: serverConfig.args || [],
+              enabled: serverConfig.enabled ?? true,
+              type: serverConfig.type || "local",
+              ...(serverConfig.env && { env: serverConfig.env }),
+              ...(serverConfig.url && { url: serverConfig.url }),
+              ...(serverConfig.timeout && { timeout: serverConfig.timeout }),
+              ...(serverConfig.oauth && { oauth: serverConfig.oauth }),
+            },
+          };
+        }
+      }
+      
+      if (parsed.command !== undefined || parsed.url !== undefined) {
+        return {
+          name: "mcp-server",
+          config: {
+            command: normalizeCommand(parsed.command),
+            args: parsed.args || [],
+            enabled: parsed.enabled ?? true,
+            type: parsed.type || "local",
+            ...(parsed.env && { env: parsed.env }),
+            ...(parsed.url && { url: parsed.url }),
+            ...(parsed.timeout && { timeout: parsed.timeout }),
+            ...(parsed.oauth && { oauth: parsed.oauth }),
+          },
+        };
+      }
+    } catch {}
+  }
 
   const parts = trimmed.split(/\s+/);
   const command: string[] = [];
@@ -93,7 +142,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
   useEffect(() => {
     if (!pasteInput.trim()) return;
     
-    const parsed = parseCommand(pasteInput);
+    const parsed = parseInput(pasteInput);
     if (parsed) {
       setName(parsed.name);
       setConfigJson(JSON.stringify(parsed.config, null, 2));
@@ -162,16 +211,16 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
           <div className="space-y-2 p-3 bg-background rounded-lg border border-dashed">
             <Label className="flex items-center gap-2 text-sm">
               <Wand2 className="h-4 w-4" />
-              Quick Add - Paste npx command
+              Quick Add - Paste command or JSON
             </Label>
-            <Input
+            <Textarea
               value={pasteInput}
               onChange={(e) => setPasteInput(e.target.value)}
-              placeholder="npx -y @modelcontextprotocol/server-memory"
-              className="font-mono text-sm"
+              placeholder={'npx -y @modelcontextprotocol/server-memory\n\nor paste full JSON config'}
+              className="font-mono text-sm min-h-[60px]"
             />
             <p className="text-xs text-muted-foreground">
-              Paste any npx/npm command to auto-generate the config below
+              Paste npx command or JSON (supports mcpServers wrapper format)
             </p>
           </div>
 
@@ -194,7 +243,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
               className="font-mono text-sm min-h-[200px]"
             />
             <p className="text-xs text-muted-foreground">
-              Full MCP config object. Edit directly to add env, timeout, oauth, etc.
+              Full MCP config. Edit directly to add env, timeout, oauth, etc.
             </p>
           </div>
 
