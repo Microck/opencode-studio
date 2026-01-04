@@ -27,6 +27,13 @@ function useIsFirstLoad() {
 }
 
 function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
+  const [showUpdateHint, setShowUpdateHint] = useState(false);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setShowUpdateHint(true), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+  
   const handleLaunch = () => {
     window.location.href = PROTOCOL_URL;
   };
@@ -95,7 +102,13 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
       </div>
 
       <div className={`absolute bottom-4 text-xs text-muted-foreground ${isFirstLoad ? "landing-delay-6" : "landing-delay-fast-6"}`}>
-        Waiting for backend connection...
+        {showUpdateHint ? (
+          <span className="animate-fade-in">
+            Not connecting? Try: <code className="bg-muted px-1.5 py-0.5 rounded">npm install -g opencode-studio-server@latest</code>
+          </span>
+        ) : (
+          "Waiting for backend connection..."
+        )}
       </div>
     </div>
   );
