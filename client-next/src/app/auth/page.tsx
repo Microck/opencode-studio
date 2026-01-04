@@ -471,10 +471,24 @@ export default function AuthPage() {
                                 onClick={() => handleSaveProfile(cred.id)}
                                 disabled={savingProfile === cred.id}
                               >
-                                <Plus className="h-3 w-3 mr-1" />
-                                {savingProfile === cred.id ? "Saving..." : "Save Current as New Profile"}
+                                <Save className="h-3 w-3 mr-1" />
+                                {savingProfile === cred.id ? "Saving..." : "Save Current"}
                               </Button>
                             )}
+                            
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setSelectedProvider(cred.id);
+                                handleLogin();
+                              }}
+                              disabled={loginLoading}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Account
+                            </Button>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
