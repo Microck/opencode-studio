@@ -33,6 +33,7 @@ export const metadata: Metadata = {
   description: "Manage your Opencode configuration",
   icons: {
     icon: "/logo-dark.png",
+    apple: "/logo-dark.png",
   },
 };
 
