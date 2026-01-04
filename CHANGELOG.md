@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - 2026-01-05
+
+### Fixed
+- **Auth Login**: Fixed OAuth browser not opening when server runs headless (via protocol handler).
+
 ## [1.0.4] - 2026-01-05
 
 ### Added

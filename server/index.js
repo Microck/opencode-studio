@@ -862,9 +862,16 @@ app.post('/api/auth/login', (req, res) => {
     }
     
     // Run opencode auth login - this opens browser
+    // Use detached + shell to ensure browser opens even when server runs headless
+    const isWindows = process.platform === 'win32';
     const child = spawn('opencode', ['auth', 'login', provider], {
-        stdio: 'inherit',
+        detached: true,
+        shell: isWindows,
+        stdio: 'ignore',
+        windowsHide: false,
     });
+    
+    child.unref(); // Allow server to exit independently
     
     child.on('error', (err) => {
         console.error('Failed to start auth login:', err);
