@@ -19,11 +19,13 @@ function DisconnectedLanding() {
         <ThemeToggle />
       </div>
       
-      <div className="flex flex-col items-center gap-8 max-w-md text-center px-4">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="animate-logo-entrance">
           <Logo className="w-24 h-24" />
         </div>
-        
+      </div>
+      
+      <div className="flex flex-col items-center gap-8 max-w-md text-center px-4 mt-48 animate-content-appear">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tight landing-delay-1">OpenCode Studio</h1>
           <p className="text-muted-foreground text-lg landing-delay-2">
@@ -81,8 +83,12 @@ function DisconnectedLanding() {
 function LoadingState() {
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      <p className="mt-4 text-sm text-muted-foreground">Connecting...</p>
+      <div className="animate-logo-entrance">
+        <Logo className="w-24 h-24" />
+      </div>
+      <div className="absolute bottom-1/3 opacity-0 animate-connecting-text text-muted-foreground text-sm">
+        Connecting...
+      </div>
     </div>
   );
 }
