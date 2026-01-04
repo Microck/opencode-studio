@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { Rethink_Sans, Geist } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
@@ -8,8 +8,13 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { PendingActionDialog } from "@/components/pending-action-dialog";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const rethinkSans = Rethink_Sans({
+  variable: "--font-rethink-sans",
+  subsets: ["latin"],
+});
+
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
 });
 
@@ -39,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${spaceGrotesk.variable} ${commitMono.variable} antialiased`}
+        className={`${rethinkSans.variable} ${geist.variable} ${commitMono.variable} antialiased`}
       >
         <ThemeProvider
           attribute="class"
