@@ -7,11 +7,32 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Play, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-function DisconnectedLanding() {
+const FIRST_LOAD_KEY = "opencode-studio-loaded";
+
+function useIsFirstLoad() {
+  const [isFirst, setIsFirst] = useState(true);
+  
+  useEffect(() => {
+    const hasLoaded = sessionStorage.getItem(FIRST_LOAD_KEY);
+    if (hasLoaded) {
+      setIsFirst(false);
+    } else {
+      sessionStorage.setItem(FIRST_LOAD_KEY, "1");
+    }
+  }, []);
+  
+  return isFirst;
+}
+
+function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   const handleLaunch = () => {
     window.location.href = PROTOCOL_URL;
   };
+
+  const animClass = isFirstLoad ? "animate-logo-entrance" : "animate-logo-entrance-fast";
+  const contentClass = isFirstLoad ? "animate-content-appear" : "animate-content-appear-fast";
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background relative overflow-hidden">
@@ -20,37 +41,37 @@ function DisconnectedLanding() {
       </div>
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="animate-logo-entrance">
+        <div className={animClass}>
           <Logo className="w-24 h-24" />
         </div>
       </div>
       
-      <div className="flex flex-col items-center gap-8 max-w-md text-center px-4 mt-48 animate-content-appear">
+      <div className={`flex flex-col items-center gap-8 max-w-md text-center px-4 mt-48 ${contentClass}`}>
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight landing-delay-1">OpenCode Studio</h1>
-          <p className="text-muted-foreground text-lg landing-delay-2">
+          <h1 className={`text-4xl font-bold tracking-tight ${isFirstLoad ? "landing-delay-1" : "landing-delay-fast-1"}`}>OpenCode Studio</h1>
+          <p className={`text-muted-foreground text-lg ${isFirstLoad ? "landing-delay-2" : "landing-delay-fast-2"}`}>
             Manage your OpenCode configuration with a visual interface
           </p>
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <div className="landing-delay-3">
+          <div className={isFirstLoad ? "landing-delay-3" : "landing-delay-fast-3"}>
             <Button size="lg" className="w-full gap-2" onClick={handleLaunch}>
               <Play className="h-5 w-5" />
               Launch Backend
             </Button>
           </div>
           
-          <p className="text-xs text-muted-foreground landing-delay-4">
+          <p className={`text-xs text-muted-foreground ${isFirstLoad ? "landing-delay-4" : "landing-delay-fast-4"}`}>
             Don&apos;t have it installed?
           </p>
           
-          <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono landing-delay-4">
+          <code className={`text-xs bg-muted px-3 py-2 rounded-md font-mono ${isFirstLoad ? "landing-delay-4" : "landing-delay-fast-4"}`}>
             npm install -g opencode-studio-server
           </code>
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-muted-foreground landing-delay-5">
+        <div className={`flex items-center gap-4 text-sm text-muted-foreground ${isFirstLoad ? "landing-delay-5" : "landing-delay-fast-5"}`}>
           <a 
             href="https://github.com/Microck/opencode-studio" 
             target="_blank" 
@@ -73,17 +94,19 @@ function DisconnectedLanding() {
         </div>
       </div>
 
-      <div className="absolute bottom-4 text-xs text-muted-foreground landing-delay-6">
+      <div className={`absolute bottom-4 text-xs text-muted-foreground ${isFirstLoad ? "landing-delay-6" : "landing-delay-fast-6"}`}>
         Waiting for backend connection...
       </div>
     </div>
   );
 }
 
-function LoadingState() {
+function LoadingState({ isFirstLoad }: { isFirstLoad: boolean }) {
+  const animClass = isFirstLoad ? "animate-logo-entrance" : "animate-logo-entrance-fast";
+  
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
-      <div className="animate-logo-entrance">
+      <div className={animClass}>
         <Logo className="w-24 h-24" />
       </div>
     </div>
@@ -92,13 +115,14 @@ function LoadingState() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { connected, loading } = useApp();
+  const isFirstLoad = useIsFirstLoad();
 
   if (loading && !connected) {
-    return <LoadingState />;
+    return <LoadingState isFirstLoad={isFirstLoad} />;
   }
 
   if (!connected) {
-    return <DisconnectedLanding />;
+    return <DisconnectedLanding isFirstLoad={isFirstLoad} />;
   }
 
   return (
