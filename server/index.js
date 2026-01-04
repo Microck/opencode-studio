@@ -914,6 +914,203 @@ app.get('/api/auth/providers', (req, res) => {
     res.json(providers);
 });
 
+const AUTH_PROFILES_DIR = path.join(HOME_DIR, '.config', 'opencode-studio', 'auth-profiles');
+
+function ensureAuthProfilesDir() {
+    if (!fs.existsSync(AUTH_PROFILES_DIR)) {
+        fs.mkdirSync(AUTH_PROFILES_DIR, { recursive: true });
+    }
+}
+
+function getProviderProfilesDir(provider) {
+    return path.join(AUTH_PROFILES_DIR, provider);
+}
+
+function listAuthProfiles(provider) {
+    const dir = getProviderProfilesDir(provider);
+    if (!fs.existsSync(dir)) return [];
+    
+    try {
+        return fs.readdirSync(dir)
+            .filter(f => f.endsWith('.json'))
+            .map(f => f.replace('.json', ''));
+    } catch {
+        return [];
+    }
+}
+
+function getNextProfileName(provider) {
+    const existing = listAuthProfiles(provider);
+    let num = 1;
+    while (existing.includes(`account-${num}`)) {
+        num++;
+    }
+    return `account-${num}`;
+}
+
+function saveAuthProfile(provider, profileName, data) {
+    ensureAuthProfilesDir();
+    const dir = getProviderProfilesDir(provider);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    const filePath = path.join(dir, `${profileName}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+}
+
+function loadAuthProfile(provider, profileName) {
+    const filePath = path.join(getProviderProfilesDir(provider), `${profileName}.json`);
+    if (!fs.existsSync(filePath)) return null;
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function deleteAuthProfile(provider, profileName) {
+    const filePath = path.join(getProviderProfilesDir(provider), `${profileName}.json`);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return true;
+    }
+    return false;
+}
+
+function getActiveProfiles() {
+    const studioConfig = loadStudioConfig();
+    return studioConfig.activeProfiles || {};
+}
+
+function setActiveProfile(provider, profileName) {
+    const studioConfig = loadStudioConfig();
+    studioConfig.activeProfiles = studioConfig.activeProfiles || {};
+    studioConfig.activeProfiles[provider] = profileName;
+    saveStudioConfig(studioConfig);
+}
+
+app.get('/api/auth/profiles', (req, res) => {
+    ensureAuthProfilesDir();
+    const activeProfiles = getActiveProfiles();
+    const authConfig = loadAuthConfig() || {};
+    
+    const profiles = {};
+    
+    Object.keys(PROVIDER_DISPLAY_NAMES).forEach(provider => {
+        const providerProfiles = listAuthProfiles(provider);
+        profiles[provider] = {
+            profiles: providerProfiles,
+            active: activeProfiles[provider] || null,
+            hasCurrentAuth: !!authConfig[provider],
+        };
+    });
+    
+    res.json(profiles);
+});
+
+app.get('/api/auth/profiles/:provider', (req, res) => {
+    const { provider } = req.params;
+    const providerProfiles = listAuthProfiles(provider);
+    const activeProfiles = getActiveProfiles();
+    const authConfig = loadAuthConfig() || {};
+    
+    res.json({
+        profiles: providerProfiles,
+        active: activeProfiles[provider] || null,
+        hasCurrentAuth: !!authConfig[provider],
+    });
+});
+
+app.post('/api/auth/profiles/:provider', (req, res) => {
+    const { provider } = req.params;
+    const { name } = req.body;
+    
+    const authConfig = loadAuthConfig();
+    if (!authConfig || !authConfig[provider]) {
+        return res.status(400).json({ error: `No active auth for ${provider} to save` });
+    }
+    
+    const profileName = name || getNextProfileName(provider);
+    const data = authConfig[provider];
+    
+    try {
+        saveAuthProfile(provider, profileName, data);
+        setActiveProfile(provider, profileName);
+        res.json({ success: true, name: profileName });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save profile', details: err.message });
+    }
+});
+
+app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
+    const { provider, name } = req.params;
+    
+    const profileData = loadAuthProfile(provider, name);
+    if (!profileData) {
+        return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    const authConfig = loadAuthConfig() || {};
+    authConfig[provider] = profileData;
+    
+    if (saveAuthConfig(authConfig)) {
+        setActiveProfile(provider, name);
+        res.json({ success: true });
+    } else {
+        res.status(500).json({ error: 'Failed to activate profile' });
+    }
+});
+
+app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
+    const { provider, name } = req.params;
+    
+    if (deleteAuthProfile(provider, name)) {
+        const activeProfiles = getActiveProfiles();
+        if (activeProfiles[provider] === name) {
+            const studioConfig = loadStudioConfig();
+            delete studioConfig.activeProfiles[provider];
+            saveStudioConfig(studioConfig);
+        }
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ error: 'Profile not found' });
+    }
+});
+
+app.put('/api/auth/profiles/:provider/:name', (req, res) => {
+    const { provider, name } = req.params;
+    const { newName } = req.body;
+    
+    if (!newName || newName === name) {
+        return res.status(400).json({ error: 'New name is required and must be different' });
+    }
+    
+    const profileData = loadAuthProfile(provider, name);
+    if (!profileData) {
+        return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    const existingProfiles = listAuthProfiles(provider);
+    if (existingProfiles.includes(newName)) {
+        return res.status(400).json({ error: 'Profile name already exists' });
+    }
+    
+    try {
+        saveAuthProfile(provider, newName, profileData);
+        deleteAuthProfile(provider, name);
+        
+        const activeProfiles = getActiveProfiles();
+        if (activeProfiles[provider] === name) {
+            setActiveProfile(provider, newName);
+        }
+        
+        res.json({ success: true, name: newName });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to rename profile', details: err.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });

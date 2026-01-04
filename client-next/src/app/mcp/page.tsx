@@ -111,7 +111,7 @@ export default function MCPPage() {
       </div>
 
       {search && filteredMCPs.length === 0 && (
-        <p className="text-muted-foreground italic">No MCP servers match "{search}"</p>
+        <p className="text-muted-foreground italic">No MCP servers match &quot;{search}&quot;</p>
       )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>

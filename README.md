@@ -48,11 +48,9 @@ open http://localhost:3000
 - **mcp manager:** toggle servers on/off, add new ones by pasting npx commands, delete unused configs
 - **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
-- **models:** configure context windows + output limits for any model, reference data for 35+ models
 - **commands:** browse and manage custom slash commands
-- **editor config:** customize editor settings (font, theme, keybinds)
-- **auth:** view connected providers, login via oauth/api key, track token expiration
-- **settings:** collapsible sections for model aliases, permissions, agents, providers, backup/restore
+- **auth:** view connected providers, login via oauth/api key, **multi-account support** (save/switch between accounts per provider)
+- **settings:** permissions, agents config, keybinds, tui settings, backup/restore
 - **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
 
 ---
@@ -111,30 +109,28 @@ flowchart LR
          → click to edit
 ```
 
-#### models
-```
-/models → configure context window + max output for any model
-        → double-click reference model to append to prefix (e.g. copilot/)
-        → 35+ reference models with specs (claude, gpt, gemini, deepseek, etc.)
-```
-
 #### commands
 ```
 /commands → browse custom slash commands
           → view command content
 ```
 
-#### editor
-```
-/editor → customize editor font, size, theme
-        → configure vim mode, word wrap, minimap
-```
-
 #### auth
 ```
 /auth → view connected providers
       → [Login] opens browser oauth
-      → remove credentials
+      → save multiple accounts per provider
+      → switch between accounts instantly
+      → rename/delete saved profiles
+```
+
+#### settings
+```
+/settings → permissions (edit, bash, skill, webfetch)
+          → agent config (model, temperature, color)
+          → keybinds (12 essential shortcuts)
+          → tui settings (scroll, diff style)
+          → backup/restore config
 ```
 
 ---
@@ -213,7 +209,7 @@ when clicking deep links, users see a confirmation dialog showing:
 opencode-studio/
 ├── client-next/           # next.js 16 frontend
 │   ├── src/
-│   │   ├── app/           # pages (mcp, skills, plugins, models, commands, editor, auth, settings)
+│   │   ├── app/           # pages (mcp, skills, plugins, commands, auth, settings, config)
 │   │   ├── components/    # ui components
 │   │   └── lib/           # api client, context
 │   └── public/
@@ -224,7 +220,9 @@ opencode-studio/
 └── package.json           # runs both with concurrently
 ```
 
-config location: `~/.config/opencode/` (auto-detected)
+config locations:
+- opencode config: `~/.config/opencode/` (auto-detected)
+- studio data: `~/.config/opencode-studio/` (profiles, preferences)
 
 ---
 

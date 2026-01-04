@@ -7,14 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,13 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
-  Plus,
-  Trash2,
-  Check,
-  X,
-  Edit2,
   Settings,
-  Hash,
   Shield,
   Bot,
   Keyboard,
@@ -49,37 +35,35 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ModelAlias, PermissionValue, OpencodeConfig, ModelConfig } from "@/types";
+import type { PermissionValue, OpencodeConfig } from "@/types";
 
-const PROVIDERS = ["github-copilot", "openai", "anthropic", "gemini", "ollama", "xai", "deepseek"];
-const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR"] as const;
 const THEMES = ["dark", "light", "auto"] as const;
 const SHARE_OPTIONS = ["manual", "auto", "disabled"] as const;
 const PERMISSION_VALUES: PermissionValue[] = ["ask", "allow", "deny"];
 const AGENT_NAMES = ["plan", "build", "general", "explore", "title", "summary", "compaction"] as const;
 
-function getModelConfig(config: OpencodeConfig | null): ModelConfig | undefined {
-  if (!config?.model) return undefined;
-  if (typeof config.model === "string") return undefined;
-  return config.model;
-}
-
-function getAliases(config: OpencodeConfig | null): Record<string, ModelAlias> {
-  const modelConfig = getModelConfig(config);
-  return modelConfig?.aliases || {};
-}
+const ESSENTIAL_KEYBINDS = [
+  ["leader", "Leader key"],
+  ["app_exit", "Exit app"],
+  ["session_new", "New session"],
+  ["session_list", "List sessions"],
+  ["session_interrupt", "Interrupt"],
+  ["input_submit", "Submit input"],
+  ["input_clear", "Clear input"],
+  ["input_newline", "New line"],
+  ["model_list", "Model selector"],
+  ["agent_cycle", "Cycle agent"],
+  ["messages_undo", "Undo"],
+  ["messages_redo", "Redo"],
+] as const;
 
 export default function SettingsPage() {
   const { config, loading, saveConfig, refreshData } = useApp();
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ provider: string; model: string }>({ provider: "", model: "" });
-  const [newAlias, setNewAlias] = useState({ key: "", provider: "github-copilot", model: "" });
   const [pathsInfo, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     general: true,
-    aliases: false,
     permissions: false,
     agents: false,
     keybinds: false,
@@ -96,8 +80,6 @@ export default function SettingsPage() {
     getPaths().then(setPathsInfo).catch(console.error);
   }, []);
 
-  const aliases = getAliases(config);
-
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
     if (!config) return;
     try {
@@ -105,80 +87,6 @@ export default function SettingsPage() {
       toast.success("Settings saved");
     } catch {
       toast.error("Failed to save settings");
-    }
-  };
-
-  const handleAddAlias = async () => {
-    if (!newAlias.key || !newAlias.model) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    if (!config) return;
-
-    const modelConfig = getModelConfig(config) || {};
-    const newConfig = {
-      ...config,
-      model: {
-        ...modelConfig,
-        aliases: {
-          ...aliases,
-          [newAlias.key]: { provider: newAlias.provider, model: newAlias.model },
-        },
-      },
-    };
-
-    try {
-      await saveConfig(newConfig);
-      setNewAlias({ key: "", provider: "github-copilot", model: "" });
-      toast.success(`Added ${newAlias.key}`);
-    } catch {
-      toast.error("Failed to add alias");
-    }
-  };
-
-  const handleDeleteAlias = async (key: string) => {
-    if (!config) return;
-    const rest = { ...aliases };
-    delete rest[key];
-    const modelConfig = getModelConfig(config) || {};
-    const newConfig = {
-      ...config,
-      model: { ...modelConfig, aliases: rest },
-    };
-    try {
-      await saveConfig(newConfig);
-      toast.success(`Deleted ${key}`);
-    } catch {
-      toast.error("Failed to delete alias");
-    }
-  };
-
-  const startEdit = (key: string, alias: ModelAlias) => {
-    setEditingKey(key);
-    setEditForm({ provider: alias.provider, model: alias.model });
-  };
-
-  const cancelEdit = () => {
-    setEditingKey(null);
-    setEditForm({ provider: "", model: "" });
-  };
-
-  const saveEdit = async () => {
-    if (!editingKey || !config) return;
-    const modelConfig = getModelConfig(config) || {};
-    const newConfig = {
-      ...config,
-      model: {
-        ...modelConfig,
-        aliases: { ...aliases, [editingKey]: editForm },
-      },
-    };
-    try {
-      await saveConfig(newConfig);
-      setEditingKey(null);
-      toast.success(`Updated ${editingKey}`);
-    } catch {
-      toast.error("Failed to update alias");
     }
   };
 
@@ -250,21 +158,21 @@ export default function SettingsPage() {
     }
   };
 
-  const getPermissionValue = (key: keyof NonNullable<OpencodeConfig["permissions"]>): PermissionValue => {
-    const val = config?.permissions?.[key];
+  const getPermissionValue = (key: keyof NonNullable<OpencodeConfig["permission"]>): PermissionValue => {
+    const val = config?.permission?.[key];
     if (typeof val === "string") return val;
     return "ask";
   };
 
-  const setPermission = (key: keyof NonNullable<OpencodeConfig["permissions"]>, value: PermissionValue) => {
+  const setPermission = (key: keyof NonNullable<OpencodeConfig["permission"]>, value: PermissionValue) => {
     updateConfig({
-      permissions: { ...config?.permissions, [key]: value },
+      permission: { ...config?.permission, [key]: value },
     });
   };
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         <h1 className="text-2xl font-bold">Settings</h1>
         <Skeleton className="h-96" />
       </div>
@@ -272,11 +180,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       <h1 className="text-2xl font-bold">Settings</h1>
 
       <Collapsible open={openSections.general} onOpenChange={() => toggleSection("general")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -284,12 +192,12 @@ export default function SettingsPage() {
                   <Settings className="h-5 w-5" />
                   <CardTitle>General Settings</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.general ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.general ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Configure core OpenCode behavior</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -304,23 +212,6 @@ export default function SettingsPage() {
                     <SelectContent>
                       {THEMES.map((t) => (
                         <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Log Level</Label>
-                  <Select
-                    value={config?.logLevel || "INFO"}
-                    onValueChange={(v) => updateConfig({ logLevel: v as typeof LOG_LEVELS[number] })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LOG_LEVELS.map((l) => (
-                        <SelectItem key={l} value={l}>{l}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -397,146 +288,8 @@ export default function SettingsPage() {
         </Card>
       </Collapsible>
 
-      <Collapsible open={openSections.aliases} onOpenChange={() => toggleSection("aliases")}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Hash className="h-5 w-5" />
-                  <CardTitle>Model Aliases</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.aliases ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Map model IDs to specific providers</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-6 pt-0">
-              <div className="flex gap-4 items-end p-4 bg-background rounded-lg">
-                <div className="flex-1 space-y-2">
-                  <Label className="text-xs text-muted-foreground">Alias Key</Label>
-                  <Input
-                    value={newAlias.key}
-                    onChange={(e) => setNewAlias({ ...newAlias, key: e.target.value })}
-                    placeholder="e.g., gpt-5.2"
-                  />
-                </div>
-                <div className="w-40 space-y-2">
-                  <Label className="text-xs text-muted-foreground">Provider</Label>
-                  <Select
-                    value={newAlias.provider}
-                    onValueChange={(v) => setNewAlias({ ...newAlias, provider: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROVIDERS.map((p) => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <Label className="text-xs text-muted-foreground">Target Model</Label>
-                  <Input
-                    value={newAlias.model}
-                    onChange={(e) => setNewAlias({ ...newAlias, model: e.target.value })}
-                    placeholder="e.g., gpt-5.2"
-                  />
-                </div>
-                <Button onClick={handleAddAlias} disabled={!newAlias.key || !newAlias.model}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Alias Key</TableHead>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Target Model</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(aliases).map(([key, alias]) => (
-                    <TableRow key={key}>
-                      {editingKey === key ? (
-                        <>
-                          <TableCell className="font-mono text-primary">{key}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={editForm.provider}
-                              onValueChange={(v) => setEditForm({ ...editForm, provider: v })}
-                            >
-                              <SelectTrigger className="w-32">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {PROVIDERS.map((p) => (
-                                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={editForm.model}
-                              onChange={(e) => setEditForm({ ...editForm, model: e.target.value })}
-                              className="w-48"
-                            />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="icon" onClick={saveEdit}>
-                                <Check className="h-4 w-4 text-green-500" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={cancelEdit}>
-                                <X className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </>
-                      ) : (
-                        <>
-                          <TableCell className="font-mono text-primary">{key}</TableCell>
-                          <TableCell>
-                            <code className="px-2 py-1 bg-background rounded text-xs">{alias.provider}</code>
-                          </TableCell>
-                          <TableCell className="font-mono text-muted-foreground">{alias.model}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => startEdit(key, alias)}>
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteAlias(key)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </>
-                      )}
-                    </TableRow>
-                  ))}
-                  {Object.keys(aliases).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                        No aliases configured.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
       <Collapsible open={openSections.permissions} onOpenChange={() => toggleSection("permissions")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -544,12 +297,12 @@ export default function SettingsPage() {
                   <Shield className="h-5 w-5" />
                   <CardTitle>Permissions</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.permissions ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.permissions ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Control what actions OpenCode can perform</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-4 pt-0">
               {(["edit", "bash", "skill", "webfetch", "doom_loop", "external_directory"] as const).map((perm) => (
                 <div key={perm} className="flex items-center justify-between p-4 bg-background rounded-lg">
@@ -582,7 +335,7 @@ export default function SettingsPage() {
       </Collapsible>
 
       <Collapsible open={openSections.agents} onOpenChange={() => toggleSection("agents")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -590,12 +343,12 @@ export default function SettingsPage() {
                   <Bot className="h-5 w-5" />
                   <CardTitle>Agents</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.agents ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.agents ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Configure individual agent behavior</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-4 pt-0">
               {AGENT_NAMES.map((agent) => (
                 <div key={agent} className="p-4 bg-background rounded-lg space-y-4">
@@ -665,7 +418,7 @@ export default function SettingsPage() {
       </Collapsible>
 
       <Collapsible open={openSections.keybinds} onOpenChange={() => toggleSection("keybinds")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -673,28 +426,15 @@ export default function SettingsPage() {
                   <Keyboard className="h-5 w-5" />
                   <CardTitle>Keybinds</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.keybinds ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.keybinds ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Customize keyboard shortcuts</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-4 pt-0">
               <div className="grid grid-cols-2 gap-4">
-                {[
-                  ["leader", "Leader key"],
-                  ["app_exit", "Exit app"],
-                  ["session_new", "New session"],
-                  ["session_list", "List sessions"],
-                  ["input_submit", "Submit input"],
-                  ["input_clear", "Clear input"],
-                  ["history_prev", "Previous history"],
-                  ["history_next", "Next history"],
-                  ["messages_scroll_up", "Scroll up"],
-                  ["messages_scroll_down", "Scroll down"],
-                  ["editor_open", "Open editor"],
-                  ["model_selector", "Model selector"],
-                ].map(([key, label]) => (
+                {ESSENTIAL_KEYBINDS.map(([key, label]) => (
                   <div key={key} className="flex items-center justify-between p-3 bg-background rounded-lg">
                     <Label className="text-sm">{label}</Label>
                     <Input
@@ -714,7 +454,7 @@ export default function SettingsPage() {
       </Collapsible>
 
       <Collapsible open={openSections.tui} onOpenChange={() => toggleSection("tui")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -722,12 +462,12 @@ export default function SettingsPage() {
                   <Monitor className="h-5 w-5" />
                   <CardTitle>TUI Settings</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.tui ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.tui ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Terminal user interface options</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -781,7 +521,7 @@ export default function SettingsPage() {
       </Collapsible>
 
       <Collapsible open={openSections.path} onOpenChange={() => toggleSection("path")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -789,12 +529,12 @@ export default function SettingsPage() {
                   <FolderCog className="h-5 w-5" />
                   <CardTitle>Config Path</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.path ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.path ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Manage OpenCode configuration location</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
               <div className="space-y-4">
                 <div className="p-4 bg-background rounded-lg space-y-2">
@@ -857,7 +597,7 @@ export default function SettingsPage() {
       </Collapsible>
 
       <Collapsible open={openSections.backup} onOpenChange={() => toggleSection("backup")}>
-        <Card>
+        <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
@@ -865,12 +605,12 @@ export default function SettingsPage() {
                   <Save className="h-5 w-5" />
                   <CardTitle>Backup & Restore</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${openSections.backup ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.backup ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Export or import your complete OpenCode configuration</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
               <div className="p-6 bg-background rounded-lg space-y-4">
                 <div className="flex items-center gap-4">

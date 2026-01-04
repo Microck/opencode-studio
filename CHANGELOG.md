@@ -8,6 +8,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Multi-Account Auth Profiles
+- Save multiple accounts per provider (e.g., 2 GitHub Copilot accounts)
+- Switch between saved profiles instantly
+- Auto-naming: profiles saved as `account-1`, `account-2`, etc.
+- Rename and delete profile support
+- Profile storage at `~/.config/opencode-studio/auth-profiles/`
+- New API endpoints:
+  - `GET /api/auth/profiles` - list all profiles
+  - `GET /api/auth/profiles/:provider` - list provider profiles
+  - `POST /api/auth/profiles/:provider` - save current auth as profile
+  - `POST /api/auth/profiles/:provider/:name/activate` - switch account
+  - `PUT /api/auth/profiles/:provider/:name` - rename profile
+  - `DELETE /api/auth/profiles/:provider/:name` - delete profile
+
+#### UI Animations
+- Page fade-in transitions
+- Card hover lift effects
+- Collapsible section animations
+- Staggered list item animations
+
+### Changed
+- **Removed Models tab** - settings now aligned with official opencode schema
+- **Settings page cleanup:**
+  - Removed Model Aliases section (not in opencode schema)
+  - Removed logLevel field (not in schema)
+  - Fixed permissions key: `permissions` → `permission` (per official docs)
+  - Trimmed keybinds to 12 essentials (leader, app_exit, session_new, session_list, session_interrupt, input_submit, input_clear, input_newline, model_list, agent_cycle, messages_undo, messages_redo)
+- **Types updated:** `OpencodeConfig.permission` (was `permissions`), added `provider` key
+
+### Fixed
+- Settings page now writes correct config keys per opencode official documentation
+
+---
+
+## [Previous]
+
+### Added
+
 #### Deep Link Protocol Support
 - Protocol URL parsing in `cli.js` for `opencodestudio://` scheme
 - Support for actions: `launch`, `install-mcp`, `import-skill`, `import-plugin`

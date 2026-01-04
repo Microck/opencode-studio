@@ -217,4 +217,48 @@ export async function deletePluginFromConfig(name: string): Promise<void> {
   await api.delete(`/plugins/config/${encodeURIComponent(name)}`);
 }
 
+export interface AuthProfilesInfo {
+  [provider: string]: {
+    profiles: string[];
+    active: string | null;
+    hasCurrentAuth: boolean;
+  };
+}
+
+export interface ProviderProfileInfo {
+  profiles: string[];
+  active: string | null;
+  hasCurrentAuth: boolean;
+}
+
+export async function getAuthProfiles(): Promise<AuthProfilesInfo> {
+  const { data } = await api.get<AuthProfilesInfo>('/auth/profiles');
+  return data;
+}
+
+export async function getProviderProfiles(provider: string): Promise<ProviderProfileInfo> {
+  const { data } = await api.get<ProviderProfileInfo>(`/auth/profiles/${provider}`);
+  return data;
+}
+
+export async function saveAuthProfile(provider: string, name?: string): Promise<{ success: boolean; name: string }> {
+  const { data } = await api.post(`/auth/profiles/${provider}`, { name });
+  return data;
+}
+
+export async function activateAuthProfile(provider: string, name: string): Promise<{ success: boolean }> {
+  const { data } = await api.post(`/auth/profiles/${provider}/${name}/activate`);
+  return data;
+}
+
+export async function deleteAuthProfile(provider: string, name: string): Promise<{ success: boolean }> {
+  const { data } = await api.delete(`/auth/profiles/${provider}/${name}`);
+  return data;
+}
+
+export async function renameAuthProfile(provider: string, name: string, newName: string): Promise<{ success: boolean; name: string }> {
+  const { data } = await api.put(`/auth/profiles/${provider}/${name}`, { newName });
+  return data;
+}
+
 export default api;

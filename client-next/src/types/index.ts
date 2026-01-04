@@ -180,9 +180,8 @@ export interface OpencodeConfig {
   share?: 'manual' | 'auto' | 'disabled';
   default_agent?: string;
   snapshot?: boolean;
-  logLevel?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   mcp?: Record<string, MCPConfig>;
-  permissions?: PermissionConfig;
+  permission?: PermissionConfig;
   agents?: AgentsConfig;
   tools?: Record<string, boolean>;
   tui?: TUIConfig;
@@ -194,6 +193,7 @@ export interface OpencodeConfig {
   command?: Record<string, { template: string }>;
   plugin?: string[];
   experimental?: ExperimentalConfig;
+  provider?: Record<string, ProviderConfig>;
 }
 
 export interface SkillFile {

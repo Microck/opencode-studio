@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,9 +23,47 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import { Key, LogOut, Plus, RefreshCw, ExternalLink, Sparkles, Check } from "lucide-react";
-import { getAuthInfo, getAuthProviders, authLogin, authLogout, addPluginsToConfig } from "@/lib/api";
+import { 
+  Key, 
+  LogOut, 
+  Plus, 
+  RefreshCw, 
+  ExternalLink, 
+  Sparkles, 
+  Check, 
+  ChevronDown,
+  Users,
+  Save,
+  Trash2,
+  Edit2,
+  MoreVertical,
+} from "lucide-react";
+import { 
+  getAuthInfo, 
+  getAuthProviders, 
+  authLogin, 
+  authLogout, 
+  addPluginsToConfig,
+  getAuthProfiles,
+  saveAuthProfile,
+  activateAuthProfile,
+  deleteAuthProfile,
+  renameAuthProfile,
+  type AuthProfilesInfo,
+} from "@/lib/api";
 import type { AuthCredential, AuthProvider } from "@/types";
 
 const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
@@ -39,18 +78,28 @@ export default function AuthPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [addingGeminiPlugin, setAddingGeminiPlugin] = useState(false);
+  
+  const [profiles, setProfiles] = useState<AuthProfilesInfo>({});
+  const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
+  const [savingProfile, setSavingProfile] = useState<string | null>(null);
+  const [activatingProfile, setActivatingProfile] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ provider: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ provider: string; name: string } | null>(null);
+  const [newName, setNewName] = useState("");
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [authInfo, providerList] = await Promise.all([
+      const [authInfo, providerList, profilesData] = await Promise.all([
         getAuthInfo(),
         getAuthProviders(),
+        getAuthProfiles(),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
       setHasGeminiAuthPlugin(authInfo.hasGeminiAuthPlugin ?? false);
       setProviders(providerList);
+      setProfiles(profilesData);
     } catch {
       toast.error("Failed to load auth info");
     } finally {
@@ -111,6 +160,59 @@ export default function AuthPage() {
     }
   };
 
+  const handleSaveProfile = async (provider: string) => {
+    try {
+      setSavingProfile(provider);
+      const result = await saveAuthProfile(provider);
+      toast.success(`Saved as ${result.name}`);
+      loadData();
+    } catch {
+      toast.error("Failed to save profile");
+    } finally {
+      setSavingProfile(null);
+    }
+  };
+
+  const handleActivateProfile = async (provider: string, name: string) => {
+    try {
+      setActivatingProfile(`${provider}-${name}`);
+      await activateAuthProfile(provider, name);
+      toast.success(`Switched to ${name}`);
+      loadData();
+    } catch {
+      toast.error("Failed to switch profile");
+    } finally {
+      setActivatingProfile(null);
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteAuthProfile(deleteTarget.provider, deleteTarget.name);
+      toast.success(`Deleted ${deleteTarget.name}`);
+      loadData();
+    } catch {
+      toast.error("Failed to delete profile");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleRenameProfile = async () => {
+    if (!renameTarget || !newName.trim()) return;
+    try {
+      const result = await renameAuthProfile(renameTarget.provider, renameTarget.name, newName.trim());
+      toast.success(`Renamed to ${result.name}`);
+      loadData();
+    } catch {
+      toast.error("Failed to rename profile");
+    } finally {
+      setRenameTarget(null);
+      setNewName("");
+    }
+  };
+
   const formatExpiry = (timestamp: number | null) => {
     if (!timestamp) return null;
     const date = new Date(timestamp);
@@ -129,9 +231,13 @@ export default function AuthPage() {
     return `${minutes}m`;
   };
 
+  const toggleProfileExpansion = (provider: string) => {
+    setExpandedProfiles(prev => ({ ...prev, [provider]: !prev[provider] }));
+  };
+
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         <h1 className="text-2xl font-bold">Authentication</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -147,7 +253,7 @@ export default function AuthPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Authentication</h1>
         <Button variant="outline" size="sm" onClick={loadData}>
@@ -156,7 +262,7 @@ export default function AuthPage() {
         </Button>
       </div>
 
-      <Card>
+      <Card className="hover-lift">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Plus className="h-5 w-5" />
@@ -196,7 +302,7 @@ export default function AuthPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-primary/30 bg-primary/5">
+      <Card className="border-primary/30 bg-primary/5 hover-lift">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -244,42 +350,171 @@ export default function AuthPage() {
           <p className="text-muted-foreground italic">No providers configured.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {credentials.map((cred) => (
-              <Card key={cred.id} className={cred.isExpired ? "border-destructive/50" : ""}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Key className="h-4 w-4" />
-                      {cred.name}
-                    </CardTitle>
-                    <Badge variant={cred.type === "oauth" ? "default" : "secondary"}>
-                      {cred.type}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm text-muted-foreground">
-                      {cred.isExpired ? (
-                        <span className="text-destructive">Expired</span>
-                      ) : cred.expiresAt ? (
-                        <span>Expires in {formatExpiry(cred.expiresAt)}</span>
-                      ) : (
-                        <span>API Key</span>
+            {credentials.map((cred) => {
+              const providerProfiles = profiles[cred.id] || { profiles: [], active: null, hasCurrentAuth: true };
+              const hasProfiles = providerProfiles.profiles.length > 0;
+              const isExpanded = expandedProfiles[cred.id];
+              
+              return (
+                <Card key={cred.id} className={`hover-lift ${cred.isExpired ? "border-destructive/50" : ""}`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Key className="h-4 w-4" />
+                        {cred.name}
+                      </CardTitle>
+                      <div className="flex items-center gap-1">
+                        <Badge variant={cred.type === "oauth" ? "default" : "secondary"}>
+                          {cred.type}
+                        </Badge>
+                        {hasProfiles && (
+                          <Badge variant="outline" className="text-xs">
+                            <Users className="h-3 w-3 mr-1" />
+                            {providerProfiles.profiles.length}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-muted-foreground">
+                        {cred.isExpired ? (
+                          <span className="text-destructive">Expired</span>
+                        ) : cred.expiresAt ? (
+                          <span>Expires in {formatExpiry(cred.expiresAt)}</span>
+                        ) : (
+                          <span>API Key</span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLogoutTarget(cred)}
+                      >
+                        <LogOut className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+
+                    {providerProfiles.active && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>Active:</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {providerProfiles.active}
+                        </Badge>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      {!providerProfiles.active && providerProfiles.hasCurrentAuth && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleSaveProfile(cred.id)}
+                          disabled={savingProfile === cred.id}
+                        >
+                          <Save className="h-3 w-3 mr-1" />
+                          {savingProfile === cred.id ? "Saving..." : "Save as Profile"}
+                        </Button>
+                      )}
+                      
+                      {hasProfiles && (
+                        <Collapsible open={isExpanded} onOpenChange={() => toggleProfileExpansion(cred.id)}>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="outline" size="sm" className="flex-1">
+                              <Users className="h-3 w-3 mr-1" />
+                              Profiles
+                              <ChevronDown className={`h-3 w-3 ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            </Button>
+                          </CollapsibleTrigger>
+                        </Collapsible>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setLogoutTarget(cred)}
-                    >
-                      <LogOut className="h-4 w-4 mr-1" />
-                      Remove
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                    {hasProfiles && (
+                      <Collapsible open={isExpanded}>
+                        <CollapsibleContent className="animate-scale-in">
+                          <div className="space-y-2 pt-2 border-t">
+                            {providerProfiles.profiles.map((profileName) => {
+                              const isActive = providerProfiles.active === profileName;
+                              const isActivating = activatingProfile === `${cred.id}-${profileName}`;
+                              
+                              return (
+                                <div
+                                  key={profileName}
+                                  className={`flex items-center justify-between p-2 rounded-md ${
+                                    isActive ? "bg-primary/10" : "bg-muted/50"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {isActive && <Check className="h-3 w-3 text-primary" />}
+                                    <span className="text-sm">{profileName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {!isActive && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2"
+                                        onClick={() => handleActivateProfile(cred.id, profileName)}
+                                        disabled={isActivating}
+                                      >
+                                        {isActivating ? "..." : "Use"}
+                                      </Button>
+                                    )}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                          <MoreVertical className="h-3 w-3" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            setRenameTarget({ provider: cred.id, name: profileName });
+                                            setNewName(profileName);
+                                          }}
+                                        >
+                                          <Edit2 className="h-3 w-3 mr-2" />
+                                          Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-destructive"
+                                          onClick={() => setDeleteTarget({ provider: cred.id, name: profileName })}
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-2" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            
+                            {providerProfiles.hasCurrentAuth && !providerProfiles.profiles.includes(providerProfiles.active || "") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => handleSaveProfile(cred.id)}
+                                disabled={savingProfile === cred.id}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                {savingProfile === cred.id ? "Saving..." : "Save Current as New Profile"}
+                              </Button>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -302,6 +537,46 @@ export default function AuthPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleLogout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete profile &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this saved profile. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteProfile} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!renameTarget} onOpenChange={(o) => { if (!o) { setRenameTarget(null); setNewName(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rename profile</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter a new name for this profile.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New profile name"
+            className="my-4"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRenameProfile} disabled={!newName.trim() || newName === renameTarget?.name}>
+              Rename
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

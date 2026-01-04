@@ -39,14 +39,19 @@ function parseInput(input: string): { name: string; config: MCPConfig } | null {
         if (serverNames.length > 0) {
           const serverName = serverNames[0];
           const serverConfig = parsed.mcpServers[serverName];
+          const command = normalizeCommand(serverConfig.command);
+          if (serverConfig.args && Array.isArray(serverConfig.args)) {
+            command.push(...serverConfig.args);
+          }
           return {
             name: serverName,
             config: {
-              command: normalizeCommand(serverConfig.command),
-              args: serverConfig.args || [],
+              command,
               enabled: serverConfig.enabled ?? true,
               type: serverConfig.type || "local",
-              ...(serverConfig.env && { env: serverConfig.env }),
+              ...((serverConfig.env || serverConfig.environment) && { 
+                environment: serverConfig.env || serverConfig.environment 
+              }),
               ...(serverConfig.url && { url: serverConfig.url }),
               ...(serverConfig.timeout && { timeout: serverConfig.timeout }),
               ...(serverConfig.oauth && { oauth: serverConfig.oauth }),
@@ -56,14 +61,19 @@ function parseInput(input: string): { name: string; config: MCPConfig } | null {
       }
       
       if (parsed.command !== undefined || parsed.url !== undefined) {
+        const command = normalizeCommand(parsed.command);
+        if (parsed.args && Array.isArray(parsed.args)) {
+            command.push(...parsed.args);
+        }
         return {
           name: "mcp-server",
           config: {
-            command: normalizeCommand(parsed.command),
-            args: parsed.args || [],
+            command,
             enabled: parsed.enabled ?? true,
             type: parsed.type || "local",
-            ...(parsed.env && { env: parsed.env }),
+            ...((parsed.env || parsed.environment) && { 
+                environment: parsed.env || parsed.environment 
+            }),
             ...(parsed.url && { url: parsed.url }),
             ...(parsed.timeout && { timeout: parsed.timeout }),
             ...(parsed.oauth && { oauth: parsed.oauth }),
@@ -75,25 +85,18 @@ function parseInput(input: string): { name: string; config: MCPConfig } | null {
 
   const parts = trimmed.split(/\s+/);
   const command: string[] = [];
-  const args: string[] = [];
   let packageName = "";
   let foundPackage = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
+    command.push(part);
     
     if (!foundPackage) {
-      if (part === "npx" || part === "npm" || part === "node" || part === "exec" || part === "--" || part === "-y" || part === "--yes") {
-        command.push(part);
-      } else if (part.startsWith("-")) {
-        command.push(part);
-      } else {
-        command.push(part);
+      if (!(part === "npx" || part === "npm" || part === "node" || part === "exec" || part === "--" || part === "-y" || part === "--yes" || part.startsWith("-"))) {
         packageName = part;
         foundPackage = true;
       }
-    } else {
-      args.push(part);
     }
   }
 
@@ -109,9 +112,6 @@ function parseInput(input: string): { name: string; config: MCPConfig } | null {
     enabled: true,
     type: "local",
   };
-  if (args.length > 0) {
-    config.args = args;
-  }
 
   return { name, config };
 }

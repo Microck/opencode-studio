@@ -25,6 +25,27 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function sanitizeMCPConfig(config: MCPConfig): MCPConfig {
+  const newConfig = { ...config };
+  
+  // Merge args into command if present
+  if (newConfig.args && newConfig.args.length > 0) {
+    if (!newConfig.command) newConfig.command = [];
+    if (Array.isArray(newConfig.command)) {
+      newConfig.command = [...newConfig.command, ...newConfig.args];
+    }
+    delete newConfig.args;
+  }
+  
+  // Rename env to environment
+  if (newConfig.env) {
+    newConfig.environment = { ...newConfig.environment, ...newConfig.env };
+    delete newConfig.env;
+  }
+  
+  return newConfig;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<OpencodeConfig | null>(null);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -131,11 +152,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addMCP = useCallback(async (key: string, mcpConfig: MCPConfig) => {
     if (!config) return;
+    const sanitizedConfig = sanitizeMCPConfig(mcpConfig);
     const newConfig = {
       ...config,
       mcp: {
         ...config.mcp,
-        [key]: mcpConfig,
+        [key]: sanitizedConfig,
       },
     };
     await saveConfigHandler(newConfig);
@@ -143,11 +165,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateMCP = useCallback(async (key: string, mcpConfig: MCPConfig) => {
     if (!config) return;
+    const sanitizedConfig = sanitizeMCPConfig(mcpConfig);
     const newConfig = {
       ...config,
       mcp: {
         ...config.mcp,
-        [key]: mcpConfig,
+        [key]: sanitizedConfig,
       },
     };
     await saveConfigHandler(newConfig);
