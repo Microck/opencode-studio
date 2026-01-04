@@ -26,7 +26,7 @@ WshShell.Run """${nodePath}""" & " ""${scriptPath}"" " & args, 0, False
     }
     
     // Register protocol to use wscript with the VBS launcher
-    const command = `wscript.exe "${vbsPath.replace(/\\/g, '\\\\')}" "%1"`;
+    const command = `wscript.exe "${vbsPath}" "%1"`;
     
     const regCommands = [
         `reg add "HKCU\\Software\\Classes\\${PROTOCOL}" /ve /d "URL:OpenCode Studio Protocol" /f`,
