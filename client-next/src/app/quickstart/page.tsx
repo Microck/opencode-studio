@@ -460,7 +460,7 @@ export default function QuickstartPage() {
           >
             <Card className={cn(isCompleted && "border-primary/30 bg-primary/5")}>
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {/* Step number / completion indicator */}
