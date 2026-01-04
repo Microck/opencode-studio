@@ -20,31 +20,35 @@ function DisconnectedLanding() {
       </div>
       
       <div className="flex flex-col items-center gap-8 max-w-md text-center px-4">
-        <Logo className="w-24 h-24" />
+        <div className="animate-logo-entrance">
+          <Logo className="w-24 h-24" />
+        </div>
         
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight">OpenCode Studio</h1>
-          <p className="text-muted-foreground text-lg">
+          <h1 className="text-4xl font-bold tracking-tight landing-delay-1">OpenCode Studio</h1>
+          <p className="text-muted-foreground text-lg landing-delay-2">
             Manage your OpenCode configuration with a visual interface
           </p>
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <Button size="lg" className="w-full gap-2" onClick={handleLaunch}>
-            <Play className="h-5 w-5" />
-            Launch Backend
-          </Button>
+          <div className="landing-delay-3">
+            <Button size="lg" className="w-full gap-2" onClick={handleLaunch}>
+              <Play className="h-5 w-5" />
+              Launch Backend
+            </Button>
+          </div>
           
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground landing-delay-4">
             Don&apos;t have it installed?
           </p>
           
-          <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono">
+          <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono landing-delay-4">
             npm install -g opencode-studio-server
           </code>
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground landing-delay-5">
           <a 
             href="https://github.com/Microck/opencode-studio" 
             target="_blank" 
@@ -67,7 +71,7 @@ function DisconnectedLanding() {
         </div>
       </div>
 
-      <div className="absolute bottom-4 text-xs text-muted-foreground">
+      <div className="absolute bottom-4 text-xs text-muted-foreground landing-delay-6">
         Waiting for backend connection...
       </div>
     </div>

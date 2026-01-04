@@ -90,6 +90,25 @@
   }
 }
 
+@keyframes logo-entrance {
+  0% {
+    transform: scale(1.5) translateY(0);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.5) translateY(0);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(-20px);
+    opacity: 1;
+  }
+}
+
 :root {
   --radius: 0.625rem;
   --background: #F5F2F2;
@@ -181,6 +200,9 @@
   .animate-slide-in {
     animation: var(--animate-slide-in);
   }
+  .animate-logo-entrance {
+    animation: logo-entrance 1s ease-out forwards;
+  }
   .hover-lift {
     @apply transition-all duration-200 ease-out;
   }
@@ -195,4 +217,36 @@
   .stagger-3 { animation-delay: 0.15s; }
   .stagger-4 { animation-delay: 0.2s; }
   .stagger-5 { animation-delay: 0.25s; }
+  
+  /* Landing page animation delays */
+  .landing-delay-1 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 0.9s; 
+  }
+  .landing-delay-2 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 1.05s; 
+  }
+  .landing-delay-3 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 1.2s; 
+  }
+  .landing-delay-4 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 1.35s; 
+  }
+  .landing-delay-5 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 1.5s; 
+  }
+  .landing-delay-6 { 
+    opacity: 0;
+    animation: fade-in-up 0.4s ease-out forwards;
+    animation-delay: 1.65s; 
+  }
 }
