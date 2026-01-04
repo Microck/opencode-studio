@@ -222,13 +222,16 @@ export default function AuthPage() {
     if (diff < 0) return "Expired";
     
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days > 0) return `${days}d`;
+    if (days > 0) return `${days} day${days !== 1 ? 's' : ''}`;
     
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours > 0) return `${hours}h`;
+    if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
     
     const minutes = Math.floor(diff / (1000 * 60));
-    return `${minutes}m`;
+    if (minutes > 0) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    
+    const seconds = Math.floor(diff / 1000);
+    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
   };
 
   const toggleProfileExpansion = (provider: string) => {
