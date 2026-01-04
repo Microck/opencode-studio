@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   title: "Opencode Studio",
   description: "Manage your Opencode configuration",
   icons: {
-    icon: "/opencode-logo.png",
+    icon: "/logo-dark.png",
   },
 };
 
