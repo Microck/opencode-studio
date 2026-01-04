@@ -382,10 +382,8 @@ export default function AuthPage() {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between items-center">
                       <div className="text-sm text-muted-foreground">
-                        {cred.isExpired ? (
-                          <span className="text-destructive">Expired</span>
-                        ) : cred.expiresAt ? (
-                          <span>Expires in {formatExpiry(cred.expiresAt)}</span>
+                        {cred.type === "oauth" ? (
+                          <span>OAuth (auto-refreshes)</span>
                         ) : (
                           <span>API Key</span>
                         )}

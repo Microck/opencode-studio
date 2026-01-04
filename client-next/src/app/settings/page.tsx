@@ -186,7 +186,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.general} onOpenChange={() => toggleSection("general")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
@@ -291,7 +291,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.permissions} onOpenChange={() => toggleSection("permissions")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
@@ -337,7 +337,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.agents} onOpenChange={() => toggleSection("agents")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bot className="h-5 w-5" />
@@ -420,7 +420,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.keybinds} onOpenChange={() => toggleSection("keybinds")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Keyboard className="h-5 w-5" />
@@ -456,7 +456,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.tui} onOpenChange={() => toggleSection("tui")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Monitor className="h-5 w-5" />
@@ -523,7 +523,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.path} onOpenChange={() => toggleSection("path")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FolderCog className="h-5 w-5" />
@@ -599,7 +599,7 @@ export default function SettingsPage() {
       <Collapsible open={openSections.backup} onOpenChange={() => toggleSection("backup")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl -mx-[1px] -mt-[1px] px-[calc(1.5rem+1px)] pt-[calc(1.5rem+1px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Save className="h-5 w-5" />
