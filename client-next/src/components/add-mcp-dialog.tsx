@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -20,16 +21,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle, Wand2, X } from "lucide-react";
+import { Plus, AlertCircle, Wand2 } from "lucide-react";
 import type { MCPConfig } from "@/types";
 
 interface AddMCPDialogProps {
   onAdd: (name: string, config: MCPConfig) => Promise<void>;
-}
-
-interface EnvVar {
-  key: string;
-  value: string;
 }
 
 function parseCommand(input: string): { name: string; command: string[]; args: string[] } | null {
@@ -79,7 +75,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
   const [url, setUrl] = useState("");
   const [type, setType] = useState<"local" | "sse">("local");
   const [enabled, setEnabled] = useState(true);
-  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [extraJson, setExtraJson] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -92,7 +88,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
     setUrl("");
     setType("local");
     setEnabled(true);
-    setEnvVars([]);
+    setExtraJson("");
     setError("");
     setShowAdvanced(false);
   };
@@ -109,20 +105,6 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
     }
   }, [pasteInput]);
 
-  const addEnvVar = () => {
-    setEnvVars([...envVars, { key: "", value: "" }]);
-  };
-
-  const removeEnvVar = (index: number) => {
-    setEnvVars(envVars.filter((_, i) => i !== index));
-  };
-
-  const updateEnvVar = (index: number, field: "key" | "value", value: string) => {
-    const updated = [...envVars];
-    updated[index][field] = value;
-    setEnvVars(updated);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -137,10 +119,17 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
       return;
     }
 
-    const env: Record<string, string> = {};
-    for (const { key, value } of envVars) {
-      if (key.trim()) {
-        env[key.trim()] = value;
+    let extraConfig: Record<string, unknown> = {};
+    if (extraJson.trim()) {
+      try {
+        extraConfig = JSON.parse(extraJson);
+        if (typeof extraConfig !== "object" || Array.isArray(extraConfig)) {
+          setError("Extra config must be a JSON object");
+          return;
+        }
+      } catch {
+        setError("Invalid JSON in extra config");
+        return;
       }
     }
 
@@ -159,12 +148,10 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
           command: commandArray,
           enabled,
           type: "local",
+          ...extraConfig,
         };
         if (argsArray.length > 0) {
           config.args = argsArray;
-        }
-        if (Object.keys(env).length > 0) {
-          config.env = env;
         }
         await onAdd(name, config);
         resetForm();
@@ -193,10 +180,8 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
           url,
           enabled,
           type: "sse",
+          ...extraConfig,
         };
-        if (Object.keys(env).length > 0) {
-          config.env = env;
-        }
         await onAdd(name, config);
         resetForm();
         setOpen(false);
@@ -330,35 +315,17 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Environment Variables</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addEnvVar}>
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                  {envVars.map((env, i) => (
-                    <div key={i} className="flex gap-2">
-                      <Input
-                        placeholder="KEY"
-                        value={env.key}
-                        onChange={(e) => updateEnvVar(i, "key", e.target.value)}
-                        className="font-mono text-sm"
-                      />
-                      <Input
-                        placeholder="value"
-                        value={env.value}
-                        onChange={(e) => updateEnvVar(i, "value", e.target.value)}
-                        className="font-mono text-sm"
-                      />
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeEnvVar(i)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {envVars.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No environment variables</p>
-                  )}
+                  <Label htmlFor="extraJson">Extra Config (JSON)</Label>
+                  <Textarea
+                    id="extraJson"
+                    value={extraJson}
+                    onChange={(e) => setExtraJson(e.target.value)}
+                    placeholder='{"env": {"API_KEY": "xxx"}, "timeout": 30000}'
+                    className="font-mono text-sm min-h-[80px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Raw JSON merged into config. Use for env, timeout, oauth, etc.
+                  </p>
                 </div>
               </div>
             )}
