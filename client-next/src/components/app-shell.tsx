@@ -86,9 +86,6 @@ function LoadingState() {
       <div className="animate-logo-entrance">
         <Logo className="w-24 h-24" />
       </div>
-      <div className="absolute bottom-1/3 opacity-0 animate-connecting-text text-muted-foreground text-sm">
-        Connecting...
-      </div>
     </div>
   );
 }

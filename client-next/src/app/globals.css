@@ -95,16 +95,12 @@
     transform: translateY(0) scale(1.8);
     opacity: 0;
   }
-  15% {
+  10% {
     transform: translateY(0) scale(1.8);
     opacity: 1;
   }
-  60% {
+  70% {
     transform: translateY(0) scale(1.8);
-    opacity: 1;
-  }
-  80% {
-    transform: translateY(-120px) scale(1);
     opacity: 1;
   }
   100% {
@@ -216,16 +212,12 @@
     animation: var(--animate-slide-in);
   }
   .animate-logo-entrance {
-    animation: logo-entrance 3s ease-out forwards;
-  }
-  .animate-connecting-text {
-    animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 2s;
+    animation: logo-entrance 2.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
   .animate-content-appear {
     opacity: 0;
     animation: content-slide-up 0.5s ease-out forwards;
-    animation-delay: 2.6s;
+    animation-delay: 2.5s;
   }
   .hover-lift {
     @apply transition-all duration-200 ease-out;
@@ -245,31 +237,31 @@
   .landing-delay-1 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 2.9s; 
+    animation-delay: 2.6s; 
   }
   .landing-delay-2 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 3.05s; 
+    animation-delay: 2.7s; 
   }
   .landing-delay-3 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 3.2s; 
+    animation-delay: 2.8s; 
   }
   .landing-delay-4 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 3.35s; 
+    animation-delay: 2.9s; 
   }
   .landing-delay-5 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 3.5s; 
+    animation-delay: 3.0s; 
   }
   .landing-delay-6 { 
     opacity: 0;
     animation: fade-in-up 0.4s ease-out forwards;
-    animation-delay: 3.65s; 
+    animation-delay: 3.1s; 
   }
 }
