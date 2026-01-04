@@ -11,6 +11,10 @@
   <a href="https://nextjs.org/"><img alt="next.js" src="https://img.shields.io/badge/next.js-16-black.svg" /></a>
 </p>
 
+<p align="center">
+  <img src="client-next/public/screenshots/preview.gif" alt="preview" width="800">
+</p>
+
 ---
 
 ### quickstart
