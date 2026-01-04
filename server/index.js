@@ -32,7 +32,11 @@ app.use((req, res, next) => {
 const ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://opencode-studio.vercel.app',
+    'https://opencode.micr.dev',
+    'https://opencode-studio.micr.dev',
     /\.vercel\.app$/,
+    /\.micr\.dev$/,
 ];
 
 app.use(cors({
