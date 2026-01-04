@@ -251,10 +251,6 @@ export default function AuthPage() {
     );
   }
 
-  const availableProviders = providers.filter(
-    (p) => !credentials.some((c) => c.id === p.id || c.id === `github-${p.id}`)
-  );
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -279,7 +275,7 @@ export default function AuthPage() {
                 <SelectValue placeholder="Select provider..." />
               </SelectTrigger>
               <SelectContent>
-                {availableProviders.map((provider) => (
+                {providers.map((provider) => (
                   <SelectItem key={provider.id} value={provider.id}>
                     <div className="flex items-center gap-2">
                       <span>{provider.name}</span>
