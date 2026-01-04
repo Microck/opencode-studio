@@ -57,6 +57,12 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
+export async function shutdownBackend(): Promise<void> {
+  try {
+    await api.post('/shutdown');
+  } catch {}
+}
+
 export interface PathsInfo {
   detected: string | null;
   manual: string | null;

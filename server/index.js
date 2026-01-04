@@ -189,6 +189,11 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+app.post('/api/shutdown', (req, res) => {
+    res.json({ success: true, message: 'Server shutting down' });
+    setTimeout(() => process.exit(0), 100);
+});
+
 app.get('/api/pending-action', (req, res) => {
     const action = loadPendingAction();
     res.json({ action });

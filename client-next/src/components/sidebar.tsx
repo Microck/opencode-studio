@@ -1,20 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu, Rocket, Circle, Play } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Cpu, Rocket, Circle, Play, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useApp } from "@/lib/context";
-import { PROTOCOL_URL } from "@/lib/api";
+import { PROTOCOL_URL, shutdownBackend } from "@/lib/api";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const navItems = [
   { href: "/mcp", label: "MCP Servers", icon: Terminal },
@@ -34,9 +45,15 @@ const bottomNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { connected } = useApp();
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
 
   const handleLaunchBackend = () => {
     window.location.href = PROTOCOL_URL;
+  };
+
+  const handleDisconnect = async () => {
+    await shutdownBackend();
+    setShowDisconnectDialog(false);
   };
 
   return (
@@ -110,20 +127,49 @@ export function Sidebar() {
               {connected ? "Connected" : "Disconnected"}
             </span>
           </div>
-          {!connected && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleLaunchBackend}>
-                  <Play className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Launch Backend</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {!connected && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={handleLaunchBackend}>
+                    <Play className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Launch Backend</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {connected && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => setShowDisconnectDialog(true)}>
+                    <Power className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Disconnect Backend</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
+
+        <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Disconnect Backend?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will shut down the backend server. You&apos;ll need to relaunch it to make changes to your OpenCode configuration.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDisconnect}>Disconnect</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
