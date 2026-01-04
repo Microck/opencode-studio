@@ -792,6 +792,7 @@ function saveAuthConfig(config) {
 const PROVIDER_DISPLAY_NAMES = {
     'github-copilot': 'GitHub Copilot',
     'google': 'Google',
+    'google-gemini-oauth': 'Google Gemini (OAuth)',
     'anthropic': 'Anthropic',
     'openai': 'OpenAI',
     'zai': 'Z.AI',
@@ -808,12 +809,26 @@ const PROVIDER_DISPLAY_NAMES = {
 app.get('/api/auth', (req, res) => {
     const authConfig = loadAuthConfig();
     const authFile = getAuthFile();
+    const paths = getPaths();
+    
+    let hasGeminiAuthPlugin = false;
+    if (paths && fs.existsSync(paths.opencodeJson)) {
+        try {
+            const config = JSON.parse(fs.readFileSync(paths.opencodeJson, 'utf8'));
+            if (Array.isArray(config.plugin)) {
+                hasGeminiAuthPlugin = config.plugin.some(p => 
+                    typeof p === 'string' && p.includes('opencode-gemini-auth')
+                );
+            }
+        } catch {}
+    }
     
     if (!authConfig) {
         return res.json({ 
             credentials: [], 
             authFile: null,
-            message: 'No auth file found' 
+            message: 'No auth file found',
+            hasGeminiAuthPlugin,
         });
     }
     
@@ -828,7 +843,7 @@ app.get('/api/auth', (req, res) => {
         };
     });
     
-    res.json({ credentials, authFile });
+    res.json({ credentials, authFile, hasGeminiAuthPlugin });
 });
 
 app.post('/api/auth/login', (req, res) => {

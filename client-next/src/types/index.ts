@@ -239,6 +239,7 @@ export interface AuthInfo {
   credentials: AuthCredential[];
   authFile: string | null;
   message?: string;
+  hasGeminiAuthPlugin?: boolean;
 }
 
 export interface AuthProvider {

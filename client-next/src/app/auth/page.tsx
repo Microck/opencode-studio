@@ -23,18 +23,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Key, LogOut, Plus, RefreshCw, ExternalLink } from "lucide-react";
-import { getAuthInfo, getAuthProviders, authLogin, authLogout } from "@/lib/api";
+import { Key, LogOut, Plus, RefreshCw, ExternalLink, Sparkles, Check } from "lucide-react";
+import { getAuthInfo, getAuthProviders, authLogin, authLogout, addPluginsToConfig } from "@/lib/api";
 import type { AuthCredential, AuthProvider } from "@/types";
+
+const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
 
 export default function AuthPage() {
   const [credentials, setCredentials] = useState<AuthCredential[]>([]);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
   const [authFile, setAuthFile] = useState<string | null>(null);
+  const [hasGeminiAuthPlugin, setHasGeminiAuthPlugin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logoutTarget, setLogoutTarget] = useState<AuthCredential | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [addingGeminiPlugin, setAddingGeminiPlugin] = useState(false);
 
   const loadData = async () => {
     try {
@@ -45,6 +49,7 @@ export default function AuthPage() {
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
+      setHasGeminiAuthPlugin(authInfo.hasGeminiAuthPlugin ?? false);
       setProviders(providerList);
     } catch {
       toast.error("Failed to load auth info");
@@ -86,6 +91,23 @@ export default function AuthPage() {
       toast.error("Failed to logout");
     } finally {
       setLogoutTarget(null);
+    }
+  };
+
+  const handleAddGeminiPlugin = async () => {
+    try {
+      setAddingGeminiPlugin(true);
+      const result = await addPluginsToConfig([GEMINI_AUTH_PLUGIN]);
+      if (result.added.length > 0) {
+        toast.success("Gemini Auth plugin added! Restart opencode to use it.");
+        setHasGeminiAuthPlugin(true);
+      } else {
+        toast.info("Plugin already in config");
+      }
+    } catch {
+      toast.error("Failed to add plugin");
+    } finally {
+      setAddingGeminiPlugin(false);
     }
   };
 
@@ -170,6 +192,47 @@ export default function AuthPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             This will open your browser to complete authentication
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Gemini OAuth Plugin
+          </CardTitle>
+          <CardDescription>
+            Use your Google account to access Gemini models (free tier included)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {hasGeminiAuthPlugin ? (
+                <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <Check className="h-4 w-4" />
+                  Plugin installed
+                </span>
+              ) : (
+                <span>Add the plugin, then run <code className="bg-muted px-1 rounded">opencode auth login</code> and select Google OAuth</span>
+              )}
+            </div>
+            {!hasGeminiAuthPlugin && (
+              <Button onClick={handleAddGeminiPlugin} disabled={addingGeminiPlugin} variant="outline">
+                {addingGeminiPlugin ? "Adding..." : "Add Plugin"}
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            <a 
+              href="https://github.com/jenslys/opencode-gemini-auth" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              Learn more about opencode-gemini-auth
+            </a>
           </p>
         </CardContent>
       </Card>
