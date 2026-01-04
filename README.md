@@ -228,13 +228,17 @@ config locations:
 
 ### screenshots
 
-| mcp manager | skill editor |
-|:---:|:---:|
-| ![mcp](client-next/public/screenshots/mcp.png) | ![skills](client-next/public/screenshots/skills.png) |
+| mcp | skills | plugins |
+|:---:|:---:|:---:|
+| ![mcp](client-next/public/screenshots/mcp.png) | ![skills](client-next/public/screenshots/skills.png) | ![plugins](client-next/public/screenshots/plugins.png) |
 
-| auth | settings |
-|:---:|:---:|
-| ![auth](client-next/public/screenshots/auth.png) | ![settings](client-next/public/screenshots/settings.png) |
+| commands | auth | settings |
+|:---:|:---:|:---:|
+| ![commands](client-next/public/screenshots/commands.png) | ![auth](client-next/public/screenshots/auth.png) | ![settings](client-next/public/screenshots/settings.png) |
+
+| quickstart |
+|:---:|
+| ![quickstart](client-next/public/screenshots/quickstart.png) |
 
 ---
 
