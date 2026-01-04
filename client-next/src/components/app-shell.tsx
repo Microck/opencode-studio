@@ -14,7 +14,7 @@ function DisconnectedLanding() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background relative">
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background relative overflow-hidden">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -76,7 +76,7 @@ function DisconnectedLanding() {
 
 function LoadingState() {
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background">
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       <p className="mt-4 text-sm text-muted-foreground">Connecting...</p>
     </div>
