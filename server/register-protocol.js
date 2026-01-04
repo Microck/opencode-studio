@@ -16,7 +16,7 @@ args = ""
 If WScript.Arguments.Count > 0 Then
     args = " """ & WScript.Arguments(0) & """"
 End If
-WshShell.Run """${nodePath.replace(/\\/g, '\\\\')}""" & " ""${scriptPath.replace(/\\/g, '\\\\')}"" " & args, 0, False
+WshShell.Run """${nodePath}""" & " ""${scriptPath}"" " & args, 0, False
 `;
     
     try {
