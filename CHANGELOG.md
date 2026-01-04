@@ -2,33 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.0.4] - 2026-01-05
 
 ### Added
 - **Multi-Account Authentication**: Support for saving multiple profiles per provider (e.g., multiple GitHub or Google accounts) and switching between them instantly.
-- **Theme-Aware Logo**: New logo design that automatically adapts to light/dark mode (inverted and rotated 180° for light mode).
+- **Theme-Aware Logo**: New logo design that automatically adapts to light/dark mode.
 - **Preview GIF**: Added animated preview to README showing dark/light mode transition.
 - **Fonts**: Switched to **Rethink Sans** for headings and **Geist** for body text, keeping **Commit Mono** for code.
 - **Gemini Plugin Detection**: Smart detection for `opencode-gemini-auth` with one-click install prompt.
-- **Disconnect Button**: Added ability to disconnect from the backend via the UI.
-- **Raw JSON Editor**: Replaced key-value inputs with raw JSON editors for complex configurations (Env vars, MCP args).
+- **Custom Domain**: Now available at [opencode.micr.dev](https://opencode.micr.dev).
 
 ### Changed
 - **Auth UI Overhaul**: 
   - Simplified "Connected" view.
-  - Hidden confusing OAuth expiry timers (replaced with clean status).
+  - Hidden confusing OAuth expiry timers.
   - "Add Account" button for easy multi-profile setup.
   - Subtle prompt for Gemini plugin installation.
-- **Card Design**: Improved hover effects (`hover-lift`) with full-width clickable areas and better vertical alignment.
-- **Settings Schema**: Aligned settings with official OpenCode schema (removed deprecated `logLevel`, fixed `permissions` key).
-- **Navigation**: Removed "Models" tab (deprecated/confusing) in favor of configuration via `opencode.json` or Settings.
-- **Protocol Handler**: Improved Windows support by hiding CMD window on launch.
+- **Card Design**: Improved hover effects with full-width clickable areas and better vertical alignment.
+- **Settings Schema**: Aligned settings with official OpenCode schema.
+- **Navigation**: Removed "Models" tab in favor of configuration via Settings.
 
 ### Fixed
-- **Hover Clipping**: Fixed issue where hover shadows were clipped by container overflow.
-- **Model Names**: Fixed model naming convention to use dots instead of hyphens where appropriate.
-- **Color Palette**: Refined neutral gray palette for better contrast.
-- **MCP Parsing**: Fixed parsing for `mcpServers` wrapper format.
+- **CORS**: Added `micr.dev` domains to allowed origins.
+- **Protocol Handler**: Fixed Windows VBScript path escaping for registry.
+- **API URL**: Changed to `127.0.0.1` to avoid mixed content issues.
+- **Hover Clipping**: Fixed issue where hover shadows were clipped.
+- **Landing Page**: Prevented scrolling on disconnected state.
 
 ## [0.1.0] - 2024-01-01
 
