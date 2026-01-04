@@ -26,7 +26,7 @@
 npm install -g opencode-studio-server
 ```
 
-2. visit the public site: [opencode-studio.vercel.app](https://opencode-studio.vercel.app)
+2. visit the public site: [opencode.micr.dev](https://opencode.micr.dev)
 
 3. click "Launch Backend" in the sidebar - backend starts automatically
 
