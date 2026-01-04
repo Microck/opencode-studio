@@ -185,7 +185,10 @@
     @apply transition-all duration-200 ease-out;
   }
   .hover-lift:hover {
-    @apply -translate-y-0.5 shadow-lg;
+    @apply -translate-y-1 shadow-xl;
+  }
+  .hover-lift-container {
+    @apply p-1 -m-1;
   }
   .stagger-1 { animation-delay: 0.05s; }
   .stagger-2 { animation-delay: 0.1s; }
