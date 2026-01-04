@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/Microck/opencode-studio">
-    <img src="client-next/public/opencode-logo.png" alt="logo" width="100">
+    <img src="client-next/public/logo-dark.png" alt="logo" width="100">
   </a>
 </p>
 
