@@ -852,7 +852,6 @@ app.get('/api/auth', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
     // opencode auth login is interactive and requires a terminal
-    // Open a new terminal window with the command
     const isWindows = process.platform === 'win32';
     const isMac = process.platform === 'darwin';
     
@@ -865,7 +864,7 @@ app.post('/api/auth/login', (req, res) => {
         command = 'x-terminal-emulator -e "opencode auth login" || gnome-terminal -- opencode auth login || xterm -e "opencode auth login"';
     }
     
-    exec(command, (err) => {
+    exec(command, { shell: true }, (err) => {
         if (err) console.error('Failed to open terminal:', err);
     });
     
