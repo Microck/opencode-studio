@@ -989,6 +989,7 @@ function setActiveProfile(provider, profileName) {
     saveStudioConfig(studioConfig);
 }
 
+function verifyActiveProfile(p, n, c) { if (!n || !c) return false; const d = loadAuthProfile(p, n); if (!d) return false; return JSON.stringify(d) === JSON.stringify(c); }
 app.get('/api/auth/profiles', (req, res) => {
     ensureAuthProfilesDir();
     const activeProfiles = getActiveProfiles();
@@ -1000,7 +1001,7 @@ app.get('/api/auth/profiles', (req, res) => {
         const providerProfiles = listAuthProfiles(provider);
         profiles[provider] = {
             profiles: providerProfiles,
-            active: activeProfiles[provider] || null,
+            active: (activeProfiles[provider] && verifyActiveProfile(provider, activeProfiles[provider], authConfig[provider])) ? activeProfiles[provider] : null,
             hasCurrentAuth: !!authConfig[provider],
         };
     });
@@ -1016,7 +1017,7 @@ app.get('/api/auth/profiles/:provider', (req, res) => {
     
     res.json({
         profiles: providerProfiles,
-        active: activeProfiles[provider] || null,
+        active: (activeProfiles[provider] && verifyActiveProfile(provider, activeProfiles[provider], authConfig[provider])) ? activeProfiles[provider] : null,
         hasCurrentAuth: !!authConfig[provider],
     });
 });

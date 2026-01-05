@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.10] - 2026-01-05
+
+### Fixed
+- **Auth Profiles**: Fixed active profile detection. Now verifies that `auth.json` content actually matches the active profile content. If mismatch (e.g. after logging in to new account), active status is cleared so you can save the new account as a profile.
+
 ## [1.0.9] - 2026-01-05
 
 ### Fixed
