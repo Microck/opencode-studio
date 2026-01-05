@@ -989,7 +989,8 @@ function setActiveProfile(provider, profileName) {
     saveStudioConfig(studioConfig);
 }
 
-function verifyActiveProfile(p, n, c) { if (!n || !c) return false; const d = loadAuthProfile(p, n); if (!d) return false; return JSON.stringify(d) === JSON.stringify(c); }
+function verifyActiveProfile(p, n, c) { console.log("Verifying:", p, n); if (!n || !c) return false; const d = loadAuthProfile(p, n); if (d && c) { console.log("Profile refresh:", d.refresh); console.log("Current refresh:", c.refresh); } if (!d) return false; return JSON.stringify(d) === JSON.stringify(c); }
+
 app.get('/api/auth/profiles', (req, res) => {
     ensureAuthProfilesDir();
     const activeProfiles = getActiveProfiles();
