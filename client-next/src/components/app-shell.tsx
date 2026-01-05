@@ -114,14 +114,10 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   );
 }
 
-function LoadingState({ isFirstLoad }: { isFirstLoad: boolean }) {
-  const animClass = isFirstLoad ? "animate-logo-entrance" : "animate-logo-entrance-fast";
-  
+function LoadingState() {
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
-      <div className={animClass}>
-        <Logo className="w-24 h-24" />
-      </div>
+      <Logo className="w-24 h-24" />
     </div>
   );
 }
@@ -131,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isFirstLoad = useIsFirstLoad();
 
   if (loading && !connected) {
-    return <LoadingState isFirstLoad={isFirstLoad} />;
+    return <LoadingState />;
   }
 
   if (!connected) {
