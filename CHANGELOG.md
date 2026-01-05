@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.11] - 2026-01-05
+
+### Added
+- **One-Click Profile Switching**: Switch profiles by clicking anywhere on the row instead of a "Use" button.
+
+### Fixed
+- **Auth Verification**: Added content verification for active profiles to ensure UI reflects actual state after external login changes.
+
 ## [1.0.10] - 2026-01-05
 
 ### Fixed

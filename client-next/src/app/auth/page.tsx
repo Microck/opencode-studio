@@ -379,29 +379,25 @@ export default function AuthPage() {
                               return (
                                 <div
                                   key={profileName}
-                                  className={`flex items-center justify-between p-2 rounded-md ${
-                                    isActive ? "bg-primary/10" : "bg-muted/50"
+                                  className={`flex items-center justify-between p-2 rounded-md transition-colors group ${
+                                    isActive ? "bg-primary/10" : "bg-muted/50 hover:bg-muted cursor-pointer"
                                   }`}
+                                  onClick={() => !isActive && !isActivating && handleActivateProfile(cred.id, profileName)}
                                 >
                                   <div className="flex items-center gap-2">
                                     {isActive && <Check className="h-3 w-3 text-primary" />}
-                                    <span className="text-sm">{profileName}</span>
+                                    {isActivating && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                    <span className="text-sm font-medium">{profileName}</span>
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    {!isActive && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 px-2"
-                                        onClick={() => handleActivateProfile(cred.id, profileName)}
-                                        disabled={isActivating}
-                                      >
-                                        {isActivating ? "..." : "Use"}
-                                      </Button>
-                                    )}
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity data-[state=open]:opacity-100"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                           <MoreVertical className="h-3 w-3" />
                                         </Button>
                                       </DropdownMenuTrigger>
