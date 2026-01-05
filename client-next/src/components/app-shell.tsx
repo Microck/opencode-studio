@@ -114,10 +114,13 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   );
 }
 
-function LoadingState() {
+function LoadingState({ isFirstLoad }: { isFirstLoad: boolean }) {
+  const scale = isFirstLoad ? "scale-[1.8]" : "scale-150";
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
-      <Logo className="w-24 h-24" />
+      <div className={scale}>
+        <Logo className="w-24 h-24" />
+      </div>
     </div>
   );
 }
@@ -127,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isFirstLoad = useIsFirstLoad();
 
   if (loading && !connected) {
-    return <LoadingState />;
+    return <LoadingState isFirstLoad={isFirstLoad} />;
   }
 
   if (!connected) {
