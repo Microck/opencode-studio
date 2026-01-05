@@ -93,10 +93,6 @@
 @keyframes logo-entrance {
   0% {
     transform: translateY(0) scale(1.8);
-    opacity: 0;
-  }
-  10% {
-    transform: translateY(0) scale(1.8);
     opacity: 1;
   }
   70% {
@@ -111,10 +107,6 @@
 
 @keyframes logo-entrance-fast {
   0% {
-    transform: translateY(0) scale(1.5);
-    opacity: 0;
-  }
-  20% {
     transform: translateY(0) scale(1.5);
     opacity: 1;
   }
