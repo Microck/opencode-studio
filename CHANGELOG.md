@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2026-01-05
+
+### Changed
+- **Auth Login**: Opens terminal window for interactive `opencode auth login` instead of trying to spawn headlessly (opencode CLI requires interactive selection).
+
+### Fixed
+- **Landing Page Scroll**: Use fixed positioning to prevent scrolling on disconnected state.
+
 ## [1.0.6] - 2026-01-05
 
 ### Fixed

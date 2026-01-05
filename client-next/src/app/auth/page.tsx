@@ -17,13 +17,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -41,7 +34,6 @@ import {
   LogOut, 
   Plus, 
   RefreshCw, 
-  ExternalLink, 
   Sparkles, 
   Check, 
   ChevronDown,
@@ -50,10 +42,10 @@ import {
   Trash2,
   Edit2,
   MoreVertical,
+  Terminal,
 } from "lucide-react";
 import { 
   getAuthInfo, 
-  getAuthProviders, 
   authLogin, 
   authLogout, 
   addPluginsToConfig,
@@ -64,18 +56,16 @@ import {
   renameAuthProfile,
   type AuthProfilesInfo,
 } from "@/lib/api";
-import type { AuthCredential, AuthProvider } from "@/types";
+import type { AuthCredential } from "@/types";
 
 const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
 
 export default function AuthPage() {
   const [credentials, setCredentials] = useState<AuthCredential[]>([]);
-  const [providers, setProviders] = useState<AuthProvider[]>([]);
   const [authFile, setAuthFile] = useState<string | null>(null);
   const [hasGeminiAuthPlugin, setHasGeminiAuthPlugin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logoutTarget, setLogoutTarget] = useState<AuthCredential | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [addingGeminiPlugin, setAddingGeminiPlugin] = useState(false);
   
@@ -90,15 +80,13 @@ export default function AuthPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [authInfo, providerList, profilesData] = await Promise.all([
+      const [authInfo, profilesData] = await Promise.all([
         getAuthInfo(),
-        getAuthProviders(),
         getAuthProfiles(),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
       setHasGeminiAuthPlugin(authInfo.hasGeminiAuthPlugin ?? false);
-      setProviders(providerList);
       setProfiles(profilesData);
     } catch {
       toast.error("Failed to load auth info");
@@ -112,18 +100,13 @@ export default function AuthPage() {
   }, []);
 
   const handleLogin = async () => {
-    if (!selectedProvider) {
-      toast.error("Please select a provider");
-      return;
-    }
-
     try {
       setLoginLoading(true);
-      const result = await authLogin(selectedProvider);
+      const result = await authLogin("");
       toast.success(result.message);
       toast.info(result.note, { duration: 10000 });
     } catch {
-      toast.error("Failed to start login");
+      toast.error("Failed to open terminal");
     } finally {
       setLoginLoading(false);
     }
@@ -267,31 +250,15 @@ export default function AuthPage() {
             <Plus className="h-5 w-5" />
             Add Provider
           </CardTitle>
+          <CardDescription>
+            Opens a terminal to authenticate with OpenCode
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Select provider..." />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((provider) => (
-                  <SelectItem key={provider.id} value={provider.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{provider.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {provider.type}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleLogin} disabled={loginLoading || !selectedProvider}>
-              {loginLoading ? "Opening..." : "Login"}
-              <ExternalLink className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
+          <Button onClick={handleLogin} disabled={loginLoading}>
+            {loginLoading ? "Opening..." : "Open Terminal"}
+            <Terminal className="h-4 w-4 ml-2" />
+          </Button>
         </CardContent>
       </Card>
 
@@ -480,10 +447,7 @@ export default function AuthPage() {
                               variant="outline"
                               size="sm"
                               className="w-full"
-                              onClick={() => {
-                                setSelectedProvider(cred.id);
-                                handleLogin();
-                              }}
+                              onClick={handleLogin}
                               disabled={loginLoading}
                             >
                               <Plus className="h-3 w-3 mr-1" />

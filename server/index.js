@@ -851,31 +851,28 @@ app.get('/api/auth', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-    const { provider } = req.body;
-    
-    if (!provider) {
-        return res.status(400).json({ error: 'Provider is required' });
-    }
-
-    if (!PROVIDER_DISPLAY_NAMES[provider]) {
-        return res.status(400).json({ error: 'Invalid provider' });
-    }
-    
-    // Run opencode auth login - this opens browser
+    // opencode auth login is interactive and requires a terminal
+    // Open a new terminal window with the command
     const isWindows = process.platform === 'win32';
-    const command = isWindows 
-        ? `start "" opencode auth login ${provider}`
-        : `opencode auth login ${provider}`;
+    const isMac = process.platform === 'darwin';
+    
+    let command;
+    if (isWindows) {
+        command = 'start cmd /k "opencode auth login"';
+    } else if (isMac) {
+        command = 'osascript -e \'tell app "Terminal" to do script "opencode auth login"\'';
+    } else {
+        command = 'x-terminal-emulator -e "opencode auth login" || gnome-terminal -- opencode auth login || xterm -e "opencode auth login"';
+    }
     
     exec(command, (err) => {
-        if (err) console.error('Failed to start auth login:', err);
+        if (err) console.error('Failed to open terminal:', err);
     });
     
-    // Return immediately - login happens in browser
     res.json({ 
         success: true, 
-        message: `Opening browser for ${provider} login...`,
-        note: 'Complete authentication in your browser, then refresh this page.'
+        message: 'Opening terminal for authentication...',
+        note: 'Complete authentication in the terminal window, then refresh this page.'
     });
 });
 
