@@ -101,6 +101,15 @@ const CANDIDATE_PATHS = [
     path.join(process.env.LOCALAPPDATA || '', 'opencode'),
 ];
 
+function getConfigDir() {
+    for (const candidate of CANDIDATE_PATHS) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
 const PROVIDER_DISPLAY_NAMES = {
     'github-copilot': 'GitHub Copilot',
     'google': 'Google AI',
@@ -115,15 +124,6 @@ const PROVIDER_DISPLAY_NAMES = {
     'amazon-bedrock': 'Amazon Bedrock',
     'azure': 'Azure OpenAI',
 };
-
-function getConfigDir() {
-    for (const candidate of CANDIDATE_PATHS) {
-        if (fs.existsSync(candidate)) {
-            return candidate;
-        }
-    }
-    return null;
-}
 
 function getPaths() {
     const configDir = getConfigDir();
