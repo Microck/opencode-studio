@@ -58,6 +58,31 @@ const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'p
 
 let pendingActionMemory = null;
 
+function loadStudioConfig() {
+    if (!fs.existsSync(STUDIO_CONFIG_PATH)) {
+        return {};
+    }
+    try {
+        return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, 'utf8'));
+    } catch {
+        return {};
+    }
+}
+
+function saveStudioConfig(config) {
+    try {
+        const dir = path.dirname(STUDIO_CONFIG_PATH);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+        return true;
+    } catch (err) {
+        console.error('Failed to save studio config:', err);
+        return false;
+    }
+}
+
 function loadPendingAction() {
     if (pendingActionMemory) return pendingActionMemory;
     
