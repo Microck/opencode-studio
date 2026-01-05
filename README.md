@@ -123,9 +123,9 @@ flowchart LR
 #### auth
 ```
 /auth → view connected providers
-      → [Login] opens browser oauth
-      → save multiple accounts per provider
-      → switch between accounts instantly
+      → [Open Terminal] launches `opencode auth login` for interactive auth
+      → save multiple accounts per provider (click "Save Current" after logging in)
+      → switch between accounts instantly by clicking the profile name
       → rename/delete saved profiles
 ```
 
