@@ -1113,5 +1113,31 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
 });
 
 app.listen(PORT, () => {
+    const url = 'https://opencode-studio.micr.dev';
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`To manage your OpenCode configuration, visit: ${url}`);
+    console.log('\nPress [Enter] to open in your browser...');
+
+    process.stdin.resume();
+    process.stdin.on('data', (data) => {
+        const input = data.toString();
+        if (input === '\n' || input === '\r\n' || input === '\r') {
+            const platform = os.platform();
+            let cmd;
+            if (platform === 'win32') {
+                cmd = `start "" "${url}"`;
+            } else if (platform === 'darwin') {
+                cmd = `open "${url}"`;
+            } else {
+                cmd = `xdg-open "${url}"`;
+            }
+            exec(cmd, (err) => {
+                if (err) {
+                    console.log(`Failed to open browser. Please visit: ${url}`);
+                } else {
+                    console.log('Opening browser...');
+                }
+            });
+        }
+    });
 });
