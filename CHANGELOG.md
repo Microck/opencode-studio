@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.8] - 2026-01-05
+
+### Fixed
+- **Server Startup**: Fixed `ReferenceError: getConfigDir is not defined` crash on startup.
+- **Auth Path Detection**: Improved logging for auth file detection to help debugging.
+
 ## [1.0.7] - 2026-01-05
 
 ### Changed

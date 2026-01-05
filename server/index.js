@@ -99,45 +99,30 @@ const CANDIDATE_PATHS = [
     path.join(HOME_DIR, '.opencode'),
     path.join(process.env.APPDATA || '', 'opencode'),
     path.join(process.env.LOCALAPPDATA || '', 'opencode'),
-    path.join(HOME_DIR, 'AppData', 'Roaming', 'opencode'),
-    path.join(HOME_DIR, 'AppData', 'Local', 'opencode'),
 ];
 
-function detectConfigDir() {
+const PROVIDER_DISPLAY_NAMES = {
+    'github-copilot': 'GitHub Copilot',
+    'google': 'Google AI',
+    'anthropic': 'Anthropic',
+    'openai': 'OpenAI',
+    'xai': 'xAI',
+    'groq': 'Groq',
+    'together': 'Together AI',
+    'mistral': 'Mistral',
+    'deepseek': 'DeepSeek',
+    'openrouter': 'OpenRouter',
+    'amazon-bedrock': 'Amazon Bedrock',
+    'azure': 'Azure OpenAI',
+};
+
+function getConfigDir() {
     for (const candidate of CANDIDATE_PATHS) {
-        const configFile = path.join(candidate, 'opencode.json');
-        if (fs.existsSync(configFile)) {
+        if (fs.existsSync(candidate)) {
             return candidate;
         }
     }
     return null;
-}
-
-function loadStudioConfig() {
-    if (fs.existsSync(STUDIO_CONFIG_PATH)) {
-        try {
-            return JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, 'utf8'));
-        } catch {
-            return { disabledSkills: [], disabledPlugins: [] };
-        }
-    }
-    return { disabledSkills: [], disabledPlugins: [] };
-}
-
-function saveStudioConfig(config) {
-    const dir = path.dirname(STUDIO_CONFIG_PATH);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(STUDIO_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-}
-
-function getConfigDir() {
-    const studioConfig = loadStudioConfig();
-    if (studioConfig.configPath && fs.existsSync(studioConfig.configPath)) {
-        return studioConfig.configPath;
-    }
-    return detectConfigDir();
 }
 
 function getPaths() {
@@ -762,11 +747,14 @@ app.post('/api/restore', (req, res) => {
 
 // Auth endpoints
 function getAuthFile() {
+    console.log('Searching for auth file in:', AUTH_CANDIDATE_PATHS);
     for (const candidate of AUTH_CANDIDATE_PATHS) {
         if (fs.existsSync(candidate)) {
+            console.log('Found auth file at:', candidate);
             return candidate;
         }
     }
+    console.log('No auth file found');
     return null;
 }
 
@@ -793,22 +781,7 @@ function saveAuthConfig(config) {
     }
 }
 
-const PROVIDER_DISPLAY_NAMES = {
-    'github-copilot': 'GitHub Copilot',
-    'google': 'Google',
-    'google-gemini-oauth': 'Google Gemini (OAuth)',
-    'anthropic': 'Anthropic',
-    'openai': 'OpenAI',
-    'zai': 'Z.AI',
-    'xai': 'xAI',
-    'groq': 'Groq',
-    'together': 'Together AI',
-    'mistral': 'Mistral',
-    'deepseek': 'DeepSeek',
-    'openrouter': 'OpenRouter',
-    'amazon-bedrock': 'Amazon Bedrock',
-    'azure': 'Azure OpenAI',
-};
+
 
 app.get('/api/auth', (req, res) => {
     const authConfig = loadAuthConfig();
