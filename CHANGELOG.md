@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6] - 2026-01-05
+
+### Fixed
+- **Auth Login**: Use `exec` with `start` on Windows for reliable browser opening.
+
 ## [1.0.5] - 2026-01-05
 
 ### Fixed
