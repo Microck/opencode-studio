@@ -42,7 +42,7 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   const contentClass = isFirstLoad ? "animate-content-appear" : "animate-content-appear-fast";
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background relative overflow-hidden">
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -117,7 +117,7 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
 function LoadingState({ isFirstLoad }: { isFirstLoad: boolean }) {
   const scale = isFirstLoad ? "scale-[1.8]" : "scale-150";
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background overflow-hidden">
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden">
       <div className={scale}>
         <Logo className="w-24 h-24" />
       </div>
