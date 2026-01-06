@@ -50,7 +50,7 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
       const x = item.day;
       const y = item.hourBucket;
       
-      const barHeight = Math.max(2, (item.value / maxValue) * 100);
+      const barHeight = Math.max(6, (item.value / maxValue) * 80);
       
       let color = 0x3b82f6; 
       if (item.value > maxValue * 0.8) color = 0xef4444; 
