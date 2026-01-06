@@ -729,6 +729,7 @@ app.get('/api/debug/paths', (req, res) => {
 
 app.get('/api/usage', async (req, res) => {
     try {
+        const { projectId: filterProjectId, granularity = 'daily' } = req.query;
         const home = os.homedir();
         const candidatePaths = [
             process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'opencode', 'storage', 'message') : null,
@@ -736,23 +737,17 @@ app.get('/api/usage', async (req, res) => {
             path.join(home, '.opencode', 'storage', 'message')
         ].filter(p => p && fs.existsSync(p));
 
-        // Locate session directory (sibling to message directory)
         const getSessionDir = (messageDir) => {
             return path.join(path.dirname(messageDir), 'session');
         };
 
-        // Cache for session -> project mapping
-        // Map<SessionID, ProjectName>
         const sessionProjectMap = new Map();
 
-        // Helper to load projects
         const loadProjects = (messageDir) => {
             const sessionDir = getSessionDir(messageDir);
             if (!fs.existsSync(sessionDir)) return;
 
             try {
-                // Directories in storage/session are hashed project IDs?
-                // Actually they seem to be project IDs directly
                 const projectDirs = fs.readdirSync(sessionDir);
                 
                 for (const projDir of projectDirs) {
@@ -765,15 +760,13 @@ app.get('/api/usage', async (req, res) => {
                             const sessionId = file.replace('.json', '');
                             try {
                                 const meta = JSON.parse(fs.readFileSync(path.join(fullProjPath, file), 'utf8'));
-                                // Use directory name as project name (last part of path)
-                                // or projectID if directory is missing
                                 let projectName = 'Unknown Project';
                                 if (meta.directory) {
                                     projectName = path.basename(meta.directory);
                                 } else if (meta.projectID) {
                                     projectName = meta.projectID.substring(0, 8);
                                 }
-                                sessionProjectMap.set(sessionId, { name: projectName, id: meta.projectID });
+                                sessionProjectMap.set(sessionId, { name: projectName, id: meta.projectID || projDir });
                             } catch (e) {}
                         }
                     }
@@ -783,7 +776,6 @@ app.get('/api/usage', async (req, res) => {
             }
         };
 
-        // Load projects first
         for (const logDir of candidatePaths) {
             loadProjects(logDir);
         }
@@ -792,8 +784,8 @@ app.get('/api/usage', async (req, res) => {
             totalCost: 0,
             totalTokens: 0,
             byModel: {},
-            byDay: {},
-            byProject: {} // New field
+            byTime: {}, 
+            byProject: {} 
         };
 
         const processedFiles = new Set();
@@ -807,13 +799,33 @@ app.get('/api/usage', async (req, res) => {
                 const msg = JSON.parse(content);
                 
                 const model = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
+                const projectInfo = sessionProjectMap.get(sessionId) || { name: 'Unassigned', id: 'unknown' };
+                const projectId = projectInfo.id || 'unknown';
+
+                if (filterProjectId && filterProjectId !== 'all' && projectId !== filterProjectId) {
+                    return;
+                }
                 
                 if (msg.role === 'assistant' && msg.tokens) {
                     const cost = msg.cost || 0;
                     const inputTokens = msg.tokens.input || 0;
                     const outputTokens = msg.tokens.output || 0;
                     const tokens = inputTokens + outputTokens;
-                    const date = new Date(msg.time.created).toISOString().split('T')[0];
+                    
+                    const timestamp = msg.time.created;
+                    const dateObj = new Date(timestamp);
+                    let timeKey;
+                    
+                    if (granularity === 'hourly') {
+                        timeKey = dateObj.toISOString().substring(0, 13) + ':00:00Z';
+                    } else if (granularity === 'weekly') {
+                        const day = dateObj.getDay();
+                        const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
+                        const monday = new Date(dateObj.setDate(diff));
+                        timeKey = monday.toISOString().split('T')[0];
+                    } else {
+                        timeKey = dateObj.toISOString().split('T')[0];
+                    }
 
                     if (tokens > 0) {
                         stats.totalCost += cost;
@@ -827,18 +839,15 @@ app.get('/api/usage', async (req, res) => {
                         stats.byModel[model].inputTokens += inputTokens;
                         stats.byModel[model].outputTokens += outputTokens;
 
-                        if (!stats.byDay[date]) {
-                            stats.byDay[date] = { date, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                        if (!stats.byTime[timeKey]) {
+                            stats.byTime[timeKey] = { date: timeKey, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
                         }
-                        stats.byDay[date].cost += cost;
-                        stats.byDay[date].tokens += tokens;
-                        stats.byDay[date].inputTokens += inputTokens;
-                        stats.byDay[date].outputTokens += outputTokens;
+                        stats.byTime[timeKey].cost += cost;
+                        stats.byTime[timeKey].tokens += tokens;
+                        stats.byTime[timeKey].inputTokens += inputTokens;
+                        stats.byTime[timeKey].outputTokens += outputTokens;
 
-                        const projectInfo = sessionProjectMap.get(sessionId) || { name: 'Unassigned', id: 'unknown' };
-                        const projectId = projectInfo.id || 'unknown';
                         const projectName = projectInfo.name;
-
                         if (!stats.byProject[projectId]) {
                             stats.byProject[projectId] = { id: projectId, name: projectName, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
                         }
@@ -877,7 +886,7 @@ app.get('/api/usage', async (req, res) => {
             totalCost: stats.totalCost,
             totalTokens: stats.totalTokens,
             byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
-            byDay: Object.values(stats.byDay).sort((a, b) => a.date.localeCompare(b.date)),
+            byDay: Object.values(stats.byTime).sort((a, b) => a.date.localeCompare(b.date)),
             byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
         };
 

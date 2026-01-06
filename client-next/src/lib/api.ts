@@ -225,14 +225,18 @@ export async function deletePluginFromConfig(name: string): Promise<void> {
 export interface UsageStats {
   totalCost: number;
   totalTokens: number;
-  byModel: { name: string; cost: number; tokens: number }[];
-  byDay: { date: string; cost: number; tokens: number }[];
-  byProject: { id: string; name: string; cost: number; tokens: number }[];
+  byModel: { name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
+  byDay: { date: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
+  byProject: { id: string; name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
 }
 
-export const getUsageStats = async (): Promise<UsageStats> => {
+export const getUsageStats = async (projectId?: string | null, granularity: string = 'daily'): Promise<UsageStats> => {
   try {
-    const res = await api.get("/usage");
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', projectId);
+    if (granularity) params.set('granularity', granularity);
+    
+    const res = await api.get(`/usage?${params.toString()}`);
     return res.data;
   } catch (error) {
     console.error("Failed to fetch usage stats:", error);

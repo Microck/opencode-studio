@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUsageStats } from "@/lib/api";
-import { Loader2, DollarSign, MessageSquare, Calendar, Download, TrendingUp, Filter, Users } from "lucide-react";
+import { getUsageStats, UsageStats } from "@/lib/api";
+import { 
+  Loader2, DollarSign, MessageSquare, Calendar, Download, 
+  TrendingUp, Filter, Users, Image as ImageIcon, ArrowLeft,
+  BarChart3, PieChart as PieChartIcon
+} from "lucide-react";
 import { calculateCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -24,6 +29,7 @@ import { IsometricHeatmap } from "@/components/isometric-heatmap";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useFilterStore } from "@/lib/store/filters";
+import { toPng } from 'html-to-image';
 
 import {
   BarChart,
@@ -39,95 +45,81 @@ import {
   Legend,
 } from "recharts";
 
-interface UsageStats {
-  totalCost: number;
-  totalTokens: number;
-  byModel: { name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
-  byDay: { date: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
-  byProject: { id: string; name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
-}
-
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"];
 
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
+  const dashboardRef = useRef<HTMLDivElement>(null);
   
-  const { projectId, setProjectId, dateRange, setDateRange } = useFilterStore();
+  const { projectId, setProjectId, dateRange, setDateRange, granularity, setGranularity } = useFilterStore();
   const [showIsometric, setShowIsometric] = useState(true);
+  const [budget] = useState(5000); 
+
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const data = await getUsageStats(projectId, granularity);
+      
+      const enrichedStats: UsageStats = {
+        totalCost: 0,
+        totalTokens: data.totalTokens,
+        byModel: data.byModel.map(m => ({
+          ...m,
+          cost: calculateCost(m.name, m.inputTokens, m.outputTokens)
+        })).sort((a, b) => b.cost - a.cost),
+        byDay: data.byDay.map(d => ({
+          ...d,
+          cost: calculateCost("default", d.inputTokens, d.outputTokens) 
+        })),
+        byProject: data.byProject.map(p => ({
+          ...p,
+          cost: calculateCost("default", p.inputTokens, p.outputTokens)
+        })).sort((a, b) => b.cost - a.cost)
+      };
+
+      enrichedStats.totalCost = enrichedStats.byModel.reduce((acc, m) => acc + m.cost, 0);
+
+      const heatmap = Array(7 * 3).fill(0).map((_, i) => ({
+        day: Math.floor(i / 3),
+        hourBucket: i % 3,
+        value: 0
+      }));
+
+      enrichedStats.byDay.forEach(day => {
+        const dateObj = new Date(day.date);
+        const dayOfWeek = dateObj.getDay();
+        const hour = dateObj.getUTCHours();
+        
+        let bucket = 1; 
+        if (hour < 8) bucket = 0; 
+        else if (hour > 18) bucket = 2; 
+        
+        heatmap[dayOfWeek * 3 + bucket].value += day.cost;
+      });
+
+      setStats(enrichedStats);
+      setHeatmapData(heatmap);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    getUsageStats()
-      .then((data) => {
-        const enrichedStats: UsageStats = {
-          totalCost: 0,
-          totalTokens: data.totalTokens,
-          byModel: [],
-          byDay: [],
-          byProject: []
-        };
-
-        const heatmap = Array(7 * 3).fill(0).map((_, i) => ({
-          day: Math.floor(i / 3),
-          hourBucket: i % 3,
-          value: 0
-        }));
-
-        enrichedStats.byModel = data.byModel.map((model: any) => {
-          const cost = calculateCost(model.name, model.inputTokens || Math.floor(model.tokens * 0.8), model.outputTokens || Math.ceil(model.tokens * 0.2));
-          enrichedStats.totalCost += cost;
-          return { 
-            ...model, 
-            cost,
-            inputTokens: model.inputTokens || Math.floor(model.tokens * 0.8),
-            outputTokens: model.outputTokens || Math.ceil(model.tokens * 0.2)
-          };
-        }).sort((a, b) => b.cost - a.cost);
-
-        if (data.byProject) {
-          enrichedStats.byProject = data.byProject.map((proj: any) => {
-             const ratio = data.totalTokens > 0 ? proj.tokens / data.totalTokens : 0;
-             const cost = enrichedStats.totalCost * ratio;
-             return { 
-               ...proj, 
-               cost,
-               inputTokens: proj.inputTokens || Math.floor(proj.tokens * 0.8),
-               outputTokens: proj.outputTokens || Math.ceil(proj.tokens * 0.2)
-             };
-          }).sort((a, b) => b.cost - a.cost);
-        }
-
-        const totalTokens = data.totalTokens;
-        enrichedStats.byDay = data.byDay.map((day: any) => {
-          const ratio = totalTokens > 0 ? day.tokens / totalTokens : 0;
-          const cost = enrichedStats.totalCost * ratio;
-          
-          const dateObj = new Date(day.date);
-          const dayIndex = dateObj.getDay();
-          const hash = day.date.split('').reduce((a: number, b: string) => a + b.charCodeAt(0), 0);
-          
-          heatmap[dayIndex * 3 + 0].value += cost * ((hash % 10) / 20); 
-          heatmap[dayIndex * 3 + 1].value += cost * ((hash % 7) / 10); 
-          heatmap[dayIndex * 3 + 2].value += cost * ((hash % 5) / 15); 
-
-          return { ...day, cost };
-        });
-
-        setStats(enrichedStats);
-        setHeatmapData(heatmap);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    fetchStats();
+  }, [projectId, granularity]);
 
   const exportToCSV = () => {
     if (!stats) return;
-    const headers = ["Model", "Tokens", "Input Tokens", "Output Tokens", "Est. Cost"];
+    const headers = ["Model", "Input Tokens", "Output Tokens", "Total Tokens", "Est. Cost"];
     const rows = stats.byModel.map(m => [
       m.name,
-      m.tokens,
       m.inputTokens,
       m.outputTokens,
+      m.tokens,
       m.cost.toFixed(4)
     ]);
     
@@ -135,14 +127,36 @@ export default function UsagePage() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `opencode-usage-${new Date().toISOString().split('T')[0]}.csv`);
+    link.href = url;
+    link.download = `opencode-usage-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  if (loading) {
+  const exportToImage = async () => {
+    if (!dashboardRef.current) return;
+    try {
+      const dataUrl = await toPng(dashboardRef.current, { cacheBust: true });
+      const link = document.createElement('a');
+      link.download = 'opencode-dashboard.png';
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to export image', err);
+    }
+  };
+
+  const handleBarClick = () => {
+    if (granularity === 'daily') {
+      setGranularity('hourly');
+    }
+  };
+
+  const budgetProgress = stats ? Math.min(100, (stats.totalCost / budget) * 100) : 0;
+  const projectedCost = stats ? (stats.totalCost * 1.2) : 0; 
+
+  if (loading && !stats) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -153,12 +167,19 @@ export default function UsagePage() {
   if (!stats) return null;
 
   return (
-    <div className="flex flex-col gap-6 p-6 h-full overflow-y-auto">
+    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 h-full overflow-y-auto bg-background">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Token Usage</h1>
+          <div className="flex items-center gap-2">
+            {granularity !== 'daily' && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setGranularity('daily')}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <h1 className="text-2xl font-bold tracking-tight">Token Usage</h1>
+          </div>
           <p className="text-muted-foreground text-sm">
-            Track your spending and token consumption across all projects.
+            Analysis of spending and token consumption across your projects.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -173,8 +194,8 @@ export default function UsagePage() {
           
           <Select value={projectId || "all"} onValueChange={(v) => setProjectId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[160px] h-9">
-              <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="flex items-center gap-2 text-xs">
+                <Filter className="h-3 w-3 text-muted-foreground" />
                 <SelectValue placeholder="All Projects" />
               </div>
             </SelectTrigger>
@@ -190,8 +211,8 @@ export default function UsagePage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9">
-                <Calendar className="h-3.5 w-3.5 mr-2" />
+              <Button variant="outline" size="sm" className="h-9 text-xs">
+                <Calendar className="h-3 w-3 mr-2" />
                 {dateRange === 'all' ? 'All Time' : dateRange}
               </Button>
             </DropdownMenuTrigger>
@@ -203,63 +224,92 @@ export default function UsagePage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" className="h-9" onClick={exportToCSV}>
-            <Download className="h-3.5 w-3.5 mr-2" />
-            Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportToCSV}>
+                <Download className="h-4 w-4 mr-2" /> Export CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportToImage}>
+                <ImageIcon className="h-4 w-4 mr-2" /> Save Screenshot
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Cost</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Cost</CardTitle>
+            <DollarSign className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter">{formatCurrency(stats.totalCost)}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">Lifetime estimated spend</p>
+            <div className="text-2xl font-bold tracking-tighter">{formatCurrency(stats.totalCost)}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <TrendingUp className="h-3 w-3 text-green-500" />
+              <span className="text-[10px] text-muted-foreground">Projected: {formatCurrency(projectedCost)}</span>
+            </div>
           </CardContent>
         </Card>
 
         <Card className="hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Tokens</CardTitle>
-            <MessageSquare className="h-4 w-4 text-primary" />
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Volume</CardTitle>
+            <MessageSquare className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter">{formatTokens(stats.totalTokens)}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">Input + Output volume</p>
+            <div className="text-2xl font-bold tracking-tighter">{formatTokens(stats.totalTokens)}</div>
+            <p className="text-[10px] text-muted-foreground mt-1">Across {stats.byModel.length} models</p>
           </CardContent>
         </Card>
 
-        <Card className="hover-lift border-primary/10 shadow-sm">
+        <Card className="md:col-span-2 hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Most Used</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Budget Utilization</CardTitle>
+            <span className="text-[10px] font-medium">{Math.round(budgetProgress)}%</span>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold truncate tracking-tight">{stats.byModel[0]?.name || "N/A"}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">Highest individual spend</p>
+          <CardContent className="space-y-3">
+            <Progress value={budgetProgress} className="h-2" />
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+              <span>Used {formatCurrency(stats.totalCost)}</span>
+              <span>Limit {formatCurrency(budget)}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {stats.byProject.length > 0 && (
-        <Card className="border-primary/10 shadow-sm">
+        <Card className="border-primary/10 shadow-sm overflow-hidden">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-sm font-semibold">Top Projects by Cost</CardTitle>
+              <CardTitle className="text-sm font-semibold">Project Breakdown</CardTitle>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-              {stats.byProject.slice(0, 6).map((proj) => (
-                <div key={proj.id} className="min-w-[180px] p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors border-border/50">
-                  <div className="text-xs font-medium truncate text-muted-foreground" title={proj.name}>{proj.name}</div>
-                  <div className="text-xl font-bold mt-1 tabular-nums">{formatCurrency(proj.cost)}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">{formatTokens(proj.tokens)} tokens</div>
+          <CardContent className="p-0 border-t">
+            <div className="flex divide-x divide-border/50 overflow-x-auto scrollbar-hide">
+              {stats.byProject.slice(0, 8).map((proj) => (
+                <div 
+                  key={proj.id} 
+                  className={cn(
+                    "min-w-[160px] p-4 hover:bg-muted/30 transition-colors cursor-pointer group",
+                    projectId === proj.id && "bg-muted/50"
+                  )}
+                  onClick={() => setProjectId(proj.id === projectId ? null : proj.id)}
+                >
+                  <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+                    <span className="truncate">{proj.name}</span>
+                    {projectId === proj.id && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                  </div>
+                  <div className="text-lg font-bold mt-1 tabular-nums">{formatCurrency(proj.cost)}</div>
+                  <div className="text-[9px] text-muted-foreground mt-0.5 group-hover:text-foreground transition-colors">
+                    {formatTokens(proj.tokens)} tokens
+                  </div>
                 </div>
               ))}
             </div>
@@ -269,21 +319,40 @@ export default function UsagePage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="col-span-1 border-primary/10">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Daily Intensity</CardTitle>
-            <span className="text-[10px] text-muted-foreground uppercase">Heatmap View</span>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Usage Timeline
+            </CardTitle>
+            <div className="flex gap-1">
+              {['hourly', 'daily', 'weekly'].map((g) => (
+                <Button 
+                  key={g} 
+                  variant={granularity === g ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="h-6 text-[9px] uppercase px-2"
+                  onClick={() => setGranularity(g as any)}
+                >
+                  {g}
+                </Button>
+              ))}
+            </div>
           </CardHeader>
-          <CardContent className="h-[300px] w-full min-h-0">
+          <CardContent className="h-[300px] w-full min-h-0 pt-4">
             <div className="h-full w-full">
               {showIsometric ? (
                 <IsometricHeatmap data={heatmapData} />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.byDay}>
+                  <BarChart data={stats.byDay} onClick={handleBarClick}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
                     <XAxis 
                       dataKey="date" 
-                      tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      tickFormatter={(v) => {
+                        const date = new Date(v || "");
+                        if (granularity === 'hourly') return date.getHours() + ':00';
+                        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                      }}
                       fontSize={10}
                       tickLine={false}
                       axisLine={false}
@@ -301,8 +370,9 @@ export default function UsagePage() {
                           return (
                             <div className="rounded-lg border bg-background p-2 shadow-sm text-[10px]">
                               <div className="flex flex-col">
-                                <span className="uppercase text-muted-foreground mb-1">{new Date(label || "").toLocaleDateString()}</span>
+                                <span className="uppercase text-muted-foreground mb-1">{new Date(label || "").toLocaleString()}</span>
                                 <span className="font-bold text-sm">{formatCurrency(Number(payload[0].value))}</span>
+                                <span className="text-muted-foreground mt-1">{payload[0].payload.tokens.toLocaleString()} tokens</span>
                               </div>
                             </div>
                           )
@@ -310,7 +380,7 @@ export default function UsagePage() {
                         return null
                       }}
                     />
-                    <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} className="cursor-pointer" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -319,10 +389,13 @@ export default function UsagePage() {
         </Card>
 
         <Card className="col-span-1 border-primary/10">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Cost Distribution</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <PieChartIcon className="h-4 w-4" />
+              Cost Distribution
+            </CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] w-full min-h-0">
+          <CardContent className="h-[300px] w-full min-h-0 pt-4">
             <div className="h-full w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -383,18 +456,18 @@ export default function UsagePage() {
         </Card>
       </div>
 
-      <Card className="border-primary/10 shadow-sm overflow-hidden">
-        <CardHeader className="bg-muted/30 border-b">
-          <CardTitle className="text-sm font-semibold">Model Breakdown</CardTitle>
+      <Card className="border-primary/10 shadow-sm overflow-hidden mb-8">
+        <CardHeader className="bg-muted/30 border-b py-3">
+          <CardTitle className="text-sm font-semibold">Model Performance</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="w-full overflow-auto">
             <table className="w-full text-sm text-left">
               <thead>
-                <tr className="bg-muted/20 text-muted-foreground border-b text-[10px] uppercase tracking-wider">
-                  <th className="px-4 py-3 font-semibold">Model Name</th>
-                  <th className="px-4 py-3 font-semibold text-right">Input Tokens</th>
-                  <th className="px-4 py-3 font-semibold text-right">Output Tokens</th>
+                <tr className="bg-muted/10 text-muted-foreground border-b text-[10px] uppercase tracking-wider">
+                  <th className="px-4 py-3 font-semibold">Model</th>
+                  <th className="px-4 py-3 font-semibold text-right">Input (Context)</th>
+                  <th className="px-4 py-3 font-semibold text-right">Output (Gen)</th>
                   <th className="px-4 py-3 font-semibold text-right">Total Tokens</th>
                   <th className="px-4 py-3 font-semibold text-right">Estimated Cost</th>
                 </tr>
