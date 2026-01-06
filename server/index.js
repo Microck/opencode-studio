@@ -318,7 +318,6 @@ app.get('/api/plugins', (req, res) => {
     
     for (const entry of entries) {
         if (entry.isDirectory()) {
-            // Check for index.js or index.ts
             const jsPath = path.join(pluginDir, entry.name, 'index.js');
             const tsPath = path.join(pluginDir, entry.name, 'index.ts');
             
@@ -329,6 +328,12 @@ app.get('/api/plugins', (req, res) => {
                     enabled: true 
                 });
             }
+        } else if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
+            plugins.push({
+                name: entry.name.replace(/\.(js|ts)$/, ''),
+                path: path.join(pluginDir, entry.name),
+                enabled: true
+            });
         }
     }
     res.json(plugins);
@@ -350,6 +355,12 @@ app.get('/api/plugins/:name', (req, res) => {
     } else if (fs.existsSync(path.join(dirPath, 'index.ts'))) {
         content = fs.readFileSync(path.join(dirPath, 'index.ts'), 'utf8');
         filename = 'index.ts';
+    } else if (fs.existsSync(path.join(pluginDir, name + '.js'))) {
+        content = fs.readFileSync(path.join(pluginDir, name + '.js'), 'utf8');
+        filename = name + '.js';
+    } else if (fs.existsSync(path.join(pluginDir, name + '.ts'))) {
+        content = fs.readFileSync(path.join(pluginDir, name + '.ts'), 'utf8');
+        filename = name + '.ts';
     } else {
         return res.status(404).json({ error: 'Plugin not found' });
     }
@@ -384,6 +395,10 @@ app.delete('/api/plugins/:name', (req, res) => {
     
     if (fs.existsSync(dirPath)) {
         fs.rmSync(dirPath, { recursive: true, force: true });
+    } else if (fs.existsSync(path.join(pluginDir, name + '.js'))) {
+        fs.unlinkSync(path.join(pluginDir, name + '.js'));
+    } else if (fs.existsSync(path.join(pluginDir, name + '.ts'))) {
+        fs.unlinkSync(path.join(pluginDir, name + '.ts'));
     }
     res.json({ success: true });
 });

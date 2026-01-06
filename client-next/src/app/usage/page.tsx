@@ -65,15 +65,15 @@ export default function UsagePage() {
       const enrichedStats: UsageStats = {
         totalCost: 0,
         totalTokens: data.totalTokens,
-        byModel: data.byModel.map(m => ({
+        byModel: (data.byModel || []).map(m => ({
           ...m,
           cost: calculateCost(m.name, m.inputTokens, m.outputTokens)
         })).sort((a, b) => b.cost - a.cost),
-        byDay: data.byDay.map(d => ({
+        byDay: (data.byDay || []).map(d => ({
           ...d,
           cost: calculateCost("default", d.inputTokens, d.outputTokens) 
         })),
-        byProject: data.byProject.map(p => ({
+        byProject: (data.byProject || []).map(p => ({
           ...p,
           cost: calculateCost("default", p.inputTokens, p.outputTokens)
         })).sort((a, b) => b.cost - a.cost)
