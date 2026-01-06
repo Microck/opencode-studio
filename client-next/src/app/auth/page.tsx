@@ -296,7 +296,8 @@ export default function AuthPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {credentials.map((cred) => {
               const providerProfiles = profiles[cred.id] || { profiles: [], active: null, hasCurrentAuth: true };
-              const hasProfiles = providerProfiles.profiles.length > 0;
+              const profileList = providerProfiles.profiles || [];
+              const hasProfiles = profileList.length > 0;
               const isExpanded = expandedProfiles[cred.id];
               
               return (
@@ -314,7 +315,7 @@ export default function AuthPage() {
                         {hasProfiles && (
                           <Badge variant="outline" className="text-xs">
                             <Users className="h-3 w-3 mr-1" />
-                            {providerProfiles.profiles.length}
+                            {profileList.length}
                           </Badge>
                         )}
                       </div>
@@ -372,7 +373,7 @@ export default function AuthPage() {
                       <Collapsible open={isExpanded}>
                         <CollapsibleContent className="animate-scale-in">
                           <div className="space-y-2 pt-2 border-t">
-                            {providerProfiles.profiles.map((profileName) => {
+                            {profileList.map((profileName) => {
                               const isActive = providerProfiles.active === profileName;
                               const isActivating = activatingProfile === `${cred.id}-${profileName}`;
                               
@@ -426,7 +427,7 @@ export default function AuthPage() {
                               );
                             })}
                             
-                            {providerProfiles.hasCurrentAuth && !providerProfiles.profiles.includes(providerProfiles.active || "") && (
+                            {providerProfiles.hasCurrentAuth && !profileList.includes(providerProfiles.active || "") && (
                               <Button
                                 variant="ghost"
                                 size="sm"
