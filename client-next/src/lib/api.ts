@@ -224,7 +224,7 @@ export async function deletePluginFromConfig(name: string): Promise<void> {
 
 export const getUsageStats = async () => {
   try {
-    const res = await api.get("/api/usage");
+    const res = await api.get("/usage");
     return res.data;
   } catch (error) {
     console.error("Failed to fetch usage stats:", error);
