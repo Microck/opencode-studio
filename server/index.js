@@ -315,9 +315,15 @@ app.get('/api/plugins', (req, res) => {
     const entries = fs.readdirSync(pluginDir, { withFileTypes: true });
     
     for (const entry of entries) {
-        if (entry.isDirectory()) {
-            const jsPath = path.join(pluginDir, entry.name, 'index.js');
-            const tsPath = path.join(pluginDir, entry.name, 'index.ts');
+        const fullPath = path.join(pluginDir, entry.name);
+        const stats = fs.lstatSync(fullPath);
+        const isDir = stats.isDirectory();
+        const isFile = stats.isFile();
+        const isSymlink = stats.isSymbolicLink();
+
+        if (isDir) {
+            const jsPath = path.join(fullPath, 'index.js');
+            const tsPath = path.join(fullPath, 'index.ts');
             
             if (fs.existsSync(jsPath) || fs.existsSync(tsPath)) {
                 plugins.push({
@@ -326,10 +332,10 @@ app.get('/api/plugins', (req, res) => {
                     enabled: true 
                 });
             }
-        } else if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
+        } else if ((isFile || isSymlink) && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
             plugins.push({
                 name: entry.name.replace(/\.(js|ts)$/, ''),
-                path: path.join(pluginDir, entry.name),
+                path: fullPath,
                 enabled: true
             });
         }
@@ -677,13 +683,18 @@ app.get('/api/auth/profiles', (req, res) => {
     const authConfig = loadAuthConfig() || {};
     
     const profiles = {};
-    const providers = [
+    
+    const savedProviders = fs.existsSync(AUTH_PROFILES_DIR) ? fs.readdirSync(AUTH_PROFILES_DIR) : [];
+    
+    const standardProviders = [
         'google', 'anthropic', 'openai', 'xai', 'groq', 
         'together', 'mistral', 'deepseek', 'openrouter', 
-        'amazon-bedrock', 'azure'
+        'amazon-bedrock', 'azure', 'github-copilot'
     ];
 
-    providers.forEach(p => {
+    const allProviders = [...new Set([...savedProviders, ...standardProviders])];
+
+    allProviders.forEach(p => {
         const saved = listAuthProfiles(p);
         const active = activeProfiles[p];
         const current = authConfig[p];
@@ -691,8 +702,10 @@ app.get('/api/auth/profiles', (req, res) => {
         if (saved.length > 0 || current) {
             profiles[p] = {
                 active: active,
+                profiles: saved, 
                 saved: saved,
-                hasCurrent: !!current
+                hasCurrent: !!current,
+                hasCurrentAuth: !!current
             };
         }
     });

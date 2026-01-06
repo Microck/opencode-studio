@@ -230,11 +230,12 @@ export interface UsageStats {
   byProject: { id: string; name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
 }
 
-export const getUsageStats = async (projectId?: string | null, granularity: string = 'daily'): Promise<UsageStats> => {
+export const getUsageStats = async (projectId?: string | null, granularity: string = 'daily', range: string = '30d'): Promise<UsageStats> => {
   try {
     const params = new URLSearchParams();
     if (projectId) params.set('projectId', projectId);
     if (granularity) params.set('granularity', granularity);
+    if (range) params.set('range', range);
     
     const res = await api.get(`/usage?${params.toString()}`);
     return res.data;
