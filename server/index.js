@@ -307,39 +307,66 @@ const getPluginDir = () => {
 
 app.get('/api/plugins', (req, res) => {
     const pluginDir = getPluginDir();
-    if (!pluginDir || !fs.existsSync(pluginDir)) {
-        return res.json([]);
-    }
+    const configPath = getConfigPath();
+    const configRoot = configPath ? path.dirname(configPath) : null;
     
     const plugins = [];
-    const entries = fs.readdirSync(pluginDir, { withFileTypes: true });
     
-    for (const entry of entries) {
-        const fullPath = path.join(pluginDir, entry.name);
-        const stats = fs.lstatSync(fullPath);
-        const isDir = stats.isDirectory();
-        const isFile = stats.isFile();
-        const isSymlink = stats.isSymbolicLink();
+    const addPlugin = (name, p, enabled = true) => {
+        if (!plugins.some(pl => pl.name === name)) {
+            plugins.push({ name, path: p, enabled });
+        }
+    };
 
-        if (isDir) {
-            const jsPath = path.join(fullPath, 'index.js');
-            const tsPath = path.join(fullPath, 'index.ts');
-            
-            if (fs.existsSync(jsPath) || fs.existsSync(tsPath)) {
-                plugins.push({
-                    name: entry.name,
-                    path: fs.existsSync(jsPath) ? jsPath : tsPath,
-                    enabled: true 
-                });
+    if (pluginDir && fs.existsSync(pluginDir)) {
+        const entries = fs.readdirSync(pluginDir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(pluginDir, entry.name);
+            const stats = fs.lstatSync(fullPath);
+            if (stats.isDirectory()) {
+                const jsPath = path.join(fullPath, 'index.js');
+                const tsPath = path.join(fullPath, 'index.ts');
+                if (fs.existsSync(jsPath) || fs.existsSync(tsPath)) {
+                    addPlugin(entry.name, fs.existsSync(jsPath) ? jsPath : tsPath);
+                }
+            } else if ((stats.isFile() || stats.isSymbolicLink()) && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
+                addPlugin(entry.name.replace(/\.(js|ts)$/, ''), fullPath);
             }
-        } else if ((isFile || isSymlink) && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
-            plugins.push({
-                name: entry.name.replace(/\.(js|ts)$/, ''),
-                path: fullPath,
-                enabled: true
-            });
         }
     }
+
+    if (configRoot && fs.existsSync(configRoot)) {
+        const rootEntries = fs.readdirSync(configRoot, { withFileTypes: true });
+        const knownPlugins = ['oh-my-opencode', 'superpowers', 'opencode-gemini-auth'];
+        
+        for (const entry of rootEntries) {
+            if (knownPlugins.includes(entry.name) && entry.isDirectory()) {
+                const fullPath = path.join(configRoot, entry.name);
+                addPlugin(entry.name, fullPath);
+            }
+        }
+    }
+
+    const loadedConfig = loadConfig();
+
+    if (loadedConfig && loadedConfig.plugin && Array.isArray(loadedConfig.plugin)) {
+        for (const pluginName of loadedConfig.plugin) {
+            if (!pluginName.includes('/') && !pluginName.includes('\\') && !pluginName.endsWith('.js') && !pluginName.endsWith('.ts')) {
+                addPlugin(pluginName, 'npm', true);
+            }
+        }
+    }
+
+    const config = loadConfig(); // Load config for plugin list checking
+
+    if (config && config.plugin && Array.isArray(config.plugin)) {
+        for (const pluginName of config.plugin) {
+            if (!pluginName.includes('/') && !pluginName.includes('\\') && !pluginName.endsWith('.js') && !pluginName.endsWith('.ts')) {
+                addPlugin(pluginName, 'npm', true);
+            }
+        }
+    }
+
     res.json(plugins);
 });
 
@@ -554,8 +581,44 @@ function loadAuthConfig() {
 }
 
 app.get('/api/auth', (req, res) => {
-    const authConfig = loadAuthConfig();
-    res.json(authConfig || {});
+    const authConfig = loadAuthConfig() || {};
+    const activeProfiles = getActiveProfiles();
+    
+    const credentials = [];
+    const providers = [
+        { id: 'google', name: 'Google AI', type: 'oauth' },
+        { id: 'anthropic', name: 'Anthropic', type: 'api' },
+        { id: 'openai', name: 'OpenAI', type: 'api' },
+        { id: 'xai', name: 'xAI', type: 'api' },
+        { id: 'groq', name: 'Groq', type: 'api' },
+        { id: 'together', name: 'Together AI', type: 'api' },
+        { id: 'mistral', name: 'Mistral', type: 'api' },
+        { id: 'deepseek', name: 'DeepSeek', type: 'api' },
+        { id: 'openrouter', name: 'OpenRouter', type: 'api' },
+        { id: 'amazon-bedrock', name: 'Amazon Bedrock', type: 'api' },
+        { id: 'azure', name: 'Azure OpenAI', type: 'api' },
+        { id: 'github-copilot', name: 'GitHub Copilot', type: 'api' }
+    ];
+
+    providers.forEach(p => {
+        const profileInfo = listAuthProfiles(p.id);
+        const hasCurrent = !!authConfig[p.id];
+        const hasProfiles = profileInfo.length > 0;
+
+        if (hasCurrent || hasProfiles) {
+            credentials.push({
+                ...p,
+                active: activeProfiles[p.id] || (hasCurrent ? 'current' : null)
+            });
+        }
+    });
+
+    res.json({
+        ...authConfig,
+        credentials,
+        authFile: path.join(path.dirname(getConfigPath() || ''), 'auth.json'),
+        hasGeminiAuthPlugin: true 
+    });
 });
 
 app.post('/api/auth/login', (req, res) => {
