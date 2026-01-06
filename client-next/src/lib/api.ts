@@ -222,13 +222,21 @@ export async function deletePluginFromConfig(name: string): Promise<void> {
   await api.delete(`/plugins/config/${encodeURIComponent(name)}`);
 }
 
-export const getUsageStats = async () => {
+export interface UsageStats {
+  totalCost: number;
+  totalTokens: number;
+  byModel: { name: string; cost: number; tokens: number }[];
+  byDay: { date: string; cost: number; tokens: number }[];
+  byProject: { id: string; name: string; cost: number; tokens: number }[];
+}
+
+export const getUsageStats = async (): Promise<UsageStats> => {
   try {
     const res = await api.get("/usage");
     return res.data;
   } catch (error) {
     console.error("Failed to fetch usage stats:", error);
-    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [] };
+    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
   }
 };
 

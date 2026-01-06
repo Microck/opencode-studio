@@ -736,16 +736,69 @@ app.get('/api/usage', async (req, res) => {
             path.join(home, '.opencode', 'storage', 'message')
         ].filter(p => p && fs.existsSync(p));
 
+        // Locate session directory (sibling to message directory)
+        const getSessionDir = (messageDir) => {
+            return path.join(path.dirname(messageDir), 'session');
+        };
+
+        // Cache for session -> project mapping
+        // Map<SessionID, ProjectName>
+        const sessionProjectMap = new Map();
+
+        // Helper to load projects
+        const loadProjects = (messageDir) => {
+            const sessionDir = getSessionDir(messageDir);
+            if (!fs.existsSync(sessionDir)) return;
+
+            try {
+                // Directories in storage/session are hashed project IDs?
+                // Actually they seem to be project IDs directly
+                const projectDirs = fs.readdirSync(sessionDir);
+                
+                for (const projDir of projectDirs) {
+                    const fullProjPath = path.join(sessionDir, projDir);
+                    if (!fs.statSync(fullProjPath).isDirectory()) continue;
+
+                    const files = fs.readdirSync(fullProjPath);
+                    for (const file of files) {
+                        if (file.startsWith('ses_') && file.endsWith('.json')) {
+                            const sessionId = file.replace('.json', '');
+                            try {
+                                const meta = JSON.parse(fs.readFileSync(path.join(fullProjPath, file), 'utf8'));
+                                // Use directory name as project name (last part of path)
+                                // or projectID if directory is missing
+                                let projectName = 'Unknown Project';
+                                if (meta.directory) {
+                                    projectName = path.basename(meta.directory);
+                                } else if (meta.projectID) {
+                                    projectName = meta.projectID.substring(0, 8);
+                                }
+                                sessionProjectMap.set(sessionId, { name: projectName, id: meta.projectID });
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading projects:', e);
+            }
+        };
+
+        // Load projects first
+        for (const logDir of candidatePaths) {
+            loadProjects(logDir);
+        }
+
         const stats = {
             totalCost: 0,
             totalTokens: 0,
             byModel: {},
-            byDay: {}
+            byDay: {},
+            byProject: {} // New field
         };
 
         const processedFiles = new Set();
 
-        const processMessage = (filePath) => {
+        const processMessage = (filePath, sessionId) => {
             if (processedFiles.has(filePath)) return;
             processedFiles.add(filePath);
 
@@ -757,7 +810,9 @@ app.get('/api/usage', async (req, res) => {
                 
                 if (msg.role === 'assistant' && msg.tokens) {
                     const cost = msg.cost || 0;
-                    const tokens = (msg.tokens.input || 0) + (msg.tokens.output || 0);
+                    const inputTokens = msg.tokens.input || 0;
+                    const outputTokens = msg.tokens.output || 0;
+                    const tokens = inputTokens + outputTokens;
                     const date = new Date(msg.time.created).toISOString().split('T')[0];
 
                     if (tokens > 0) {
@@ -765,16 +820,32 @@ app.get('/api/usage', async (req, res) => {
                         stats.totalTokens += tokens;
 
                         if (!stats.byModel[model]) {
-                            stats.byModel[model] = { name: model, cost: 0, tokens: 0 };
+                            stats.byModel[model] = { name: model, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
                         }
                         stats.byModel[model].cost += cost;
                         stats.byModel[model].tokens += tokens;
+                        stats.byModel[model].inputTokens += inputTokens;
+                        stats.byModel[model].outputTokens += outputTokens;
 
                         if (!stats.byDay[date]) {
-                            stats.byDay[date] = { date, cost: 0, tokens: 0 };
+                            stats.byDay[date] = { date, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
                         }
                         stats.byDay[date].cost += cost;
                         stats.byDay[date].tokens += tokens;
+                        stats.byDay[date].inputTokens += inputTokens;
+                        stats.byDay[date].outputTokens += outputTokens;
+
+                        const projectInfo = sessionProjectMap.get(sessionId) || { name: 'Unassigned', id: 'unknown' };
+                        const projectId = projectInfo.id || 'unknown';
+                        const projectName = projectInfo.name;
+
+                        if (!stats.byProject[projectId]) {
+                            stats.byProject[projectId] = { id: projectId, name: projectName, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                        }
+                        stats.byProject[projectId].cost += cost;
+                        stats.byProject[projectId].tokens += tokens;
+                        stats.byProject[projectId].inputTokens += inputTokens;
+                        stats.byProject[projectId].outputTokens += outputTokens;
                     }
                 }
             } catch (err) {
@@ -792,7 +863,7 @@ app.get('/api/usage', async (req, res) => {
                         const messages = fs.readdirSync(sessionDir);
                         for (const msgFile of messages) {
                             if (msgFile.endsWith('.json')) {
-                                processMessage(path.join(sessionDir, msgFile));
+                                processMessage(path.join(sessionDir, msgFile), session);
                             }
                         }
                     }
@@ -806,7 +877,8 @@ app.get('/api/usage', async (req, res) => {
             totalCost: stats.totalCost,
             totalTokens: stats.totalTokens,
             byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
-            byDay: Object.values(stats.byDay).sort((a, b) => a.date.localeCompare(b.date))
+            byDay: Object.values(stats.byDay).sort((a, b) => a.date.localeCompare(b.date)),
+            byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
         };
 
         res.json(response);
