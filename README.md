@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
   <a href="https://nextjs.org/"><img alt="next.js" src="https://img.shields.io/badge/next.js-16-black.svg" /></a>
   <a href="https://www.npmjs.com/package/opencode-studio-server"><img alt="npm" src="https://img.shields.io/npm/v/opencode-studio-server.svg" /></a>
-  <a href="https://www.npmjs.com/package/opencode-studio-server"><img alt="npm downloads" src="https://img.shields.io/npm/dt/opencode-studio-server.svg" /></a>
+  <a href="https://www.npmjs.com/package/opencode-studio-server"><img alt="npm downloads" src="https://img.shields.io/npm/dm/opencode-studio-server.svg" /></a>
 </p>
 
 <p align="center">
