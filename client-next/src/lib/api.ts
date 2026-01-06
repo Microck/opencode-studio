@@ -75,6 +75,11 @@ export async function getPaths(): Promise<PathsInfo> {
   return data;
 }
 
+export async function getDebugPaths(): Promise<any> {
+  const { data } = await api.get('/debug/paths');
+  return data;
+}
+
 export async function setConfigPath(configPath: string | null): Promise<{ success: boolean; current: string | null }> {
   const { data } = await api.post('/paths', { configPath });
   return data;
@@ -216,6 +221,16 @@ export async function addPluginsToConfig(plugins: string[]): Promise<AddPluginsT
 export async function deletePluginFromConfig(name: string): Promise<void> {
   await api.delete(`/plugins/config/${encodeURIComponent(name)}`);
 }
+
+export const getUsageStats = async () => {
+  try {
+    const res = await api.get("/api/usage");
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch usage stats:", error);
+    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [] };
+  }
+};
 
 export interface AuthProfilesInfo {
   [provider: string]: {
