@@ -2,6 +2,7 @@
 
 import { useApp } from "@/lib/context";
 import { Sidebar } from "@/components/sidebar";
+import { DebugMenu } from "@/components/debug-menu";
 import { PROTOCOL_URL } from "@/lib/api";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -138,13 +139,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <main className="flex-1 overflow-auto p-6 pb-8">
-        <div className="hover-lift-container">
+        <div className="hover-lift-container h-full">
           {children}
         </div>
       </main>
+      <DebugMenu />
     </div>
   );
 }
