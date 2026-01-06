@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsageStats, UsageStats } from "@/lib/api";
 import { 
@@ -11,7 +11,6 @@ import {
 import { calculateCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -52,10 +51,10 @@ export default function UsagePage() {
   const [loading, setLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const [showAllModels, setShowAllModels] = useState(false);
   
   const { projectId, setProjectId, dateRange, setDateRange, granularity, setGranularity } = useFilterStore();
   const [showIsometric, setShowIsometric] = useState(true);
-  const [budget] = useState(5000); 
 
   const fetchStats = async () => {
     setLoading(true);
@@ -110,7 +109,21 @@ export default function UsagePage() {
 
   useEffect(() => {
     fetchStats();
-  }, [projectId, granularity]);
+  }, [projectId, granularity, dateRange]);
+
+  const pieData = useMemo(() => {
+    if (!stats) return [];
+    if (showAllModels || stats.byModel.length <= 6) return stats.byModel;
+    
+    const topModels = stats.byModel.slice(0, 5);
+    const otherModels = stats.byModel.slice(5);
+    const othersCost = otherModels.reduce((acc, m) => acc + m.cost, 0);
+    
+    return [
+      ...topModels,
+      { name: "Others", cost: othersCost, tokens: 0, inputTokens: 0, outputTokens: 0 }
+    ];
+  }, [stats, showAllModels]);
 
   const exportToCSV = () => {
     if (!stats) return;
@@ -147,13 +160,6 @@ export default function UsagePage() {
     }
   };
 
-  const handleBarClick = () => {
-    if (granularity === 'daily') {
-      setGranularity('hourly');
-    }
-  };
-
-  const budgetProgress = stats ? Math.min(100, (stats.totalCost / budget) * 100) : 0;
   const projectedCost = stats ? (stats.totalCost * 1.2) : 0; 
 
   if (loading && !stats) {
@@ -171,11 +177,6 @@ export default function UsagePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            {granularity !== 'daily' && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setGranularity('daily')}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
             <h1 className="text-2xl font-bold tracking-tight">Token Usage</h1>
           </div>
           <p className="text-muted-foreground text-sm">
@@ -201,7 +202,7 @@ export default function UsagePage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Projects</SelectItem>
-              {stats.byProject.map((proj) => (
+              {(stats.byProject || []).map((proj) => (
                 <SelectItem key={proj.id} value={proj.id}>
                   {proj.name}
                 </SelectItem>
@@ -242,7 +243,7 @@ export default function UsagePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Cost</CardTitle>
@@ -259,31 +260,28 @@ export default function UsagePage() {
 
         <Card className="hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Volume</CardTitle>
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Input Volume</CardTitle>
             <MessageSquare className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tracking-tighter">{formatTokens(stats.totalTokens)}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">Across {stats.byModel.length} models</p>
+            <div className="text-2xl font-bold tracking-tighter">{formatTokens(stats.byModel.reduce((acc, m) => acc + m.inputTokens, 0))}</div>
+            <p className="text-[10px] text-muted-foreground mt-1">Context / Prompts</p>
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2 hover-lift border-primary/10 shadow-sm">
+        <Card className="hover-lift border-primary/10 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Budget Utilization</CardTitle>
-            <span className="text-[10px] font-medium">{Math.round(budgetProgress)}%</span>
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Output Volume</CardTitle>
+            <TrendingUp className="h-3 w-3 text-primary" />
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Progress value={budgetProgress} className="h-2" />
-            <div className="flex justify-between items-center text-[10px] text-muted-foreground">
-              <span>Used {formatCurrency(stats.totalCost)}</span>
-              <span>Limit {formatCurrency(budget)}</span>
-            </div>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tighter">{formatTokens(stats.byModel.reduce((acc, m) => acc + m.outputTokens, 0))}</div>
+            <p className="text-[10px] text-muted-foreground mt-1">Generation / Responses</p>
           </CardContent>
         </Card>
       </div>
 
-      {stats.byProject.length > 0 && (
+      {(stats.byProject || []).length > 0 && (
         <Card className="border-primary/10 shadow-sm overflow-hidden">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -325,7 +323,7 @@ export default function UsagePage() {
               Usage Timeline
             </CardTitle>
             <div className="flex gap-1">
-              {['hourly', 'daily', 'weekly'].map((g) => (
+              {['hourly', 'daily', 'weekly', 'monthly'].map((g) => (
                 <Button 
                   key={g} 
                   variant={granularity === g ? 'secondary' : 'ghost'} 
@@ -344,7 +342,7 @@ export default function UsagePage() {
                 <IsometricHeatmap data={heatmapData} />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.byDay} onClick={handleBarClick}>
+                  <BarChart data={stats.byDay}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
                     <XAxis 
                       dataKey="date" 
@@ -380,7 +378,7 @@ export default function UsagePage() {
                         return null
                       }}
                     />
-                    <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} className="cursor-pointer" />
+                    <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -394,13 +392,21 @@ export default function UsagePage() {
               <PieChartIcon className="h-4 w-4" />
               Cost Distribution
             </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 text-[9px] uppercase px-2"
+              onClick={() => setShowAllModels(!showAllModels)}
+            >
+              {showAllModels ? "Show Top 5" : "Show All"}
+            </Button>
           </CardHeader>
           <CardContent className="h-[300px] w-full min-h-0 pt-4">
             <div className="h-full w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={stats.byModel}
+                    data={pieData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -408,8 +414,13 @@ export default function UsagePage() {
                     paddingAngle={2}
                     dataKey="cost"
                   >
-                    {stats.byModel.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="hsl(var(--background))" strokeWidth={2} />
+                    {pieData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.name === "Others" ? "#64748b" : COLORS[index % COLORS.length]} 
+                        stroke="hsl(var(--background))" 
+                        strokeWidth={2} 
+                      />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -434,18 +445,12 @@ export default function UsagePage() {
                     wrapperStyle={{ fontSize: "10px", maxWidth: "100px" }}
                     content={({ payload }) => (
                       <ul className="space-y-1">
-                        {payload?.slice(0, 5).map((entry: any, index: number) => (
+                        {payload?.map((entry: any, index: number) => (
                           <li key={`item-${index}`} className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
                             <span className="truncate opacity-80" title={entry.value}>{entry.value}</span>
                           </li>
                         ))}
-                        {(payload?.length || 0) > 5 && (
-                          <li className="flex items-center gap-2 text-muted-foreground opacity-60">
-                            <span className="w-1.5 h-1.5 rounded-full bg-muted" />
-                            <span>Others ({((payload?.length || 0) - 5)})</span>
-                          </li>
-                        )}
                       </ul>
                     )}
                   />
@@ -456,14 +461,14 @@ export default function UsagePage() {
         </Card>
       </div>
 
-      <Card className="border-primary/10 shadow-sm overflow-hidden mb-8">
+      <Card className="border-primary/10 shadow-sm overflow-hidden mb-8 min-h-0 flex flex-col">
         <CardHeader className="bg-muted/30 border-b py-3">
           <CardTitle className="text-sm font-semibold">Model Performance</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="w-full overflow-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
+        <CardContent className="p-0 flex-1 overflow-auto max-h-[400px]">
+          <div className="w-full">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="sticky top-0 bg-background z-10">
                 <tr className="bg-muted/10 text-muted-foreground border-b text-[10px] uppercase tracking-wider">
                   <th className="px-4 py-3 font-semibold">Model</th>
                   <th className="px-4 py-3 font-semibold text-right">Input (Context)</th>
@@ -473,7 +478,7 @@ export default function UsagePage() {
                 </tr>
               </thead>
               <tbody className="divide-y border-b">
-                {stats.byModel.map((model) => (
+                {(stats.byModel || []).map((model) => (
                   <tr key={model.name} className="hover:bg-muted/20 transition-colors group">
                     <td className="px-4 py-3 font-medium truncate max-w-[200px]">{model.name}</td>
                     <td className="px-4 py-3 text-right text-muted-foreground tabular-nums font-mono text-xs">{model.inputTokens.toLocaleString()}</td>

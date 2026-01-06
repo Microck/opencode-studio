@@ -8,7 +8,7 @@ const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; 
 
 let lastActivityTime = Date.now();
 let idleTimer = null;
@@ -124,11 +124,13 @@ const getPaths = () => {
         candidates = [
             path.join(process.env.APPDATA, 'opencode', 'opencode.json'),
             path.join(home, '.config', 'opencode', 'opencode.json'),
+            path.join(home, '.local', 'share', 'opencode', 'opencode.json'),
         ];
     } else {
         candidates = [
             path.join(home, '.config', 'opencode', 'opencode.json'),
             path.join(home, '.opencode', 'opencode.json'),
+            path.join(home, '.local', 'share', 'opencode', 'opencode.json'),
         ];
     }
 
@@ -219,7 +221,6 @@ app.post('/api/config', (req, res) => {
     }
 });
 
-// Helper to get skill dir
 const getSkillDir = () => {
     const configPath = getConfigPath();
     if (!configPath) return null;
@@ -242,7 +243,7 @@ app.get('/api/skills', (req, res) => {
                 skills.push({
                     name: entry.name,
                     path: skillPath,
-                    enabled: !entry.name.endsWith('.disabled') // Simplified logic
+                    enabled: !entry.name.endsWith('.disabled')
                 });
             }
         }
@@ -295,12 +296,9 @@ app.delete('/api/skills/:name', (req, res) => {
 });
 
 app.post('/api/skills/:name/toggle', (req, res) => {
-    // Simplified: renaming not implemented for now to avoid complexity
-    // In real implementation we would rename folder to .disabled
     res.json({ success: true, enabled: true }); 
 });
 
-// Helper to get plugin dir
 const getPluginDir = () => {
     const configPath = getConfigPath();
     if (!configPath) return null;
@@ -380,7 +378,6 @@ app.post('/api/plugins/:name', (req, res) => {
         fs.mkdirSync(dirPath, { recursive: true });
     }
     
-    // Determine file extension based on content? Default to .js if new
     const filePath = path.join(dirPath, 'index.js');
     fs.writeFileSync(filePath, content, 'utf8');
     res.json({ success: true });
@@ -431,7 +428,6 @@ app.post('/api/bulk-fetch', async (req, res) => {
     const fetch = (await import('node-fetch')).default;
     const results = [];
     
-    // Limit concurrency? For now sequential is safer
     for (const url of urls) {
         try {
             const response = await fetch(url);
@@ -439,8 +435,6 @@ app.post('/api/bulk-fetch', async (req, res) => {
             const content = await response.text();
             const filename = path.basename(new URL(url).pathname) || 'file.txt';
             
-            // Try to extract name/description from content (simple regex for markdown/js)
-            // This is basic heuristic
             results.push({
                 url,
                 success: true,
@@ -540,17 +534,10 @@ app.post('/api/restore', (req, res) => {
     res.json({ success: true });
 });
 
-// Auth Handlers
 function loadAuthConfig() {
     const configPath = getConfigPath();
     if (!configPath) return null;
     
-    // Auth config is usually in ~/.config/opencode/auth.json ? 
-    // Or inside opencode.json?
-    // Based on opencode CLI, it seems to store auth in separate files or system keychain.
-    // But for this studio, we might just look at opencode.json "providers" section or similar.
-    
-    // ACTUALLY, opencode stores auth tokens in ~/.config/opencode/auth.json
     const authPath = path.join(path.dirname(configPath), 'auth.json');
     if (!fs.existsSync(authPath)) return null;
     try {
@@ -567,12 +554,8 @@ app.get('/api/auth', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
     const { provider } = req.body;
-    // Launch opencode CLI auth login
-    // This requires 'opencode' to be in PATH
-    
     const cmd = process.platform === 'win32' ? 'opencode.cmd' : 'opencode';
     
-    // We spawn it so it opens the browser
     const child = spawn(cmd, ['auth', 'login', provider], {
         stdio: 'inherit',
         shell: true
@@ -582,8 +565,6 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.delete('/api/auth/:provider', (req, res) => {
-    // Logout logic
-    // Maybe just delete from auth.json? Or run opencode auth logout?
     const { provider } = req.params;
     const cmd = process.platform === 'win32' ? 'opencode.cmd' : 'opencode';
     
@@ -596,7 +577,6 @@ app.delete('/api/auth/:provider', (req, res) => {
 });
 
 app.get('/api/auth/providers', (req, res) => {
-    // List of supported providers (hardcoded for now as it's not easily discoverable via CLI)
     const providers = [
         { id: 'google', name: 'Google AI', type: 'oauth', description: 'Use Google Gemini models' },
         { id: 'anthropic', name: 'Anthropic', type: 'api', description: 'Use Claude models' },
@@ -744,7 +724,7 @@ app.get('/api/debug/paths', (req, res) => {
 
 app.get('/api/usage', async (req, res) => {
     try {
-        const { projectId: filterProjectId, granularity = 'daily' } = req.query;
+        const { projectId: filterProjectId, granularity = 'daily', range = '30d' } = req.query;
         const home = os.homedir();
         const candidatePaths = [
             process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'opencode', 'storage', 'message') : null,
@@ -804,6 +784,12 @@ app.get('/api/usage', async (req, res) => {
         };
 
         const processedFiles = new Set();
+        const now = Date.now();
+        let minTimestamp = 0;
+        
+        if (range === '24h') minTimestamp = now - 24 * 60 * 60 * 1000;
+        else if (range === '7d') minTimestamp = now - 7 * 24 * 60 * 60 * 1000;
+        else if (range === '30d') minTimestamp = now - 30 * 24 * 60 * 60 * 1000;
 
         const processMessage = (filePath, sessionId) => {
             if (processedFiles.has(filePath)) return;
@@ -818,6 +804,10 @@ app.get('/api/usage', async (req, res) => {
                 const projectId = projectInfo.id || 'unknown';
 
                 if (filterProjectId && filterProjectId !== 'all' && projectId !== filterProjectId) {
+                    return;
+                }
+
+                if (minTimestamp > 0 && msg.time.created < minTimestamp) {
                     return;
                 }
                 
@@ -838,6 +828,8 @@ app.get('/api/usage', async (req, res) => {
                         const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
                         const monday = new Date(dateObj.setDate(diff));
                         timeKey = monday.toISOString().split('T')[0];
+                    } else if (granularity === 'monthly') {
+                        timeKey = dateObj.toISOString().substring(0, 7) + '-01';
                     } else {
                         timeKey = dateObj.toISOString().split('T')[0];
                     }
@@ -957,7 +949,6 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
     const authConfig = loadAuthConfig() || {};
     authConfig[provider] = profileData;
     
-    // Save to ~/.config/opencode/auth.json
     const configPath = getConfigPath();
     if (configPath) {
         const authPath = path.join(path.dirname(configPath), 'auth.json');
@@ -1032,7 +1023,6 @@ app.post('/api/plugins/config/add', (req, res) => {
     };
 
     for (const pluginName of plugins) {
-        // Check if plugin exists in studio (for validation)
         const pluginDir = getPluginDir();
         const dirPath = path.join(pluginDir, pluginName);
         const hasJs = fs.existsSync(path.join(dirPath, 'index.js'));
@@ -1043,8 +1033,6 @@ app.post('/api/plugins/config/add', (req, res) => {
             continue;
         }
 
-        // Add to config
-        // Default config for a plugin? Usually empty object or enabled: true
         if (config.plugins[pluginName]) {
             result.skipped.push(`${pluginName} (already configured)`);
         } else {
