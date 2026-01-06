@@ -3,8 +3,16 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsageStats } from "@/lib/api";
-import { Loader2, DollarSign, MessageSquare } from "lucide-react";
+import { Loader2, DollarSign, MessageSquare, Calendar, Download, TrendingUp, Filter } from "lucide-react";
 import { calculateCost } from "@/lib/data/pricing";
+import { formatCurrency, formatTokens, cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   BarChart,
   Bar,
@@ -132,27 +140,29 @@ export default function UsagePage() {
           <CardHeader>
             <CardTitle>Daily Cost</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.byDay}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  fontSize={12}
-                />
-                <YAxis 
-                    tickFormatter={(value) => `$${value}`}
+          <CardContent className="h-[300px] w-full min-h-0">
+            <div className="h-full w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.byDay}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     fontSize={12}
-                />
-                <Tooltip 
-                    formatter={(value: any) => [`$${Number(value).toFixed(4)}`, "Cost"]}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
-                />
-                <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+                  />
+                  <YAxis 
+                      tickFormatter={(value) => `$${value}`}
+                      fontSize={12}
+                  />
+                  <Tooltip 
+                      formatter={(value: any) => [`$${Number(value).toFixed(4)}`, "Cost"]}
+                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+                  />
+                  <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -160,29 +170,31 @@ export default function UsagePage() {
           <CardHeader>
             <CardTitle>Cost by Model</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats.byModel}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="cost"
-                >
-                  {stats.byModel.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                    formatter={(value: any) => [`$${Number(value).toFixed(4)}`, "Cost"]}
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="h-[300px] w-full min-h-0">
+            <div className="h-full w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.byModel}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="cost"
+                  >
+                    {stats.byModel.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                      formatter={(value: any) => [`$${Number(value).toFixed(4)}`, "Cost"]}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
