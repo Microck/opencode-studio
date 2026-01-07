@@ -1,16 +1,16 @@
 # Session Handoff
 
 ## Completed Tasks
-- **Usage Timeline Visualization Refinements**:
-  - Modified `modelIds` logic to explicitly include "Others" and place it at index 0 of the render array.
-  - This ensures "Others" is rendered first (at the bottom of the stack) in the Recharts Bar chart.
-  - Added specific color logic: If model is "Others", it gets a fixed dark gray (`#2e2e2e`). Otherwise, it uses `STACK_COLORS` from the palette.
-  - Verified logic matches the requirement: Darkest/Others at bottom, lighter on top.
+- **Usage Page Tooltip Improvements**:
+  - **Cursor Follow**: Removed custom positioning from the Recharts Tooltip, allowing it to follow the mouse cursor naturally (default behavior).
+  - **Detailed Breakdown**: Updated the custom tooltip content to display a breakdown of *all* models in the stack for the hovered time period (day/hour).
+  - **Visuals**: The tooltip now lists each model with its color dot, name, cost, input tokens, and output tokens. The list is sorted (reversed payload) to match the visual stack order (Top -> Bottom).
+  - **Total**: Added a "Total" cost summary at the bottom of the tooltip for quick reference.
 
 ## Verification
-- Code review confirms `modelIds` prepends "Others" if present.
-- Recharts renders the first item in the data/children list at the bottom of the stack.
-- Playwright script confirmed page loads and "Others" category is present (when data exists).
+- Code changes applied to `client-next/src/app/usage/page.tsx`.
+- Playwright script confirmed basic page load and code logic presence.
+- Visual verification (manual) required to confirm the tooltip looks and behaves exactly as desired (follows cursor, shows list).
 
 ## Next Steps
-- Manual visual verification recommended to ensure color contrast is satisfactory.
+- User can test hovering over the chart bars to see the detailed breakdown.

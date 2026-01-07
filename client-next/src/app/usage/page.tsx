@@ -372,18 +372,28 @@ export default function UsagePage() {
                       if (active && payload && payload.length) {
                         return (
                           <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
-                            <div className="flex flex-col gap-1">
-                              <span className="uppercase text-muted-foreground font-bold">{new Date(label || "").toLocaleString()}</span>
-                              <span className="text-base font-bold text-primary">{formatCurrency(Number(payload[0].payload.cost))}</span>
-                              <div className="mt-1 pt-1 border-t border-border/50 flex flex-col gap-0.5">
-                                <span className="flex justify-between gap-4">
-                                  <span className="text-muted-foreground">Input</span>
-                                  <span className="font-mono">{payload[0].payload.inputTokens?.toLocaleString()}</span>
-                                </span>
-                                <span className="flex justify-between gap-4">
-                                  <span className="text-muted-foreground">Output</span>
-                                  <span className="font-mono">{payload[0].payload.outputTokens?.toLocaleString()}</span>
-                                </span>
+                            <div className="flex flex-col gap-2">
+                              <span className="uppercase text-muted-foreground font-bold border-b pb-1 mb-1">{new Date(label || "").toLocaleString()}</span>
+                              <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
+                                {payload.slice().reverse().map((entry: any, index: number) => (
+                                  <div key={index} className="flex flex-col gap-0.5">
+                                    <div className="flex items-center justify-between gap-4">
+                                      <span className="font-bold flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                        {entry.name}
+                                      </span>
+                                      <span className="text-primary font-mono">{formatCurrency(Number(entry.value))}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-[9px] text-muted-foreground pl-3.5">
+                                      <span>In: {entry.payload[`${entry.name}_input`]?.toLocaleString()}</span>
+                                      <span>Out: {entry.payload[`${entry.name}_output`]?.toLocaleString()}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="pt-2 border-t mt-1 flex justify-between font-bold">
+                                <span>Total</span>
+                                <span>{formatCurrency(payload.reduce((acc: number, p: any) => acc + Number(p.value), 0))}</span>
                               </div>
                             </div>
                           </div>
