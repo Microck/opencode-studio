@@ -371,7 +371,6 @@ export default function UsagePage() {
                     cursor={false}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
-                        // If specific model is hovered (via state), show ONLY that model's details
                         const targetModel = hoveredModel;
                         const entry = targetModel ? payload.find((p: any) => p.name === targetModel) : null;
 
@@ -407,8 +406,6 @@ export default function UsagePage() {
                            )
                         }
 
-                        // Fallback to total if no specific bar segment is hovered (e.g. axis)
-                        // Or simple summary of the stack
                         return (
                           <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
                             <span className="uppercase text-muted-foreground font-bold">{new Date(label || "").toLocaleString()}</span>
