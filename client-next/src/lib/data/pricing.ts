@@ -32,3 +32,12 @@ export function calculateCost(model: string, inputTokens: number, outputTokens: 
   const price = PRICING_PER_1M[model] || PRICING_PER_1M["default"];
   return (inputTokens / 1_000_000 * price.input) + (outputTokens / 1_000_000 * price.output);
 }
+
+export function calculateDetailedCost(model: string, inputTokens: number, outputTokens: number) {
+  const price = PRICING_PER_1M[model] || PRICING_PER_1M["default"];
+  return {
+    inputCost: (inputTokens / 1_000_000 * price.input),
+    outputCost: (outputTokens / 1_000_000 * price.output),
+    total: (inputTokens / 1_000_000 * price.input) + (outputTokens / 1_000_000 * price.output)
+  };
+}

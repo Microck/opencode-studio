@@ -8,7 +8,7 @@ import {
   TrendingUp, Filter, Users, Image as ImageIcon,
   BarChart3, PieChart as PieChartIcon, Activity
 } from "lucide-react";
-import { calculateCost } from "@/lib/data/pricing";
+import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +69,7 @@ export default function UsagePage() {
   const [showAllModels, setShowAllModels] = useState(false);
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   const [timeRange, setTimeRange] = useState("30d");
+  const [hoveredModel, setHoveredModel] = useState<string | null>(null);
   
   const { projectId, setProjectId } = useFilterStore();
 
@@ -367,34 +368,53 @@ export default function UsagePage() {
                     tick={{ fill: 'currentColor', opacity: 0.5 }}
                   />
                   <Tooltip 
-                    cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+                    cursor={false}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
+                        // If specific model is hovered (via state), show ONLY that model's details
+                        const targetModel = hoveredModel;
+                        const entry = targetModel ? payload.find((p: any) => p.name === targetModel) : null;
+
+                        if (targetModel && entry) {
+                           const inputTokens = entry.payload[`${targetModel}_input`] || 0;
+                           const outputTokens = entry.payload[`${targetModel}_output`] || 0;
+                           const costs = calculateDetailedCost(targetModel, inputTokens, outputTokens);
+                           
+                           return (
+                            <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
+                              <div className="flex flex-col gap-1">
+                                <span className="uppercase text-muted-foreground font-bold border-b pb-1 mb-1">{new Date(label || "").toLocaleString()}</span>
+                                <div className="flex items-center gap-2 mb-1">
+                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                   <span className="font-bold text-sm">{targetModel}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex justify-between gap-4">
+                                    <span className="text-muted-foreground">Input Cost</span>
+                                    <span className="font-mono">{formatCurrency(costs.inputCost)}</span>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <span className="text-muted-foreground">Output Cost</span>
+                                    <span className="font-mono">{formatCurrency(costs.outputCost)}</span>
+                                  </div>
+                                  <div className="flex justify-between gap-4 border-t pt-1 mt-0.5 font-bold">
+                                    <span>Total Cost</span>
+                                    <span className="text-primary">{formatCurrency(costs.total)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                           )
+                        }
+
+                        // Fallback to total if no specific bar segment is hovered (e.g. axis)
+                        // Or simple summary of the stack
                         return (
                           <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
-                            <div className="flex flex-col gap-2">
-                              <span className="uppercase text-muted-foreground font-bold border-b pb-1 mb-1">{new Date(label || "").toLocaleString()}</span>
-                              <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
-                                {payload.slice().reverse().map((entry: any, index: number) => (
-                                  <div key={index} className="flex flex-col gap-0.5">
-                                    <div className="flex items-center justify-between gap-4">
-                                      <span className="font-bold flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                        {entry.name}
-                                      </span>
-                                      <span className="text-primary font-mono">{formatCurrency(Number(entry.value))}</span>
-                                    </div>
-                                    <div className="flex justify-between gap-4 text-[9px] text-muted-foreground pl-3.5">
-                                      <span>In: {entry.payload[`${entry.name}_input`]?.toLocaleString()}</span>
-                                      <span>Out: {entry.payload[`${entry.name}_output`]?.toLocaleString()}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="pt-2 border-t mt-1 flex justify-between font-bold">
+                            <span className="uppercase text-muted-foreground font-bold">{new Date(label || "").toLocaleString()}</span>
+                            <div className="mt-1 font-bold flex justify-between gap-4">
                                 <span>Total</span>
-                                <span>{formatCurrency(payload.reduce((acc: number, p: any) => acc + Number(p.value), 0))}</span>
-                              </div>
+                                <span className="text-primary">{formatCurrency(payload.reduce((acc: number, p: any) => acc + Number(p.value), 0))}</span>
                             </div>
                           </div>
                         )
@@ -409,6 +429,11 @@ export default function UsagePage() {
                       stackId="a"
                       fill={modelId === "Others" ? "#2e2e2e" : STACK_COLORS[index % STACK_COLORS.length]}
                       radius={[0, 0, 0, 0]}
+                      onMouseEnter={() => setHoveredModel(modelId)}
+                      onMouseLeave={() => setHoveredModel(null)}
+                      stroke={hoveredModel === modelId ? "hsl(var(--background))" : "none"}
+                      strokeWidth={hoveredModel === modelId ? 2 : 0}
+                      strokeOpacity={0.8}
                     />
                   ))}
                 </BarChart>

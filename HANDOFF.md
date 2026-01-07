@@ -1,16 +1,19 @@
 # Session Handoff
 
 ## Completed Tasks
-- **Usage Page Tooltip Improvements**:
-  - **Cursor Follow**: Removed custom positioning from the Recharts Tooltip, allowing it to follow the mouse cursor naturally (default behavior).
-  - **Detailed Breakdown**: Updated the custom tooltip content to display a breakdown of *all* models in the stack for the hovered time period (day/hour).
-  - **Visuals**: The tooltip now lists each model with its color dot, name, cost, input tokens, and output tokens. The list is sorted (reversed payload) to match the visual stack order (Top -> Bottom).
-  - **Total**: Added a "Total" cost summary at the bottom of the tooltip for quick reference.
+- **Refined Pricing Logic**: Updated `client-next/src/lib/data/pricing.ts` to export `calculateDetailedCost`, allowing split reporting of input vs. output costs.
+- **Enhanced Usage Chart Interaction**:
+  - **Hover State**: Added `hoveredModel` state to track which stacked bar segment is being hovered.
+  - **Dynamic Tooltip**: The tooltip now intelligently switches context:
+    - If hovering a specific model segment: Shows Name, Input Cost, Output Cost, and Total Cost for *that* model only.
+    - If hovering the general axis/background: Shows a daily Total summary.
+  - **Visual Feedback**: Added an outline effect (white stroke) to the hovered bar segment to clearly indicate selection.
+  - **Cursor Follow**: Removed explicit cursor positioning to ensure the tooltip follows the mouse pointer naturally.
 
 ## Verification
-- Code changes applied to `client-next/src/app/usage/page.tsx`.
-- Playwright script confirmed basic page load and code logic presence.
-- Visual verification (manual) required to confirm the tooltip looks and behaves exactly as desired (follows cursor, shows list).
+- Code changes applied successfully.
+- Playwright verified page load stability.
+- Visual behavior (outline + specific data) requires manual interaction to appreciate fully.
 
 ## Next Steps
-- User can test hovering over the chart bars to see the detailed breakdown.
+- Verify the "Input Tokens cost" label matches user expectation (currently showing "Input Cost" with currency formatting).
