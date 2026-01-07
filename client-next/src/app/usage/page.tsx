@@ -74,6 +74,10 @@ export default function UsagePage() {
         byDay: (data.byDay || []).map((d: any) => {
           const modelCosts: Record<string, number> = {};
           (data.byModel || []).forEach(m => {
+             modelCosts[m.name] = 0;
+          });
+          
+          (data.byModel || []).forEach(m => {
              const mid = m.name;
              const it = d[`${mid}_input`] || 0;
              const ot = d[`${mid}_output`] || 0;
@@ -364,27 +368,27 @@ export default function UsagePage() {
             <Dialog>
               <DialogTrigger asChild>
                 <Button 
-                  variant="ghost" 
+                  variant="outline" 
                   size="sm" 
-                  className="h-6 text-[8px] uppercase px-2 font-black opacity-60 hover:opacity-100"
+                  className="h-8 text-xs"
                 >
                   View All
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[90vw] h-[90vh] flex flex-col p-0 gap-0">
+              <DialogContent className="max-w-[95vw] h-[95vh] flex flex-col p-0 gap-0">
                 <DialogHeader className="px-6 py-4 border-b shrink-0">
                   <DialogTitle>Cost Breakdown</DialogTitle>
                 </DialogHeader>
-                <div className="flex-1 min-h-0 flex w-full">
-                  <div className="flex-1 h-full relative min-w-0">
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row w-full overflow-hidden">
+                  <div className="flex-1 h-full relative min-w-0 p-8">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={stats?.byModel || []}
                           cx="50%"
                           cy="50%"
-                          innerRadius="40%"
-                          outerRadius="70%"
+                          innerRadius="30%"
+                          outerRadius="80%"
                           paddingAngle={2}
                           dataKey="cost"
                         >
@@ -402,10 +406,10 @@ export default function UsagePage() {
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               return (
-                                <div className="rounded-lg border bg-background/95 p-2 shadow-xl text-xs backdrop-blur-md border-primary/20">
-                                  <div className="flex flex-col">
-                                    <span className="font-bold truncate max-w-[200px]">{payload[0].name}</span>
-                                    <span className="font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
+                                <div className="rounded-lg border bg-background/95 p-3 shadow-xl text-sm backdrop-blur-md border-primary/20 z-50">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-bold truncate max-w-[300px]">{payload[0].name}</span>
+                                    <span className="font-bold text-primary text-lg">{formatCurrency(Number(payload[0].value))}</span>
                                   </div>
                                 </div>
                               )
@@ -416,7 +420,7 @@ export default function UsagePage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="w-[400px] border-l h-full overflow-y-auto bg-muted/5 p-6 shrink-0">
+                  <div className="w-full lg:w-[450px] border-t lg:border-t-0 lg:border-l h-[40%] lg:h-full overflow-y-auto bg-muted/5 p-6 shrink-0">
                     <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Models ({stats?.byModel.length})</h3>
                     <ul className="space-y-3">
                       {(stats?.byModel || []).map((entry, index) => (

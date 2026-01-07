@@ -109,10 +109,13 @@ export default function PluginsPage() {
              const isGemini = plugin.name === 'gemini';
              const isAntigravity = plugin.name === 'antigravity';
              const locked = (isGemini && activeGPlugin === 'antigravity') || (isAntigravity && activeGPlugin === 'gemini');
+             
+             const displayPlugin = locked ? { ...plugin, enabled: false } : plugin;
+             
              return (
                 <PluginCard
                   key={plugin.name}
-                  plugin={plugin}
+                  plugin={displayPlugin}
                   locked={locked}
                   onToggle={() => handleToggle(plugin.name)}
                   onDelete={() => handleDelete(plugin.name, plugin.type)}

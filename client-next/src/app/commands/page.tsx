@@ -31,6 +31,8 @@ export default function CommandsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newTemplate, setNewTemplate] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingCmd, setEditingCmd] = useState<{ originalName: string, name: string, template: string } | null>(null);
 
   useEffect(() => {
     if (config?.command) {
@@ -80,6 +82,50 @@ export default function CommandsPage() {
 
 
 
+  const handleEditSave = async () => {
+    if (!editingCmd) return;
+    if (!editingCmd.name.trim()) {
+      toast.error("Command name is required");
+      return;
+    }
+    if (!editingCmd.template.trim()) {
+      toast.error("Template is required");
+      return;
+    }
+    
+    // Check for duplicate name only if name changed
+    if (editingCmd.name !== editingCmd.originalName && commands.some(c => c.name === editingCmd.name.trim())) {
+      toast.error("Command already exists");
+      return;
+    }
+
+    const newCommands = { ...config?.command };
+    
+    // If name changed, delete old key
+    if (editingCmd.name !== editingCmd.originalName) {
+      delete newCommands[editingCmd.originalName];
+    }
+    
+    // Set new/updated key
+    newCommands[editingCmd.name.trim()] = { template: editingCmd.template };
+
+    const updatedConfig = {
+      ...config,
+      command: newCommands,
+    };
+
+    try {
+      await saveConfig(updatedConfig);
+      toast.success(`Command "${editingCmd.name}" updated`);
+      setEditOpen(false);
+      setEditingCmd(null);
+      refreshData();
+    } catch {
+      toast.error("Failed to update command");
+    }
+  };
+
+
   const handleDelete = async (name: string) => {
     if (!confirm(`Delete command "${name}"?`)) return;
 
@@ -101,7 +147,12 @@ export default function CommandsPage() {
   };
 
   const openEdit = (cmd: CommandEntry) => {
-    router.push(`/editor?type=commands&name=${encodeURIComponent(cmd.name)}`);
+    setEditingCmd({
+      originalName: cmd.name,
+      name: cmd.name,
+      template: cmd.template
+    });
+    setEditOpen(true);
   };
 
   if (loading) {
@@ -169,9 +220,45 @@ export default function CommandsPage() {
             </div>
           </DialogContent>
         </Dialog>
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit Command</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Command Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editingCmd?.name || ""}
+                  onChange={(e) => setEditingCmd(prev => prev ? { ...prev, name: e.target.value } : null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use with /{editingCmd?.name} in opencode
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-template">Template</Label>
+                <Textarea
+                  id="edit-template"
+                  value={editingCmd?.template || ""}
+                  onChange={(e) => setEditingCmd(prev => prev ? { ...prev, template: e.target.value } : null)}
+                  className="font-mono text-sm min-h-[200px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use $ARGUMENTS to include user-provided arguments
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setEditOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditSave}>Save Changes</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-
-
 
       {commands.length === 0 ? (
         <p className="text-muted-foreground italic">No commands configured.</p>
