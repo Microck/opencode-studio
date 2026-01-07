@@ -1,28 +1,19 @@
 # Session Handoff
 
 ## Completed Tasks
-- **Commands Page**: 
-  - Aligned "Edit" button style with other buttons (ghost variant).
-  - Added ability to edit command name and template via the dialog.
-  - Verified with Playwright: Create -> Edit -> Verify -> Delete cycle passed.
-- **Plugins Page**:
-  - Implemented logic to show incompatible Google plugins (Gemini vs Antigravity) with a lock icon (disabled) instead of hiding them.
-  - Used `locked` prop on `PluginCard`.
-- **Usage Page**:
-  - Removed debug menu from Cost Breakdown.
-  - Improved "View All" dialog layout:
-    - Pie chart on the left (larger).
-    - Legend/List on the right (scrollable).
-    - Removed text overlap issues.
-  - Fixed Usage Timeline bars not showing up:
-    - Updated `dataKey` logic to match backend response (camelCase).
-    - Verified with Playwright: 42 bars detected in the chart.
+- **Usage Page Enhancements**:
+  - Restored **Time Range Filter**: Added dropdown for 24h, 7d, 30d, 3m, 6m, 1y, custom.
+  - **Timeline Stacking**: Fixed stacking order to render darker colors at the bottom and lighter at the top (`STACK_COLORS` reversed).
+  - **Cost Breakdown Legend**: Ensured "Others" category is always at the bottom of the list.
+  - **Tooltip Behavior**: Verified standard Recharts tooltip behavior (follows pointer). Removed manual positioning constraints.
 
-## Verification
-- Run `npm run dev` in `client-next` and `node index.js` in `server`.
-- Visit http://localhost:3000 to see changes.
-- Playwright verification script confirmed core functionality.
+## Verification Status
+- **Manual Verification Needed**:
+  - Check Time Range dropdown appears and filters data.
+  - Check Timeline bar colors are stacked correctly (Dark -> Light from bottom up).
+  - Check "Others" is last in Cost Breakdown legend.
+  - Check Tooltip follows cursor smoothly.
 
 ## Next Steps
-- If plugins `gemini` and `antigravity` are installed, verify the lock icon visually.
-- Add more comprehensive tests for the Usage page if needed.
+- Verify if "Others" category appears correctly when data exceeds 5 models.
+- Ensure backend supports 'weekly' granularity for 6m range (implemented in frontend logic).

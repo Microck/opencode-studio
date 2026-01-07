@@ -49,6 +49,18 @@ import {
 } from "recharts";
 
 const COLORS = ["#D1C6C6", "#AC9F9F", "#877A7A", "#615757", "#3C3636"];
+// Reversed colors for timeline stacking (Darkest first/bottom -> Lightest last/top)
+const STACK_COLORS = [...COLORS].reverse();
+
+const TIME_RANGES = [
+  { label: "24 Hours", value: "24h", granularity: "hourly" },
+  { label: "7 Days", value: "7d", granularity: "daily" },
+  { label: "30 Days", value: "30d", granularity: "daily" },
+  { label: "3 Months", value: "3m", granularity: "daily" }, // Approx 90 days
+  { label: "6 Months", value: "6m", granularity: "weekly" }, // Weekly is better for 6m
+  { label: "1 Year", value: "1y", granularity: "monthly" },
+  { label: "Custom", value: "custom", granularity: "daily" }, // Placeholder for now
+];
 
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
@@ -56,13 +68,15 @@ export default function UsagePage() {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [showAllModels, setShowAllModels] = useState(false);
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
+  const [timeRange, setTimeRange] = useState("30d");
   
   const { projectId, setProjectId } = useFilterStore();
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const data = await getUsageStats(projectId, 'monthly', '1y');
+      const selectedRange = TIME_RANGES.find(r => r.value === timeRange) || TIME_RANGES[2];
+      const data = await getUsageStats(projectId, selectedRange.granularity, selectedRange.value);
       
       const enrichedStats: UsageStats = {
         totalCost: 0,
@@ -108,52 +122,71 @@ export default function UsagePage() {
 
   useEffect(() => {
     fetchStats();
-  }, [projectId]);
+  }, [projectId, timeRange]);
 
   const pieData = useMemo(() => {
     if (!stats) return [];
-    if (showAllModels || stats.byModel.length <= 6) {
-      // Even if showing all, ensure "Others" (if it exists from backend) is at bottom
-      const othersIndex = stats.byModel.findIndex(m => m.name === "Others");
-      if (othersIndex !== -1) {
-        const others = stats.byModel.splice(othersIndex, 1)[0];
-        return [...stats.byModel, others];
-      }
-      return stats.byModel;
+    
+    // Always put "Others" last if it exists in the raw data or after slicing
+    let finalModels = [...stats.byModel];
+    
+    if (!showAllModels && stats.byModel.length > 6) {
+      const topModels = stats.byModel.slice(0, 5);
+      const otherModels = stats.byModel.slice(5);
+      const othersCost = otherModels.reduce((acc, m) => acc + m.cost, 0);
+      const othersTokens = otherModels.reduce((acc, m) => acc + m.tokens, 0);
+      const othersInput = otherModels.reduce((acc, m) => acc + m.inputTokens, 0);
+      const othersOutput = otherModels.reduce((acc, m) => acc + m.outputTokens, 0);
+      
+      finalModels = [
+        ...topModels,
+        { 
+          name: "Others", 
+          cost: othersCost, 
+          tokens: othersTokens, 
+          inputTokens: othersInput, 
+          outputTokens: othersOutput 
+        }
+      ];
+    } else {
+        // Just ensure Others is last if it exists from backend
+        const othersIndex = finalModels.findIndex(m => m.name === "Others");
+        if (othersIndex !== -1) {
+            const others = finalModels.splice(othersIndex, 1)[0];
+            finalModels.push(others);
+        }
     }
     
-    const topModels = stats.byModel.slice(0, 5);
-    const otherModels = stats.byModel.slice(5);
-    const othersCost = otherModels.reduce((acc, m) => acc + m.cost, 0);
-    const othersTokens = otherModels.reduce((acc, m) => acc + m.tokens, 0);
-    const othersInput = otherModels.reduce((acc, m) => acc + m.inputTokens, 0);
-    const othersOutput = otherModels.reduce((acc, m) => acc + m.outputTokens, 0);
-    
-    return [
-      ...topModels,
-      { 
-        name: "Others", 
-        cost: othersCost, 
-        tokens: othersTokens, 
-        inputTokens: othersInput, 
-        outputTokens: othersOutput 
-      }
-    ];
+    return finalModels;
   }, [stats, showAllModels]);
 
-  const tableData = useMemo(() => {
+  const legendData = useMemo(() => {
     if (!stats) return [];
+    // Ensure "Others" is at the bottom for the legend list as well
     const data = [...stats.byModel];
     const othersIndex = data.findIndex(m => m.name === "Others");
     if (othersIndex !== -1) {
       const others = data.splice(othersIndex, 1)[0];
-      return [...data, others];
+      data.push(others);
     }
     return data;
   }, [stats]);
 
+  const tableData = useMemo(() => {
+    // Re-use sorted logic
+    return legendData; 
+  }, [legendData]);
+
   const modelIds = useMemo(() => {
     if (!stats) return [];
+    // For stacking: render Darkest (first in STACK_COLORS) at the bottom.
+    // So we want the model that should be "Darkest" to be the first Bar rendered.
+    // If we want "Darker at bottom", and STACK_COLORS[0] is Darkest.
+    // We should render the model corresponding to STACK_COLORS[0] first.
+    // The loop is: modelIds.map((id, index) => <Bar fill={STACK_COLORS[index]} ... />)
+    // So modelIds[0] gets STACK_COLORS[0] (Darkest).
+    // And rendered first -> Bottom of stack.
+    // So we just need to list models in the order we want them stacked (Bottom to Top).
     return stats.byModel.map(m => m.name).filter(name => name !== "Others");
   }, [stats]);
 
@@ -215,6 +248,20 @@ export default function UsagePage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <Select value={timeRange} onValueChange={setTimeRange}>
+             <SelectTrigger className="w-[120px] h-9 text-xs">
+                <div className="flex items-center gap-2">
+                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                   <SelectValue placeholder="Range" />
+                </div>
+             </SelectTrigger>
+             <SelectContent>
+                {TIME_RANGES.map((r) => (
+                   <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+             </SelectContent>
+          </Select>
+
           <Select value={projectId || "all"} onValueChange={(v) => setProjectId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[160px] h-9 text-xs">
               <div className="flex items-center gap-2">
@@ -349,7 +396,7 @@ export default function UsagePage() {
                       key={modelId}
                       dataKey={modelId}
                       stackId="a"
-                      fill={COLORS[index % COLORS.length]}
+                      fill={STACK_COLORS[index % STACK_COLORS.length]}
                       radius={[0, 0, 0, 0]}
                     />
                   ))}
@@ -421,9 +468,9 @@ export default function UsagePage() {
                     </ResponsiveContainer>
                   </div>
                   <div className="w-full lg:w-[450px] border-t lg:border-t-0 lg:border-l h-[40%] lg:h-full overflow-y-auto bg-muted/5 p-6 shrink-0">
-                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Models ({stats?.byModel.length})</h3>
+                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Models ({legendData.length})</h3>
                     <ul className="space-y-3">
-                      {(stats?.byModel || []).map((entry, index) => (
+                      {legendData.map((entry, index) => (
                         <li key={`item-${index}`} className="flex items-center justify-between text-sm gap-4 group hover:bg-muted/50 p-2 rounded-md transition-colors">
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
