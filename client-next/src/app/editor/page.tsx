@@ -138,7 +138,7 @@ function EditorContent() {
         <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        {type === "skills" ? (
+        {type === "skills" || type === "commands" ? (
             <Input 
                 value={currentName} 
                 onChange={(e) => setCurrentName(e.target.value)} 

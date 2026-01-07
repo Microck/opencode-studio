@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { PluginCard } from "@/components/plugin-card";
 import { AddPluginDialog } from "@/components/add-plugin-dialog";
@@ -8,7 +8,7 @@ import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import { deletePlugin, deletePluginFromConfig } from "@/lib/api";
+import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
 
@@ -16,6 +16,11 @@ export default function PluginsPage() {
   const { plugins, loading, refreshData, togglePlugin } = useApp();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [activeGPlugin, setActiveGPlugin] = useState<string | null>(null);
+
+  useEffect(() => {
+    getActiveGooglePlugin().then(res => setActiveGPlugin(res.activePlugin)).catch(() => {});
+  }, []);
 
   const filteredPlugins = useMemo(() => {
     if (!search.trim()) return plugins;
@@ -100,15 +105,21 @@ export default function PluginsPage() {
         <p className="text-muted-foreground italic">No plugins match "{search}"</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {filteredPlugins.map((plugin) => (
-            <PluginCard
-              key={plugin.name}
-              plugin={plugin}
-              onToggle={() => handleToggle(plugin.name)}
-              onDelete={() => handleDelete(plugin.name, plugin.type)}
-              onClick={plugin.type === 'file' ? () => handleOpen(plugin.name, plugin.type) : undefined}
-            />
-          ))}
+          {filteredPlugins.map((plugin) => {
+             const isGemini = plugin.name === 'gemini';
+             const isAntigravity = plugin.name === 'antigravity';
+             const locked = (isGemini && activeGPlugin === 'antigravity') || (isAntigravity && activeGPlugin === 'gemini');
+             return (
+                <PluginCard
+                  key={plugin.name}
+                  plugin={plugin}
+                  locked={locked}
+                  onToggle={() => handleToggle(plugin.name)}
+                  onDelete={() => handleDelete(plugin.name, plugin.type)}
+                  onClick={plugin.type === 'file' ? () => handleOpen(plugin.name, plugin.type) : undefined}
+                />
+             );
+          })}
         </div>
       )}
     </div>

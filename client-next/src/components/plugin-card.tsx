@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Trash2, Package, AlertCircle, Pencil } from "lucide-react";
+import { Settings, Trash2, Package, AlertCircle, Pencil, Lock } from "lucide-react";
 import type { PluginInfo } from "@/types";
 
 interface PluginCardProps {
@@ -12,9 +12,10 @@ interface PluginCardProps {
   onToggle: () => void;
   onDelete: () => void;
   onClick?: () => void;
+  locked?: boolean;
 }
 
-export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardProps) {
+export function PluginCard({ plugin, onToggle, onDelete, onClick, locked }: PluginCardProps) {
   const isNpm = plugin.type === 'npm';
   const Icon = isNpm ? Package : Settings;
   const isIncompatible = plugin.name.includes('opencode-skills');
@@ -24,20 +25,24 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardPr
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2">
           <div
-            className={`flex items-center gap-2 flex-1 min-w-0 ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
-            onClick={onClick}
+            className={`flex items-center gap-2 flex-1 min-w-0 ${onClick && !locked ? 'cursor-pointer hover:opacity-80' : ''}`}
+            onClick={!locked ? onClick : undefined}
           >
             <Icon className={`h-5 w-5 shrink-0 ${isNpm ? 'text-orange-500' : 'text-purple-500'}`} />
             <span className="font-mono text-sm truncate">{plugin.name}</span>
             {isNpm && <Badge variant="secondary" className="text-xs">npm</Badge>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Switch
-              checked={plugin.enabled}
-              onCheckedChange={() => onToggle()}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Toggle ${plugin.name}`}
-            />
+            {locked ? (
+                <Lock className="h-4 w-4 text-muted-foreground" />
+            ) : (
+                <Switch
+                  checked={plugin.enabled}
+                  onCheckedChange={() => onToggle()}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Toggle ${plugin.name}`}
+                />
+            )}
             <Button
               variant="ghost"
               size="icon"

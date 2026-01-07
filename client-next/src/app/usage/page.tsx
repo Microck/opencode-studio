@@ -57,12 +57,12 @@ export default function UsagePage() {
   const [showAllModels, setShowAllModels] = useState(false);
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   
-  const { projectId, setProjectId, dateRange, setDateRange, granularity, setGranularity } = useFilterStore();
+  const { projectId, setProjectId } = useFilterStore();
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const data = await getUsageStats(projectId, granularity, dateRange);
+      const data = await getUsageStats(projectId, 'monthly', '1y');
       
       const enrichedStats: UsageStats = {
         totalCost: 0,
@@ -104,7 +104,7 @@ export default function UsagePage() {
 
   useEffect(() => {
     fetchStats();
-  }, [projectId, granularity, dateRange]);
+  }, [projectId]);
 
   const pieData = useMemo(() => {
     if (!stats) return [];
@@ -228,36 +228,7 @@ export default function UsagePage() {
             </SelectContent>
           </Select>
 
-          <Select value={dateRange} onValueChange={(v: any) => setDateRange(v)}>
-            <SelectTrigger className="w-[140px] h-9 text-xs">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-3 w-3 text-muted-foreground" />
-                <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24 Hours</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-              <SelectItem value="1y">Last Year</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
-            </SelectContent>
-          </Select>
 
-          <Select value={granularity} onValueChange={(v: any) => setGranularity(v)}>
-            <SelectTrigger className="w-[120px] h-9 text-xs">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="h-3 w-3 text-muted-foreground" />
-                <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="hourly">Hourly</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-            </SelectContent>
-          </Select>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -329,8 +300,7 @@ export default function UsagePage() {
                     dataKey="date" 
                     tickFormatter={(v) => {
                       const date = new Date(v || "");
-                      if (granularity === 'hourly') return date.getHours() + 'h';
-                      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                      return date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
                     }}
                     fontSize={9}
                     tickLine={false}
@@ -401,65 +371,65 @@ export default function UsagePage() {
                   View All
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-6xl h-[80vh]">
-                <DialogHeader>
+              <DialogContent className="max-w-[90vw] h-[90vh] flex flex-col p-0 gap-0">
+                <DialogHeader className="px-6 py-4 border-b shrink-0">
                   <DialogTitle>Cost Breakdown</DialogTitle>
                 </DialogHeader>
-                <div className="h-full w-full pb-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={stats?.byModel || []}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={150}
-                        outerRadius={250}
-                        paddingAngle={2}
-                        dataKey="cost"
-                      >
-                        {(stats?.byModel || []).map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={COLORS[index % COLORS.length]} 
-                            stroke="hsl(var(--background))" 
-                            strokeWidth={2} 
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        isAnimationActive={false}
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            return (
-                              <div className="rounded-lg border bg-background/95 p-2 shadow-xl text-xs backdrop-blur-md border-primary/20">
-                                <div className="flex flex-col">
-                                  <span className="font-bold truncate max-w-[200px]">{payload[0].name}</span>
-                                  <span className="font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
+                <div className="flex-1 min-h-0 flex w-full">
+                  <div className="flex-1 h-full relative min-w-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats?.byModel || []}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius="40%"
+                          outerRadius="70%"
+                          paddingAngle={2}
+                          dataKey="cost"
+                        >
+                          {(stats?.byModel || []).map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS[index % COLORS.length]} 
+                              stroke="hsl(var(--background))" 
+                              strokeWidth={2} 
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          isAnimationActive={false}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="rounded-lg border bg-background/95 p-2 shadow-xl text-xs backdrop-blur-md border-primary/20">
+                                  <div className="flex flex-col">
+                                    <span className="font-bold truncate max-w-[200px]">{payload[0].name}</span>
+                                    <span className="font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            )
-                          }
-                          return null
-                        }}
-                      />
-                      <Legend 
-                        layout="vertical" 
-                        verticalAlign="middle" 
-                        align="right"
-                        wrapperStyle={{ fontSize: "12px", right: 20, overflowY: 'auto', maxHeight: '100%' }}
-                        content={({ payload }) => (
-                          <ul className="space-y-2 max-h-full overflow-y-auto pr-2">
-                            {payload?.map((entry: any, index: number) => (
-                              <li key={`item-${index}`} className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                                <span className="truncate font-medium opacity-80" title={entry.value}>{entry.value}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                              )
+                            }
+                            return null
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="w-[400px] border-l h-full overflow-y-auto bg-muted/5 p-6 shrink-0">
+                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Models ({stats?.byModel.length})</h3>
+                    <ul className="space-y-3">
+                      {(stats?.byModel || []).map((entry, index) => (
+                        <li key={`item-${index}`} className="flex items-center justify-between text-sm gap-4 group hover:bg-muted/50 p-2 rounded-md transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                            <span className="font-medium truncate" title={entry.name}>{entry.name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-primary shrink-0 opacity-80 group-hover:opacity-100">{formatCurrency(entry.cost)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
@@ -520,11 +490,6 @@ export default function UsagePage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute bottom-0 left-0 flex gap-2 p-1 bg-background/50 text-[10px] backdrop-blur">
-                <label>CX: <input value={pieConfig.cx} onChange={e => setPieConfig({...pieConfig, cx: e.target.value})} className="border w-8 px-1 bg-transparent" /></label>
-                <label>CY: <input value={pieConfig.cy} onChange={e => setPieConfig({...pieConfig, cy: e.target.value})} className="border w-8 px-1 bg-transparent" /></label>
-                <label>LegR: <input value={pieConfig.legendRight} onChange={e => setPieConfig({...pieConfig, legendRight: Number(e.target.value)})} className="border w-8 px-1 bg-transparent" type="number" /></label>
-              </div>
             </div>
           </CardContent>
         </Card>

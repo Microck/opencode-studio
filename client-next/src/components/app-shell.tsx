@@ -67,7 +67,7 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
       </div>
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className={animClass}>
+        <div className={`${animClass} mt-[-10px]`}>
           <Logo className="w-24 h-24" />
         </div>
       </div>
