@@ -62,9 +62,8 @@ export default function MCPPage() {
     toast.success(`${name} added`);
   };
 
-  const handleEdit = async (key: string, mcpConfig: Parameters<typeof updateMCP>[1]) => {
-    await updateMCP(key, mcpConfig);
-    toast.success(`${key} updated`);
+  const handleEdit = (key: string) => {
+    toast.info(`Edit ${key}`);
   };
 
   if (loading) {
@@ -82,7 +81,10 @@ export default function MCPPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">MCP Servers</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">MCP Servers</h1>
+        <AddMCPDialog onAdd={handleAdd} />
+      </div>
 
       {mcpEntries.length > 0 && (
         <div className="relative max-w-sm">
@@ -104,10 +106,9 @@ export default function MCPPage() {
             config={mcp}
             onToggle={() => handleToggle(key)}
             onDelete={() => setDeleteTarget(key)}
-            onEdit={(newConfig) => handleEdit(key, newConfig)}
+            onEdit={() => handleEdit(key)}
           />
         ))}
-        <AddMCPDialog onAdd={handleAdd} />
       </div>
 
       {search && filteredMCPs.length === 0 && (

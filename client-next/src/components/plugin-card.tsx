@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Trash2, Package, AlertCircle } from "lucide-react";
+import { Settings, Trash2, Package, AlertCircle, Pencil } from "lucide-react";
 import type { PluginInfo } from "@/types";
 
 interface PluginCardProps {
@@ -32,6 +32,19 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardPr
             {isNpm && <Badge variant="secondary" className="text-xs">npm</Badge>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {!isNpm && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClick?.();
+                }}
+                className="h-8 w-8 text-muted-foreground"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
             <Switch
               checked={plugin.enabled}
               onCheckedChange={() => onToggle()}

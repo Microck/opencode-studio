@@ -144,7 +144,6 @@ export default function AuthPage() {
 
     try {
       await authLogout(logoutTarget.id);
-      toast.success(`Logged out from ${logoutTarget.name}`);
       loadData();
     } catch {
       toast.error("Failed to logout");
@@ -300,44 +299,38 @@ export default function AuthPage() {
               <Button
                 variant={activeGooglePlugin === 'gemini' ? 'default' : 'outline'}
                 disabled={switchingPlugin}
-                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group ${
+                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group relative overflow-hidden ${
                   activeGooglePlugin === 'gemini' ? 'border-primary' : 'border-transparent hover:border-primary/20'
                 }`}
                 onClick={() => handleSetGooglePlugin('gemini')}
               >
-                <div className="text-left flex flex-col justify-center h-full">
+                {activeGooglePlugin !== 'gemini' && (
+                  <GeminiLogo className="absolute inset-0 opacity-10 pointer-events-none" />
+                )}
+                <div className="text-left flex flex-col justify-center h-full relative z-10">
                   <div className="font-bold flex items-center gap-2 text-base">
                     {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
-                    Gemini Auth
                   </div>
-                  <div className="text-[11px] opacity-80 font-normal mt-1 leading-tight">
-                    Use Gemini CLI quota & models
-                  </div>
-                  <div className="h-4" />
                 </div>
-                <GeminiLogo className={`h-10 w-10 ml-4 opacity-20 group-hover:opacity-40 transition-opacity ${activeGooglePlugin === 'gemini' ? 'opacity-100 text-primary-foreground' : ''}`} />
+                <GeminiLogo className={`h-10 w-10 ml-4 transition-opacity ${activeGooglePlugin === 'gemini' ? 'text-primary-foreground' : 'opacity-20 group-hover:opacity-40'}`} />
               </Button>
               <Button
                 variant={activeGooglePlugin === 'antigravity' ? 'default' : 'outline'}
                 disabled={switchingPlugin}
-                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group ${
+                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group relative overflow-hidden ${
                   activeGooglePlugin === 'antigravity' ? 'border-primary' : 'border-transparent hover:border-primary/20'
                 }`}
                 onClick={() => handleSetGooglePlugin('antigravity')}
               >
-                <div className="text-left flex flex-col justify-center h-full">
+                {activeGooglePlugin !== 'antigravity' && (
+                  <AntigravityLogo className="absolute inset-0 opacity-10 pointer-events-none" />
+                )}
+                <div className="text-left flex flex-col justify-center h-full relative z-10">
                   <div className="font-bold flex items-center gap-2 text-base">
                     {activeGooglePlugin === 'antigravity' && <Check className="h-4 w-4" />}
-                    Antigravity
-                  </div>
-                  <div className="text-[11px] opacity-80 font-normal mt-1 leading-tight">
-                    Use Antigravity quota & models
-                  </div>
-                  <div className="text-[10px] text-primary-foreground/80 mt-1 font-medium italic">
-                    Supports up to 10 accounts!
                   </div>
                 </div>
-                <AntigravityLogo className={`h-10 w-10 ml-4 opacity-20 group-hover:opacity-40 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'opacity-100 text-primary-foreground' : ''}`} />
+                <AntigravityLogo className={`h-10 w-10 ml-4 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'text-primary-foreground' : 'opacity-20 group-hover:opacity-40'}`} />
               </Button>
             </div>
           </CardContent>
@@ -428,7 +421,7 @@ export default function AuthPage() {
                           className="h-8 text-xs text-muted-foreground hover:text-destructive"
                         >
                           <LogOut className="h-3 w-3 mr-1" />
-                          Remove
+                          Logout
                         </Button>
                       )}
                     </div>
@@ -584,15 +577,15 @@ export default function AuthPage() {
       <AlertDialog open={!!logoutTarget} onOpenChange={(o) => !o && setLogoutTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {logoutTarget?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>Logout from {logoutTarget?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove your credentials for this provider. You&apos;ll need to login again to use their models.
+              This will logout your credentials for this provider. You&apos;ll need to login again to use their models.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleLogout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Remove
+              Logout
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Puzzle, Trash2 } from "lucide-react";
+import { Puzzle, Trash2, Pencil } from "lucide-react";
 import type { SkillInfo } from "@/types";
 
 interface SkillCardProps {
@@ -33,6 +33,17 @@ export function SkillCard({ skill, onToggle, onDelete, onClick }: SkillCardProps
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick();
+              }}
+              className="h-8 w-8 text-muted-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
             <Switch
               checked={skill.enabled}
               onCheckedChange={() => onToggle()}

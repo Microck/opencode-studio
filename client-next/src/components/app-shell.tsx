@@ -11,10 +11,11 @@ import { Play, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const FIRST_LOAD_KEY = "opencode-studio-loaded";
+const LAUNCH_ATTEMPT_KEY = "opencode-studio-launch-attempt";
 
 function useIsFirstLoad() {
   const [isFirst, setIsFirst] = useState(true);
-  
+
   useEffect(() => {
     const hasLoaded = sessionStorage.getItem(FIRST_LOAD_KEY);
     if (hasLoaded) {
@@ -23,19 +24,36 @@ function useIsFirstLoad() {
       sessionStorage.setItem(FIRST_LOAD_KEY, "1");
     }
   }, []);
-  
+
   return isFirst;
+}
+
+function useLaunchAttempt() {
+  const [hasAttempted, setHasAttempted] = useState(false);
+
+  useEffect(() => {
+    const attempted = localStorage.getItem(LAUNCH_ATTEMPT_KEY) === "1";
+    setHasAttempted(attempted);
+  }, []);
+
+  return {
+    hasAttempted,
+    markAttempt: () => localStorage.setItem(LAUNCH_ATTEMPT_KEY, "1"),
+    clearAttempt: () => localStorage.removeItem(LAUNCH_ATTEMPT_KEY),
+  };
 }
 
 function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   const [showUpdateHint, setShowUpdateHint] = useState(false);
-  
+  const { hasAttempted, markAttempt } = useLaunchAttempt();
+
   useEffect(() => {
     const timer = setTimeout(() => setShowUpdateHint(true), 10000);
     return () => clearTimeout(timer);
   }, []);
-  
+
   const handleLaunch = () => {
+    markAttempt();
     window.location.href = PROTOCOL_URL;
   };
 
@@ -95,7 +113,8 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
               </div>
             </div>
 
-            <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5 text-left">
+            {hasAttempted && (
+              <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5 text-left">
               <div className="flex items-center gap-2 mb-1">
                 <AlertCircle className="h-3 w-3 text-orange-500" />
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-tight">Troubleshooting</p>
@@ -104,7 +123,8 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
                 Stuck in a loading loop? Make sure the server is running in your terminal and you have initialized opencode. 
                 Try clearing browser cache if the issue persists.
               </p>
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

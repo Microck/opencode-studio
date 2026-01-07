@@ -190,8 +190,8 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="h-32 border-dashed">
-          <Plus className="h-6 w-6 mr-2" />
+        <Button size="sm">
+          <Plus className="h-4 w-4 mr-2" />
           Add MCP Server
         </Button>
       </DialogTrigger>
