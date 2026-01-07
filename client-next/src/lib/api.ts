@@ -76,7 +76,7 @@ export async function getPaths(): Promise<PathsInfo> {
 }
 
 export async function getDebugPaths(): Promise<any> {
-  const { data } = await api.get('/debug/paths');
+  const { data } = await api.get('/paths');
   return data;
 }
 
