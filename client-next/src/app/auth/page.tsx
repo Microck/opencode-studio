@@ -299,21 +299,22 @@ export default function AuthPage() {
               <Button
                 variant={activeGooglePlugin === 'gemini' ? 'default' : 'outline'}
                 disabled={switchingPlugin}
-                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group relative overflow-hidden ${
+                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group ${
                   activeGooglePlugin === 'gemini' ? 'border-primary' : 'border-transparent hover:border-primary/20'
                 }`}
                 onClick={() => handleSetGooglePlugin('gemini')}
               >
-                {activeGooglePlugin !== 'gemini' && (
-                  <GeminiLogo className="absolute inset-0 opacity-10 pointer-events-none" />
-                )}
-                <div className="text-left flex flex-col justify-center h-full relative z-10">
+                <div className="text-left flex flex-col justify-center h-full">
                   <div className="font-bold flex items-center gap-2 text-base">
                     {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
                     Gemini Auth
                   </div>
+                  <div className="text-[11px] opacity-80 font-normal mt-1 leading-tight">
+                    Use Gemini CLI quota & models
+                  </div>
+                  <div className="h-4" />
                 </div>
-                <GeminiLogo className={`h-10 w-10 ml-4 transition-opacity ${activeGooglePlugin === 'gemini' ? 'text-primary-foreground' : 'opacity-20 group-hover:opacity-40'}`} />
+                <GeminiLogo className={`h-10 w-10 ml-4 opacity-20 group-hover:opacity-40 transition-opacity ${activeGooglePlugin === 'gemini' ? 'opacity-100 text-primary-foreground' : ''}`} />
               </Button>
               <Button
                 variant={activeGooglePlugin === 'antigravity' ? 'default' : 'outline'}

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
+import type { MCPConfig } from "@/types";
 
 export default function MCPPage() {
   const { config, loading, toggleMCP, deleteMCP, addMCP, updateMCP } = useApp();
@@ -62,8 +63,11 @@ export default function MCPPage() {
     toast.success(`${name} added`);
   };
 
-  const handleEdit = (key: string) => {
-    toast.info(`Edit ${key}`);
+  const handleEdit = async (key: string) => {
+    const mcpConfig = config?.mcp?.[key];
+    if (!mcpConfig) return;
+    await updateMCP(key, mcpConfig);
+    toast.success(`${key} updated`);
   };
 
   if (loading) {
