@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Save, ArrowLeft } from "lucide-react";
 import { getSkill, saveSkill, getPlugin, savePlugin } from "@/lib/api";
 import { toast } from "sonner";
+import type { SkillInfo, PluginInfo } from "@/types";
 
 function EditorContent() {
   const searchParams = useSearchParams();
@@ -102,12 +103,10 @@ function EditorContent() {
   return (
     <div className="h-full flex flex-col space-y-4">
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-xl font-bold font-mono">{name}</h1>
-        </div>
+        <Button variant="ghost" size="icon" onClick={handleBack}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-xl font-bold font-mono">{name}</h1>
         <Button onClick={handleSave} disabled={saving}>
           <Save className="h-4 w-4 mr-2" />
           {saving ? "Saving..." : "Save"}
@@ -140,17 +139,5 @@ function EditorContent() {
 }
 
 export default function EditorPage() {
-  return (
-    <Suspense fallback={
-      <div className="h-full flex flex-col space-y-4">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-24" />
-        </div>
-        <Skeleton className="flex-1" />
-      </div>
-    }>
-      <EditorContent />
-    </Suspense>
-  );
+  return <EditorContent />;
 }

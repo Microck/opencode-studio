@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Command } from "lucide-react";
+import { Plus, Trash2, Edit, Command, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 interface CommandEntry {

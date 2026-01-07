@@ -152,6 +152,16 @@ export default function AuthPage() {
     }
   };
 
+  const handleLogoutProfile = async (providerId: string, profileName: string) => {
+    try {
+      await deleteAuthProfile(providerId, profileName);
+      toast.success(`Logged out from ${profileName}`);
+      loadData();
+    } catch {
+      toast.error("Failed to logout from profile");
+    }
+  };
+
   const handleAddPlugin = async (name: string) => {
     try {
       setAddingPlugin(name);
@@ -387,7 +397,6 @@ export default function AuthPage() {
               const isExpanded = expandedProfiles[cred.id];
               
               const isGoogleAndToggled = cred.id === 'google' && activeGooglePlugin;
-              const titlePrefix = isGoogleAndToggled ? (activeGooglePlugin === 'gemini' ? '[Gemini] ' : '[Antigravity] ') : '';
               const isConnected = providerProfiles.hasCurrentAuth || hasProfiles;
               
               return (
@@ -396,7 +405,7 @@ export default function AuthPage() {
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-base flex items-center gap-2">
                         <Key className={`h-4 w-4 ${isConnected ? 'text-primary' : 'text-muted-foreground'}`} />
-                        {titlePrefix}{cred.name}
+                        {cred.name}
                       </CardTitle>
                       <div className="flex items-center gap-1">
                         <Badge variant={cred.type === "oauth" ? "default" : "secondary"}>
@@ -419,7 +428,7 @@ export default function AuthPage() {
                         <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200 dark:border-green-900/30">Connected</Badge>
                       )}
                       
-                      {isConnected && (
+                      {isConnected && !hasProfiles && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -516,25 +525,32 @@ export default function AuthPage() {
                                       <MoreVertical className="h-3 w-3" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        setRenameTarget({ provider: cred.id, name: profileName });
-                                        setNewName(profileName);
-                                      }}
-                                    >
-                                      <Edit2 className="h-3 w-3 mr-2" />
-                                      Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="text-destructive"
-                                      onClick={() => setDeleteTarget({ provider: cred.id, name: profileName })}
-                                    >
-                                      <Trash2 className="h-3 w-3 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
+                                   <DropdownMenuContent align="end">
+                                     <DropdownMenuItem
+                                       onClick={() => {
+                                         setRenameTarget({ provider: cred.id, name: profileName });
+                                         setNewName(profileName);
+                                       }}
+                                     >
+                                       <Edit2 className="h-3 w-3 mr-2" />
+                                       Rename
+                                     </DropdownMenuItem>
+                                     <DropdownMenuSeparator />
+                                     <DropdownMenuItem
+                                       onClick={() => handleLogoutProfile(cred.id, profileName)}
+                                     >
+                                       <LogOut className="h-3 w-3 mr-2" />
+                                       Logout
+                                     </DropdownMenuItem>
+                                     <DropdownMenuSeparator />
+                                     <DropdownMenuItem
+                                       className="text-destructive"
+                                       onClick={() => setDeleteTarget({ provider: cred.id, name: profileName })}
+                                     >
+                                       <Trash2 className="h-3 w-3 mr-2" />
+                                       Delete
+                                     </DropdownMenuItem>
+                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </div>
                             </div>
