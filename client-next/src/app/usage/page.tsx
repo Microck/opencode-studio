@@ -179,15 +179,16 @@ export default function UsagePage() {
 
   const modelIds = useMemo(() => {
     if (!stats) return [];
-    // For stacking: render Darkest (first in STACK_COLORS) at the bottom.
-    // So we want the model that should be "Darkest" to be the first Bar rendered.
-    // If we want "Darker at bottom", and STACK_COLORS[0] is Darkest.
-    // We should render the model corresponding to STACK_COLORS[0] first.
-    // The loop is: modelIds.map((id, index) => <Bar fill={STACK_COLORS[index]} ... />)
-    // So modelIds[0] gets STACK_COLORS[0] (Darkest).
-    // And rendered first -> Bottom of stack.
-    // So we just need to list models in the order we want them stacked (Bottom to Top).
-    return stats.byModel.map(m => m.name).filter(name => name !== "Others");
+    // Ensure "Others" is included and at index 0 to render at the bottom of the stack
+    const ids = stats.byModel.map(m => m.name).filter(name => name !== "Others");
+    
+    // Check if "Others" exists in the data and prepend it
+    const othersExists = stats.byModel.some(m => m.name === "Others");
+    if (othersExists) {
+        ids.unshift("Others");
+    }
+    
+    return ids;
   }, [stats]);
 
   const exportToCSV = () => {
@@ -396,7 +397,7 @@ export default function UsagePage() {
                       key={modelId}
                       dataKey={modelId}
                       stackId="a"
-                      fill={STACK_COLORS[index % STACK_COLORS.length]}
+                      fill={modelId === "Others" ? "#2e2e2e" : STACK_COLORS[index % STACK_COLORS.length]}
                       radius={[0, 0, 0, 0]}
                     />
                   ))}
