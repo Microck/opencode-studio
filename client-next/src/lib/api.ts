@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001/api';
 
@@ -208,6 +208,16 @@ export async function authLogout(provider: string): Promise<void> {
   await api.delete(`/auth/${provider}`);
 }
 
+export async function setActiveGooglePlugin(plugin: 'gemini' | 'antigravity' | null): Promise<{ success: boolean; activePlugin: string }> {
+  const { data } = await api.post('/auth/google/plugin', { plugin });
+  return data;
+}
+
+export async function getActiveGooglePlugin(): Promise<{ activePlugin: string | null }> {
+  const { data } = await api.get('/auth/google/plugin');
+  return data;
+}
+
 export interface AddPluginsToConfigResult {
   added: string[];
   skipped: string[];
@@ -244,14 +254,6 @@ export const getUsageStats = async (projectId?: string | null, granularity: stri
     return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
   }
 };
-
-export interface AuthProfilesInfo {
-  [provider: string]: {
-    profiles: string[];
-    active: string | null;
-    hasCurrentAuth: boolean;
-  };
-}
 
 export interface ProviderProfileInfo {
   profiles: string[];

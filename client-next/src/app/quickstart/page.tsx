@@ -101,8 +101,7 @@ export default function QuickstartPage() {
   const [mounted, setMounted] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    opencode: true,
-    ohmyopencode: false,
+    ohmyopencode: true,
     superpowers: false,
     starterkit: false,
   });
@@ -186,7 +185,7 @@ export default function QuickstartPage() {
       setCompletedSteps(prev => [...prev, id]);
       toast.success("Step completed!");
       // Auto-open next step
-      const stepIds = ["opencode", "ohmyopencode", "superpowers", "starterkit"];
+      const stepIds = ["ohmyopencode", "superpowers", "starterkit"];
       const idx = stepIds.indexOf(id);
       if (idx < stepIds.length - 1) {
         const nextId = stepIds[idx + 1];
@@ -197,37 +196,12 @@ export default function QuickstartPage() {
 
   const resetProgress = () => {
     setCompletedSteps([]);
-    setOpenSections({ opencode: true, ohmyopencode: false, superpowers: false, starterkit: false });
+    setOpenSections({ ohmyopencode: true, superpowers: false, starterkit: false });
     localStorage.removeItem("opencode-quickstart-progress");
     toast.success("Progress reset");
   };
 
   const steps: Step[] = [
-    {
-      id: "opencode",
-      title: "Install OpenCode",
-      description: "Install the core CLI tool",
-      badge: "Required",
-      badgeVariant: "default",
-      content: (
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <ExternalLinkButton href="https://opencode.ai">opencode.ai</ExternalLinkButton>
-            <ExternalLinkButton href="https://www.npmjs.com/package/opencode-ai">npm</ExternalLinkButton>
-          </div>
-          
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Install globally:</p>
-            <CodeBlock code="npm install -g opencode-ai" />
-          </div>
-
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Verify:</p>
-            <CodeBlock code="opencode --version" />
-          </div>
-        </div>
-      ),
-    },
     {
       id: "ohmyopencode",
       title: "Oh My OpenCode",
@@ -251,7 +225,7 @@ export default function QuickstartPage() {
             <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-600 dark:text-amber-400">
               Don't edit <code className="bg-background px-1 rounded text-xs">opencode.json</code> manually. 
-              Use the configs in Step 4.
+              Use the configs in Step 3.
             </p>
           </div>
         </div>
@@ -280,7 +254,7 @@ export default function QuickstartPage() {
             <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
             <p className="text-sm text-blue-600 dark:text-blue-400">
               If you see <code className="bg-muted px-1 rounded text-xs">Module not found: lib/skills-core.js</code>,
-              the starter configs in Step 4 should fix it.
+              the starter configs in Step 3 should fix it.
             </p>
           </div>
         </div>

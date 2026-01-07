@@ -158,10 +158,10 @@ export default function UsagePage() {
   const totalOutputTokens = stats.byModel.reduce((acc, m) => acc + m.outputTokens, 0);
 
   return (
-    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 h-full overflow-y-auto bg-background">
+    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-12 h-full overflow-y-auto bg-background">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Token Usage</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Token Usage</h1>
           <p className="text-muted-foreground text-sm">
             Analysis of spending and token consumption across your projects.
           </p>
@@ -195,7 +195,23 @@ export default function UsagePage() {
               <SelectItem value="24h">Last 24 Hours</SelectItem>
               <SelectItem value="7d">Last 7 Days</SelectItem>
               <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="1y">Last Year</SelectItem>
               <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={granularity} onValueChange={(v: any) => setGranularity(v)}>
+            <SelectTrigger className="w-[120px] h-9 text-xs">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-3 w-3 text-muted-foreground" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hourly">Hourly</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
             </SelectContent>
           </Select>
 
@@ -224,7 +240,7 @@ export default function UsagePage() {
             <DollarSign className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter text-white">{formatCurrency(stats.totalCost)}</div>
+            <div className="text-3xl font-bold tracking-tighter text-foreground">{formatCurrency(stats.totalCost)}</div>
             <p className="text-[10px] text-muted-foreground mt-1">Estimated total spend</p>
           </CardContent>
         </Card>
@@ -235,7 +251,7 @@ export default function UsagePage() {
             <MessageSquare className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter text-white">{formatTokens(totalInputTokens)}</div>
+            <div className="text-3xl font-bold tracking-tighter text-foreground">{formatTokens(totalInputTokens)}</div>
             <p className="text-[10px] text-muted-foreground mt-1">Context and prompts</p>
           </CardContent>
         </Card>
@@ -246,7 +262,7 @@ export default function UsagePage() {
             <TrendingUp className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter text-white">{formatTokens(totalOutputTokens)}</div>
+            <div className="text-3xl font-bold tracking-tighter text-foreground">{formatTokens(totalOutputTokens)}</div>
             <p className="text-[10px] text-muted-foreground mt-1">AI responses</p>
           </CardContent>
         </Card>
@@ -259,19 +275,6 @@ export default function UsagePage() {
               <BarChart3 className="h-3.5 w-3.5 text-primary" />
               Usage Timeline
             </CardTitle>
-            <div className="flex gap-1 bg-black/20 p-0.5 rounded-md border border-border/50">
-              {['hourly', 'daily', 'weekly', 'monthly'].map((g) => (
-                <Button 
-                  key={g} 
-                  variant={granularity === g ? 'secondary' : 'ghost'} 
-                  size="sm" 
-                  className="h-6 text-[8px] uppercase px-2 font-black"
-                  onClick={() => setGranularity(g as any)}
-                >
-                  {g}
-                </Button>
-              ))}
-            </div>
           </CardHeader>
           <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
             <div className="h-full w-full">
@@ -416,7 +419,7 @@ export default function UsagePage() {
           <CardContent className="p-0 flex-1 overflow-auto max-h-[400px]">
             <table className="w-full text-[11px] text-left border-collapse">
               <thead>
-                <tr className="bg-muted/5 text-muted-foreground border-b text-[9px] uppercase font-bold sticky top-0 bg-[#0a0a0a] z-10">
+                <tr className="bg-muted text-muted-foreground border-b text-[9px] uppercase font-bold sticky top-0 z-10">
                   <th className="px-6 py-3">Project</th>
                   <th className="px-6 py-3 text-right">Estimated Cost</th>
                 </tr>
@@ -447,8 +450,8 @@ export default function UsagePage() {
           <CardContent className="p-0 flex-1 overflow-auto max-h-[400px]">
             <div className="w-full">
               <table className="w-full text-[11px] text-left border-collapse">
-                <thead className="sticky top-0 bg-[#0a0a0a] z-10 shadow-sm">
-                  <tr className="bg-muted/10 text-muted-foreground border-b text-[9px] uppercase tracking-wider font-bold">
+                <thead className="sticky top-0 bg-muted z-10 shadow-sm">
+                  <tr className="text-muted-foreground border-b text-[9px] uppercase tracking-wider font-bold">
                     <th className="px-6 py-4">Model Interface</th>
                     <th className="px-6 py-4 text-right">Input</th>
                     <th className="px-6 py-4 text-right">Output</th>
@@ -470,6 +473,8 @@ export default function UsagePage() {
           </CardContent>
         </Card>
       </div>
+      
+      <div className="h-12" />
     </div>
   );
 }

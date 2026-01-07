@@ -70,13 +70,25 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
             </Button>
           </div>
           
-          <p className={`text-xs text-muted-foreground ${isFirstLoad ? "landing-delay-4" : "landing-delay-fast-4"}`}>
-            Don&apos;t have it installed?
-          </p>
-          
-          <code className={`text-xs bg-muted px-3 py-2 rounded-md font-mono ${isFirstLoad ? "landing-delay-4" : "landing-delay-fast-4"}`}>
-            npm install -g opencode-studio-server
-          </code>
+          <div className={`space-y-4 mt-2 ${isFirstLoad ? "landing-delay-4" : "landing-delay-fast-4"}`}>
+            <div className="space-y-2 text-left bg-muted/30 p-4 rounded-xl border border-border/50 shadow-sm">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Setup Required</p>
+              
+              <div className="space-y-1">
+                <p className="text-xs font-medium">1. Install OpenCode AI</p>
+                <code className="text-[11px] block bg-background border border-border p-2 rounded font-mono break-all">
+                  npm install -g opencode-ai
+                </code>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs font-medium">2. Install Studio Server</p>
+                <code className="text-[11px] block bg-background border border-border p-2 rounded font-mono break-all">
+                  npm install -g opencode-studio-server
+                </code>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className={`flex items-center gap-4 text-sm text-muted-foreground ${isFirstLoad ? "landing-delay-5" : "landing-delay-fast-5"}`}>
@@ -116,7 +128,7 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
 }
 
 function LoadingState({ isFirstLoad }: { isFirstLoad: boolean }) {
-  const scale = isFirstLoad ? "scale-[1.8]" : "scale-150";
+  const scale = isFirstLoad ? "scale-[1.8]" : "scale-[1.5]";
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden">
       <div className={scale}>

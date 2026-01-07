@@ -67,12 +67,40 @@ export interface ProviderConfig {
   env?: string[];
   npm?: string;
   models?: Record<string, {
+    id?: string;
     name?: string;
+    release_date?: string;
     attachments?: boolean;
     reasoning?: boolean;
     limit?: {
       context?: number;
       output?: number;
+    };
+    cost?: {
+      input: number;
+      output: number;
+      cache_read?: number;
+    };
+    modalities?: {
+      input: string[];
+      output: string[];
+    };
+    variants?: Record<string, {
+      reasoning?: boolean;
+      options?: {
+        thinkingConfig?: {
+          thinkingLevel?: 'low' | 'medium' | 'high' | 'minimal';
+          thinkingBudget?: number;
+          includeThoughts?: boolean;
+        };
+      };
+    }>;
+    options?: {
+      thinkingConfig?: {
+        thinkingLevel?: 'low' | 'medium' | 'high' | 'minimal';
+        thinkingBudget?: number;
+        includeThoughts?: boolean;
+      };
     };
   }>;
   whitelist?: string[];
@@ -233,6 +261,9 @@ export interface AuthCredential {
   type: 'oauth' | 'api';
   isExpired: boolean;
   expiresAt: number | null;
+  active?: string | null;
+  profiles?: string[];
+  hasCurrentAuth?: boolean;
 }
 
 export interface AuthInfo {
@@ -240,6 +271,23 @@ export interface AuthInfo {
   authFile: string | null;
   message?: string;
   hasGeminiAuthPlugin?: boolean;
+  installedGooglePlugins: ('gemini' | 'antigravity')[];
+  activeGooglePlugin: 'gemini' | 'antigravity' | null;
+}
+
+export interface PluginModelsConfig {
+  [plugin: string]: {
+    activeModels: string[];
+    blacklist: string[];
+  };
+}
+
+export interface StudioConfig {
+  disabledSkills: string[];
+  disabledPlugins: string[];
+  activeGooglePlugin: 'gemini' | 'antigravity' | null;
+  pluginModels: PluginModelsConfig;
+  activeProfiles: Record<string, string>;
 }
 
 export interface AuthProvider {
@@ -247,4 +295,12 @@ export interface AuthProvider {
   name: string;
   type: 'oauth' | 'api';
   description: string;
+}
+
+export interface AuthProfilesInfo {
+  [provider: string]: {
+    profiles: string[];
+    active: string | null;
+    hasCurrentAuth: boolean;
+  };
 }

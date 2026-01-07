@@ -73,6 +73,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setError('Failed to connect to backend');
       setConnected(false);
+      // Ensure loading is false so we show the disconnected landing instead of a spinner
+      setLoading(false);
       console.error(err);
     } finally {
       setLoading(false);

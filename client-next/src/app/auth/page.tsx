@@ -43,6 +43,8 @@ import {
   Edit2,
   MoreVertical,
   Terminal,
+  CloudLightning,
+  Stars,
 } from "lucide-react";
 import { 
   getAuthInfo, 
@@ -54,20 +56,34 @@ import {
   activateAuthProfile,
   deleteAuthProfile,
   renameAuthProfile,
-  type AuthProfilesInfo,
+  setActiveGooglePlugin,
 } from "@/lib/api";
-import type { AuthCredential } from "@/types";
+import type { AuthCredential, AuthProfilesInfo } from "@/types";
 
 const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
+const ANTIGRAVITY_AUTH_PLUGIN = "opencode-google-antigravity-auth";
+
+const GeminiLogo = ({ className }: { className?: string }) => (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <path d="M12 2C12 2 12.5 7.5 15 9.5C17.5 11.5 22 12 22 12C22 12 17.5 12.5 15 14.5C12.5 16.5 12 22 12 22C12 22 11.5 16.5 9 14.5C6.5 12.5 2 12 2 12C2 12 6.5 11.5 9 9.5C11.5 7.5 12 2 12 2Z" fill="currentColor"/>
+  </svg>
+);
+
+const AntigravityLogo = ({ className }: { className?: string }) => (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <path d="M12 3L2 21H22L12 3Z" fill="currentColor" fillOpacity="0.2"/>
+    <path d="M12 3L7 21H17L12 3Z" fill="currentColor"/>
+    <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.5"/>
+  </svg>
+);
 
 export default function AuthPage() {
   const [credentials, setCredentials] = useState<AuthCredential[]>([]);
   const [authFile, setAuthFile] = useState<string | null>(null);
-  const [hasGeminiAuthPlugin, setHasGeminiAuthPlugin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logoutTarget, setLogoutTarget] = useState<AuthCredential | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [addingGeminiPlugin, setAddingGeminiPlugin] = useState(false);
+  const [addingPlugin, setAddingPlugin] = useState<string | null>(null);
   
   const [profiles, setProfiles] = useState<AuthProfilesInfo>({});
   const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
@@ -77,32 +93,43 @@ export default function AuthPage() {
   const [renameTarget, setRenameTarget] = useState<{ provider: string; name: string } | null>(null);
   const [newName, setNewName] = useState("");
 
-  const loadData = async () => {
+  const [installedGooglePlugins, setInstalledGooglePlugins] = useState<('gemini' | 'antigravity')[]>([]);
+  const [activeGooglePlugin, setActiveGooglePluginState] = useState<'gemini' | 'antigravity' | null>(null);
+  const [switchingPlugin, setSwitchingPlugin] = useState(false);
+
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [authInfo, profilesData] = await Promise.all([
         getAuthInfo(),
         getAuthProfiles(),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
-      setHasGeminiAuthPlugin(authInfo.hasGeminiAuthPlugin ?? false);
-      setProfiles(profilesData);
+      setInstalledGooglePlugins(authInfo.installedGooglePlugins || []);
+      setActiveGooglePluginState(authInfo.activeGooglePlugin || null);
+      setProfiles(profilesData || {});
     } catch {
-      toast.error("Failed to load auth info");
+      if (!silent) toast.error("Failed to load auth info");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+    
+    // Poll for changes every 3 seconds to detect terminal login
+    const interval = setInterval(() => loadData(true), 3000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = async (providerId: string = "") => {
     try {
       setLoginLoading(true);
-      const result = await authLogin("");
+      // If it's google, we don't pass it so the user can pick the plugin in the terminal
+      const pid = providerId === 'google' ? "" : providerId;
+      const result = await authLogin(pid);
       toast.success(result.message);
       toast.info(result.note, { duration: 10000 });
     } catch {
@@ -126,20 +153,34 @@ export default function AuthPage() {
     }
   };
 
-  const handleAddGeminiPlugin = async () => {
+  const handleAddPlugin = async (name: string) => {
     try {
-      setAddingGeminiPlugin(true);
-      const result = await addPluginsToConfig([GEMINI_AUTH_PLUGIN]);
+      setAddingPlugin(name);
+      const result = await addPluginsToConfig([name]);
       if (result.added.length > 0) {
-        toast.success("Gemini Auth plugin added! Restart opencode to use it.");
-        setHasGeminiAuthPlugin(true);
+        toast.success(`${name} added! Restart opencode to use it.`);
+        loadData();
       } else {
         toast.info("Plugin already in config");
       }
     } catch {
       toast.error("Failed to add plugin");
     } finally {
-      setAddingGeminiPlugin(false);
+      setAddingPlugin(null);
+    }
+  };
+
+  const handleSetGooglePlugin = async (plugin: 'gemini' | 'antigravity') => {
+    try {
+      setSwitchingPlugin(true);
+      await setActiveGooglePlugin(plugin);
+      setActiveGooglePluginState(plugin);
+      toast.success(`Switched to ${plugin === 'gemini' ? 'Gemini Auth' : 'Antigravity Auth'}`);
+      await loadData();
+    } catch {
+      toast.error("Failed to switch plugin");
+    } finally {
+      setSwitchingPlugin(false);
     }
   };
 
@@ -196,34 +237,13 @@ export default function AuthPage() {
     }
   };
 
-  const formatExpiry = (timestamp: number | null) => {
-    if (!timestamp) return null;
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = date.getTime() - now.getTime();
-    
-    if (diff < 0) return "Expired";
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days > 0) return `${days} day${days !== 1 ? 's' : ''}`;
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
-    
-    const minutes = Math.floor(diff / (1000 * 60));
-    if (minutes > 0) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-    
-    const seconds = Math.floor(diff / 1000);
-    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
-  };
-
   const toggleProfileExpansion = (provider: string) => {
     setExpandedProfiles(prev => ({ ...prev, [provider]: !prev[provider] }));
   };
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 pb-12 animate-fade-in">
         <h1 className="text-2xl font-bold">Authentication</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -233,6 +253,8 @@ export default function AuthPage() {
       </div>
     );
   }
+
+  const hasBothPlugins = installedGooglePlugins.includes('gemini') && installedGooglePlugins.includes('antigravity');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -255,35 +277,96 @@ export default function AuthPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={handleLogin} disabled={loginLoading}>
+          <Button onClick={() => handleLogin()} disabled={loginLoading}>
             {loginLoading ? "Opening..." : "Open Terminal"}
             <Terminal className="h-4 w-4 ml-2" />
           </Button>
         </CardContent>
       </Card>
 
-      {!hasGeminiAuthPlugin && (
+      {hasBothPlugins && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Google Auth Plugin Toggle
+            </CardTitle>
+            <CardDescription>
+              Switch between separate profiles for Gemini and Antigravity plugins
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Button
+                variant={activeGooglePlugin === 'gemini' ? 'default' : 'outline'}
+                disabled={switchingPlugin}
+                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group ${
+                  activeGooglePlugin === 'gemini' ? 'border-primary' : 'border-transparent hover:border-primary/20'
+                }`}
+                onClick={() => handleSetGooglePlugin('gemini')}
+              >
+                <div className="text-left flex flex-col justify-center h-full">
+                  <div className="font-bold flex items-center gap-2 text-base">
+                    {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
+                    Gemini Auth
+                  </div>
+                  <div className="text-[11px] opacity-80 font-normal mt-1 leading-tight">
+                    Use Gemini CLI quota & models
+                  </div>
+                  <div className="h-4" />
+                </div>
+                <GeminiLogo className={`h-10 w-10 ml-4 opacity-20 group-hover:opacity-40 transition-opacity ${activeGooglePlugin === 'gemini' ? 'opacity-100 text-primary-foreground' : ''}`} />
+              </Button>
+              <Button
+                variant={activeGooglePlugin === 'antigravity' ? 'default' : 'outline'}
+                disabled={switchingPlugin}
+                className={`justify-between h-[100px] py-4 px-4 border-2 transition-all group ${
+                  activeGooglePlugin === 'antigravity' ? 'border-primary' : 'border-transparent hover:border-primary/20'
+                }`}
+                onClick={() => handleSetGooglePlugin('antigravity')}
+              >
+                <div className="text-left flex flex-col justify-center h-full">
+                  <div className="font-bold flex items-center gap-2 text-base">
+                    {activeGooglePlugin === 'antigravity' && <Check className="h-4 w-4" />}
+                    Antigravity
+                  </div>
+                  <div className="text-[11px] opacity-80 font-normal mt-1 leading-tight">
+                    Use Antigravity quota & models
+                  </div>
+                  <div className="text-[10px] text-primary-foreground/80 mt-1 font-medium italic">
+                    Supports up to 10 accounts!
+                  </div>
+                </div>
+                <AntigravityLogo className={`h-10 w-10 ml-4 opacity-20 group-hover:opacity-40 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'opacity-100 text-primary-foreground' : ''}`} />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {installedGooglePlugins.length < 2 && (
         <div className="flex items-center justify-between p-4 rounded-lg border border-dashed">
           <div className="flex items-center gap-3">
             <Sparkles className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">Want free Gemini access?</p>
+              <p className="text-sm font-medium">Want separate Google profiles?</p>
               <p className="text-xs text-muted-foreground">
-                <a 
-                  href="https://github.com/jenslys/opencode-gemini-auth" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                >
-                  opencode-gemini-auth
-                </a>
-                {" "}lets you use Google OAuth
+                Install both <b>gemini-auth</b> and <b>antigravity-auth</b> to enable the toggle.
               </p>
             </div>
           </div>
-          <Button onClick={handleAddGeminiPlugin} disabled={addingGeminiPlugin} variant="outline" size="sm">
-            {addingGeminiPlugin ? "Adding..." : "Add Plugin"}
-          </Button>
+          <div className="flex gap-2">
+            {!installedGooglePlugins.includes('gemini') && (
+              <Button onClick={() => handleAddPlugin(GEMINI_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm">
+                {addingPlugin === GEMINI_AUTH_PLUGIN ? "Adding..." : "Add Gemini"}
+              </Button>
+            )}
+            {!installedGooglePlugins.includes('antigravity') && (
+              <Button onClick={() => handleAddPlugin(ANTIGRAVITY_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm">
+                {addingPlugin === ANTIGRAVITY_AUTH_PLUGIN ? "Adding..." : "Add Antigravity"}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -295,18 +378,26 @@ export default function AuthPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(credentials || []).map((cred) => {
-              const providerProfiles = profiles[cred.id] || { profiles: [], active: null, hasCurrentAuth: true };
+              const providerProfiles = profiles[cred.id] || { 
+                profiles: cred.profiles || [], 
+                active: cred.active || null, 
+                hasCurrentAuth: cred.hasCurrentAuth ?? true 
+              };
               const profileList = providerProfiles.profiles || [];
               const hasProfiles = profileList.length > 0;
               const isExpanded = expandedProfiles[cred.id];
               
+              const isGoogleAndToggled = cred.id === 'google' && activeGooglePlugin;
+              const titlePrefix = isGoogleAndToggled ? (activeGooglePlugin === 'gemini' ? '[Gemini] ' : '[Antigravity] ') : '';
+              const isConnected = providerProfiles.hasCurrentAuth || hasProfiles;
+              
               return (
-                <Card key={cred.id} className="hover-lift">
+                <Card key={cred.id} className={`hover-lift ${isGoogleAndToggled ? 'border-primary/30' : ''} ${!isConnected ? 'opacity-80 grayscale-[0.5]' : ''}`}>
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Key className="h-4 w-4" />
-                        {cred.name}
+                        <Key className={`h-4 w-4 ${isConnected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        {titlePrefix}{cred.name}
                       </CardTitle>
                       <div className="flex items-center gap-1">
                         <Badge variant={cred.type === "oauth" ? "default" : "secondary"}>
@@ -322,137 +413,159 @@ export default function AuthPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setLogoutTarget(cred)}
-                      >
-                        <LogOut className="h-4 w-4 mr-1" />
-                        Remove
-                      </Button>
+                    <div className="flex justify-between items-center h-8">
+                      {!isConnected ? (
+                        <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-dashed">Disconnected</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200 dark:border-green-900/30">Connected</Badge>
+                      )}
+                      
+                      {isConnected && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLogoutTarget(cred)}
+                          className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          <LogOut className="h-3 w-3 mr-1" />
+                          Remove
+                        </Button>
+                      )}
                     </div>
 
                     {providerProfiles.active && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-1.5 rounded-md">
+                        <Check className="h-3 w-3 text-primary" />
                         <span>Active:</span>
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] h-4">
                           {providerProfiles.active}
                         </Badge>
                       </div>
                     )}
 
                     <div className="flex gap-2">
-                      {!providerProfiles.active && providerProfiles.hasCurrentAuth && (
+                      {!isConnected ? (
                         <Button
-                          variant="outline"
+                          variant="default"
                           size="sm"
-                          className="flex-1"
-                          onClick={() => handleSaveProfile(cred.id)}
-                          disabled={savingProfile === cred.id}
+                          className="w-full h-8"
+                          onClick={() => handleLogin(cred.id)}
+                          disabled={loginLoading}
                         >
-                          <Save className="h-3 w-3 mr-1" />
-                          {savingProfile === cred.id ? "Saving..." : "Save as Profile"}
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Connect
                         </Button>
-                      )}
-                      
-                      {hasProfiles && (
-                        <Collapsible open={isExpanded} onOpenChange={() => toggleProfileExpansion(cred.id)}>
-                          <CollapsibleTrigger asChild>
-                            <Button variant="outline" size="sm" className="flex-1">
-                              <Users className="h-3 w-3 mr-1" />
-                              Profiles
-                              <ChevronDown className={`h-3 w-3 ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                            </Button>
-                          </CollapsibleTrigger>
-                        </Collapsible>
-                      )}
-                    </div>
-
-                    {hasProfiles && (
-                      <Collapsible open={isExpanded}>
-                        <CollapsibleContent className="animate-scale-in">
-                          <div className="space-y-2 pt-2 border-t">
-                            {profileList.map((profileName) => {
-                              const isActive = providerProfiles.active === profileName;
-                              const isActivating = activatingProfile === `${cred.id}-${profileName}`;
-                              
-                              return (
-                                <div
-                                  key={profileName}
-                                  className={`flex items-center justify-between p-2 rounded-md transition-colors group ${
-                                    isActive ? "bg-primary/10" : "bg-muted/50 hover:bg-muted cursor-pointer"
-                                  }`}
-                                  onClick={() => !isActive && !isActivating && handleActivateProfile(cred.id, profileName)}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {isActive && <Check className="h-3 w-3 text-primary" />}
-                                    {isActivating && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
-                                    <span className="text-sm font-medium">{profileName}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm" 
-                                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity data-[state=open]:opacity-100"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <MoreVertical className="h-3 w-3" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            setRenameTarget({ provider: cred.id, name: profileName });
-                                            setNewName(profileName);
-                                          }}
-                                        >
-                                          <Edit2 className="h-3 w-3 mr-2" />
-                                          Rename
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          className="text-destructive"
-                                          onClick={() => setDeleteTarget({ provider: cred.id, name: profileName })}
-                                        >
-                                          <Trash2 className="h-3 w-3 mr-2" />
-                                          Delete
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            
-                            {providerProfiles.hasCurrentAuth && !profileList.includes(providerProfiles.active || "") && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full"
-                                onClick={() => handleSaveProfile(cred.id)}
-                                disabled={savingProfile === cred.id}
-                              >
-                                <Save className="h-3 w-3 mr-1" />
-                                {savingProfile === cred.id ? "Saving..." : "Save Current"}
-                              </Button>
-                            )}
-                            
+                      ) : (
+                        <>
+                          {!providerProfiles.active && providerProfiles.hasCurrentAuth && (
                             <Button
                               variant="outline"
                               size="sm"
-                              className="w-full"
-                              onClick={handleLogin}
-                              disabled={loginLoading}
+                              className="flex-1 h-8 text-xs"
+                              onClick={() => handleSaveProfile(cred.id)}
+                              disabled={savingProfile === cred.id}
                             >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Account
+                              <Save className="h-3 w-3 mr-1" />
+                              {savingProfile === cred.id ? "Saving..." : "Save Profile"}
                             </Button>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
+                          )}
+                          
+                          {hasProfiles && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex-1 h-8 text-xs"
+                              onClick={() => toggleProfileExpansion(cred.id)}
+                            >
+                              <Users className="h-3 w-3 mr-1" />
+                              Profiles ({profileList.length})
+                              <ChevronDown className={`h-3 w-3 ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {hasProfiles && isExpanded && (
+                      <div className="space-y-2 pt-2 border-t animate-scale-in">
+                        {profileList.map((profileName: string) => {
+                          const isActive = providerProfiles.active === profileName;
+                          const isActivating = activatingProfile === `${cred.id}-${profileName}`;
+                          
+                          return (
+                            <div
+                              key={profileName}
+                              className={`flex items-center justify-between p-2 rounded-md transition-colors group ${
+                                isActive ? "bg-primary/10" : "bg-muted/50 hover:bg-muted cursor-pointer"
+                              }`}
+                              onClick={() => !isActive && !isActivating && handleActivateProfile(cred.id, profileName)}
+                            >
+                              <div className="flex items-center gap-2">
+                                {isActive && <Check className="h-3 w-3 text-primary" />}
+                                {isActivating && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                <span className="text-sm font-medium">{profileName}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity data-[state=open]:opacity-100"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setRenameTarget({ provider: cred.id, name: profileName });
+                                        setNewName(profileName);
+                                      }}
+                                    >
+                                      <Edit2 className="h-3 w-3 mr-2" />
+                                      Rename
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive"
+                                      onClick={() => setDeleteTarget({ provider: cred.id, name: profileName })}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        
+                        {providerProfiles.hasCurrentAuth && !profileList.includes(providerProfiles.active || "") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleSaveProfile(cred.id)}
+                            disabled={savingProfile === cred.id}
+                          >
+                            <Save className="h-3 w-3 mr-1" />
+                            {savingProfile === cred.id ? "Saving..." : "Save Current"}
+                          </Button>
+                        )}
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => handleLogin()}
+                          disabled={loginLoading}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Account
+                        </Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -524,6 +637,8 @@ export default function AuthPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <div className="h-12" />
     </div>
   );
 }

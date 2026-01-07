@@ -5,11 +5,15 @@ export const PRICING_PER_1M: Record<string, { input: number; output: number }> =
   "claude-3-opus": { input: 15.0, output: 75.0 },
   "claude-3-haiku": { input: 0.25, output: 1.25 },
 
-  "gemini-3-pro-preview": { input: 1.25, output: 5.0 },
-  "gemini-3-flash-preview": { input: 0.075, output: 0.3 },
+  "gemini-3-pro-preview": { input: 2.0, output: 12.0 },
+  "gemini-3-flash": { input: 0.5, output: 3.0 },
+  "gemini-3-flash-preview": { input: 0.5, output: 3.0 },
   "gemini-2.5-pro": { input: 1.25, output: 5.0 },
   "gemini-2.5-flash": { input: 0.075, output: 0.3 },
-  "gemini-3-pro-high": { input: 2.5, output: 10.0 },
+  "gemini-3-pro-high": { input: 4.0, output: 24.0 },
+
+  "gemini-claude-sonnet-4-5-thinking": { input: 3.0, output: 15.0 },
+  "gemini-claude-opus-4-5-thinking": { input: 15.0, output: 75.0 },
 
   "gpt-5.2": { input: 10.0, output: 30.0 },
   "gpt-4o": { input: 2.5, output: 10.0 },

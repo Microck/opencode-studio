@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Trash2, Package } from "lucide-react";
+import { Settings, Trash2, Package, AlertCircle } from "lucide-react";
 import type { PluginInfo } from "@/types";
 
 interface PluginCardProps {
@@ -17,6 +17,7 @@ interface PluginCardProps {
 export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardProps) {
   const isNpm = plugin.type === 'npm';
   const Icon = isNpm ? Package : Settings;
+  const isIncompatible = plugin.name.includes('opencode-skills');
   
   return (
     <Card className={plugin.enabled ? "border-primary/50" : "opacity-60"}>
@@ -50,6 +51,12 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick }: PluginCardPr
             </Button>
           </div>
         </div>
+        {isIncompatible && (
+          <div className="mt-2 text-[10px] text-destructive flex items-center gap-1 font-medium bg-destructive/10 p-1 rounded">
+            <AlertCircle className="h-3 w-3" />
+            Incompatible with Antigravity. Use openskills instead.
+          </div>
+        )}
       </CardContent>
     </Card>
   );
