@@ -7,7 +7,7 @@ import { PROTOCOL_URL } from "@/lib/api";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Play, ExternalLink, Loader2 } from "lucide-react";
+import { Play, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const FIRST_LOAD_KEY = "opencode-studio-loaded";
