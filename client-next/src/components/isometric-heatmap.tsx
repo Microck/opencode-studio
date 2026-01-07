@@ -38,7 +38,7 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
     const cellSize = 12;
     const cellGap = 4;
     
-    const dimension = new obelisk.CubeDimension(cellSize, cellSize, 2);
+    const dimension = new obelisk.CubeDimension(cellSize, cellSize, 6);
     const emptyColor = new obelisk.CubeColor().getByHorizontalColor(0x1e293b); 
     const base = new obelisk.Cube(dimension, emptyColor);
 
