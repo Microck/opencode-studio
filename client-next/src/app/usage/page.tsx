@@ -88,7 +88,15 @@ export default function UsagePage() {
 
   const pieData = useMemo(() => {
     if (!stats) return [];
-    if (showAllModels || stats.byModel.length <= 6) return stats.byModel;
+    if (showAllModels || stats.byModel.length <= 6) {
+      // Even if showing all, ensure "Others" (if it exists from backend) is at bottom
+      const othersIndex = stats.byModel.findIndex(m => m.name === "Others");
+      if (othersIndex !== -1) {
+        const others = stats.byModel.splice(othersIndex, 1)[0];
+        return [...stats.byModel, others];
+      }
+      return stats.byModel;
+    }
     
     const topModels = stats.byModel.slice(0, 5);
     const otherModels = stats.byModel.slice(5);
@@ -108,6 +116,17 @@ export default function UsagePage() {
       }
     ];
   }, [stats, showAllModels]);
+
+  const tableData = useMemo(() => {
+    if (!stats) return [];
+    const data = [...stats.byModel];
+    const othersIndex = data.findIndex(m => m.name === "Others");
+    if (othersIndex !== -1) {
+      const others = data.splice(othersIndex, 1)[0];
+      return [...data, others];
+    }
+    return data;
+  }, [stats]);
 
   const exportToCSV = () => {
     if (!stats) return;
@@ -158,7 +177,7 @@ export default function UsagePage() {
   const totalOutputTokens = stats.byModel.reduce((acc, m) => acc + m.outputTokens, 0);
 
   return (
-    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-12 h-full overflow-y-auto bg-background">
+    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-32 h-full overflow-y-auto bg-background">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Token Usage</h1>
@@ -354,7 +373,7 @@ export default function UsagePage() {
                 <PieChart>
                   <Pie
                     data={pieData}
-                    cx="40%"
+                    cx="65%"
                     cy="50%"
                     innerRadius={65}
                     outerRadius={90}
@@ -388,8 +407,8 @@ export default function UsagePage() {
                   <Legend 
                     layout="vertical" 
                     verticalAlign="middle" 
-                    align="right"
-                    wrapperStyle={{ fontSize: "11px", maxWidth: "120px" }}
+                    align="left"
+                    wrapperStyle={{ fontSize: "11px", maxWidth: "120px", left: 0 }}
                     content={({ payload }) => (
                       <ul className="space-y-2">
                         {payload?.map((entry: any, index: number) => (
@@ -459,7 +478,7 @@ export default function UsagePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
-                  {(stats.byModel || []).map((model) => (
+                  {(tableData || []).map((model) => (
                     <tr key={model.name} className="hover:bg-muted/20 transition-colors group">
                       <td className="px-6 py-4 font-bold text-foreground/80">{model.name}</td>
                       <td className="px-6 py-4 text-right text-muted-foreground font-mono tabular-nums">{model.inputTokens.toLocaleString()}</td>

@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Trash2, Pencil, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { MCPConfig } from "@/types";
 
 interface MCPCardProps {
@@ -70,42 +71,45 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
 
   return (
     <>
-      <Card className={config.enabled ? "border-primary/50" : "opacity-60"}>
-        <CardHeader className="pb-2">
+      <Card className={cn("hover-lift", config.enabled ? "border-primary/50" : "opacity-60")}>
+        <CardHeader className="p-3 pb-1">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">{name}</CardTitle>
-            <div className="flex items-center gap-2">
+            <CardTitle className="text-sm font-bold truncate max-w-[120px]">{name}</CardTitle>
+            <div className="flex items-center gap-1">
               <Switch
                 checked={config.enabled}
                 onCheckedChange={onToggle}
                 aria-label={`Toggle ${name}`}
+                className="scale-75"
               />
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleOpenEdit}
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
               >
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onDelete}
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <code className="block text-xs bg-background p-2 rounded overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-mono">
+        <CardContent className="p-3 pt-0 space-y-1.5">
+          <code className="block text-[10px] bg-background/50 p-1.5 rounded overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-mono border border-border/20">
             {fullCommand}
           </code>
-          <Badge variant={config.type === "local" ? "default" : "secondary"}>
-            {config.type}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={config.type === "local" ? "default" : "secondary"} className="text-[9px] px-1.5 py-0 h-4">
+              {config.type}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 

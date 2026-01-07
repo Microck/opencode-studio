@@ -87,6 +87,23 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
                   npm install -g opencode-studio-server
                 </code>
               </div>
+
+              <div className="pt-2 border-t border-border/30">
+                <p className="text-[10px] text-primary/70 font-semibold italic">
+                  Important: Run <code className="bg-background px-1 rounded not-italic">opencode --version</code> once after install to initialize your configuration.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5 text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertCircle className="h-3 w-3 text-orange-500" />
+                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-tight">Troubleshooting</p>
+              </div>
+              <p className="text-[10px] text-orange-700/80 leading-snug">
+                Stuck in a loading loop? Make sure the server is running in your terminal and you have initialized opencode. 
+                Try clearing browser cache if the issue persists.
+              </p>
             </div>
           </div>
         </div>

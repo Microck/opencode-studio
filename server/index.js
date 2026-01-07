@@ -487,7 +487,11 @@ app.get('/api/auth', (req, res) => {
 
     providers.forEach(p => {
         const saved = listAuthProfiles(p.id, activePlugin);
-        const curr = !!authCfg[p.id];
+        let curr = !!authCfg[p.id];
+        if (p.id === 'google') {
+            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            curr = !!authCfg[key] || !!authCfg.google;
+        }
         credentials.push({ ...p, active: ac[p.id] || (curr ? 'current' : null), profiles: saved, hasCurrentAuth: curr });
     });
     res.json({ 
@@ -508,7 +512,13 @@ app.get('/api/auth/profiles', (req, res) => {
     
     providers.forEach(p => {
         const saved = listAuthProfiles(p, activePlugin);
-        const curr = authCfg[p];
+        // Correct current auth check: handle google vs google.gemini/antigravity
+        let curr = !!authCfg[p];
+        if (p === 'google') {
+            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            curr = !!authCfg[key] || !!authCfg.google;
+        }
+        
         if (saved.length > 0 || curr) {
             profiles[p] = { active: ac[p], profiles: saved, hasCurrentAuth: !!curr };
         }
@@ -587,6 +597,14 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
     const oldPath = path.join(AUTH_PROFILES_DIR, namespace, `${name}.json`);
     const newPath = path.join(AUTH_PROFILES_DIR, namespace, `${newName}.json`);
     if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
+
+    // Update active profile name if it was the one renamed
+    const studio = loadStudioConfig();
+    if (studio.activeProfiles && studio.activeProfiles[provider] === name) {
+        studio.activeProfiles[provider] = newName;
+        saveStudioConfig(studio);
+    }
+
     res.json({ success: true, name: newName });
 });
 

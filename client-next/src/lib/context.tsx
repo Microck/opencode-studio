@@ -55,10 +55,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingRef = useRef(false);
   const checkedPendingRef = useRef(false);
 
   const refreshData = useCallback(async () => {
+    // Prevent multiple simultaneous refreshes
+    if (loadingRef.current) return;
+    
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError(null);
       const [configData, skillsData, pluginsData] = await Promise.all([
@@ -69,15 +74,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConfig(configData);
       setSkills(skillsData);
       setPlugins(pluginsData);
+      // We are connected because the requests succeeded
       setConnected(true);
-    } catch (err) {
-      setError('Failed to connect to backend');
-      setConnected(false);
-      // Ensure loading is false so we show the disconnected landing instead of a spinner
-      setLoading(false);
+    } catch (err: any) {
+      // If the error is a 404, it means the server is up but opencode.json is missing
+      if (err.response?.status === 404) {
+        setError('OpenCode configuration not found. Please run "opencode --version" in your terminal to initialize it.');
+        setConfig(null);
+        setConnected(true); // The server IS connected, just has no data
+      } else {
+        setError('Failed to load data from backend');
+        setConnected(false);
+      }
       console.error(err);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, []);
 
@@ -85,38 +97,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (checkedPendingRef.current) return;
     checkedPendingRef.current = true;
     
-    const action = await getPendingAction();
-    if (action) {
-      setPendingAction(action);
+    try {
+      const action = await getPendingAction();
+      if (action) {
+        setPendingAction(action);
+      }
+    } catch {
+      // Ignore errors here
     }
   }, []);
 
   useEffect(() => {
     const pollHealth = async () => {
-      const isHealthy = await checkHealth();
-      if (isHealthy && !connected) {
-        setConnected(true);
-        refreshData();
-        checkForPendingAction();
-      } else if (!isHealthy && connected) {
-        setConnected(false);
-        setError('Backend disconnected');
-        checkedPendingRef.current = false;
+      try {
+        const isHealthy = await checkHealth();
+        if (isHealthy) {
+          if (!connected) {
+            setConnected(true);
+            refreshData();
+            checkForPendingAction();
+          }
+        } else {
+          if (connected) {
+            setConnected(false);
+            setError('Backend disconnected');
+            checkedPendingRef.current = false;
+          }
+        }
+      } catch {
+        if (connected) {
+          setConnected(false);
+          setError('Backend disconnected');
+        }
       }
     };
 
-    refreshData().then(() => {
-      if (connected) {
-        checkForPendingAction();
-      }
-    });
-    healthCheckRef.current = setInterval(pollHealth, 3000);
+    // Initial load
+    refreshData();
 
-    return () => {
-      if (healthCheckRef.current) {
-        clearInterval(healthCheckRef.current);
-      }
-    };
+    const interval = setInterval(pollHealth, 3000);
+    return () => clearInterval(interval);
   }, [refreshData, connected, checkForPendingAction]);
 
   const dismissPendingAction = useCallback(async () => {

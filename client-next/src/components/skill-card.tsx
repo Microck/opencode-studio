@@ -17,7 +17,7 @@ export function SkillCard({ skill, onToggle, onDelete, onClick }: SkillCardProps
   return (
     <Card className={skill.enabled ? "border-primary/50" : "opacity-60"}>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div
             className="flex-1 min-w-0 cursor-pointer hover:opacity-80"
             onClick={onClick}
