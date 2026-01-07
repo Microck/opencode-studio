@@ -5,18 +5,12 @@ import obelisk from 'obelisk.js';
 interface IsometricHeatmapProps {
   data: {
     day: number; 
-    hourBucket: number; 
     value: number; 
-    date?: string;
   }[];
 }
 
-const WEEK_NAMES = ["Mon", "Wed", "Fri"];
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const render = useCallback(() => {
@@ -35,10 +29,11 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
 
     const weeks = 52;
     const days = 7;
-    const cellSize = 12;
+    const cellSize = 14;
     const cellGap = 4;
     
-    const dimension = new obelisk.CubeDimension(cellSize, cellSize, 6);
+    const baseHeight = 8;
+    const dimension = new obelisk.CubeDimension(cellSize, cellSize, baseHeight);
     const emptyColor = new obelisk.CubeColor().getByHorizontalColor(0x1e293b); 
     const base = new obelisk.Cube(dimension, emptyColor);
 
@@ -58,7 +53,7 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
       if (weekIndex >= weeks) return;
 
       const intensity = item.value / maxValue;
-      const barHeight = Math.max(4, intensity * 40);
+      const barHeight = Math.max(8, intensity * 50);
       
       let color = 0x1e293b; 
       
@@ -86,16 +81,10 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
     return () => window.removeEventListener('resize', render);
   }, [render]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    setTooltip(null); 
-  };
-
   return (
     <div 
       ref={containerRef}
       className="w-full h-full flex flex-col items-center justify-center bg-black/40 rounded-xl relative overflow-hidden group border border-primary/10 shadow-2xl"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setTooltip(null)}
     >
       <div className="absolute top-4 left-5 flex flex-col gap-1 z-10 pointer-events-none text-left">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 flex items-center gap-2">
