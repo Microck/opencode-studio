@@ -260,7 +260,7 @@ export default function AuthPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Authentication</h1>
-        <Button variant="outline" size="sm" onClick={loadData}>
+        <Button variant="outline" size="sm" onClick={() => loadData()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
