@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Rocket, Circle, Play, Power, BarChart } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Rocket, Circle, Play, Power, BarChart, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -152,6 +152,18 @@ export function Sidebar() {
                 </TooltipContent>
               </Tooltip>
             )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" asChild>
+                  <a href="https://github.com/Microck/opencode-studio" target="_blank" rel="noopener noreferrer">
+                    <Github className="h-4 w-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>GitHub</p>
+              </TooltipContent>
+            </Tooltip>
             <ThemeToggle />
           </div>
         </div>

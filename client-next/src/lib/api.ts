@@ -140,6 +140,33 @@ export async function togglePlugin(name: string): Promise<{ enabled: boolean }> 
   return { enabled: data.enabled };
 }
 
+export async function getCommand(name: string): Promise<{ template: string }> {
+  const config = await getConfig();
+  const cmd = config.command?.[name];
+  if (!cmd) throw new Error('Command not found');
+  return cmd;
+}
+
+export async function saveCommand(name: string, template: string): Promise<void> {
+  const config = await getConfig();
+  const updated = {
+    ...config,
+    command: {
+        ...config.command,
+        [name]: { template }
+    }
+  };
+  await saveConfig(updated);
+}
+
+export async function deleteCommand(name: string): Promise<void> {
+  const config = await getConfig();
+  if (config.command) {
+      const { [name]: removed, ...rest } = config.command;
+      await saveConfig({ ...config, command: rest });
+  }
+}
+
 export interface BackupData {
   version: number;
   timestamp: string;

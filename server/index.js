@@ -129,6 +129,34 @@ function loadStudioConfig() {
                     "name": "2.5 Flash Lite",
                     "reasoning": false
                 },
+                "google/gemini-3-flash": {
+                    "id": "google/gemini-3-flash",
+                    "name": "3 Flash (Google)",
+                    "reasoning": true,
+                    "limit": { "context": 1048576, "output": 65536 },
+                    "cost": { "input": 0.5, "output": 3, "cache_read": 0.05 },
+                    "modalities": {
+                        "input": ["text", "image", "video", "audio", "pdf"],
+                        "output": ["text"]
+                    },
+                    "variants": {
+                        "minimal": { "options": { "thinkingConfig": { "thinkingLevel": "minimal", "includeThoughts": true } } },
+                        "low": { "options": { "thinkingConfig": { "thinkingLevel": "low", "includeThoughts": true } } },
+                        "medium": { "options": { "thinkingConfig": { "thinkingLevel": "medium", "includeThoughts": true } } },
+                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } }
+                    }
+                },
+                "opencode/glm-4.7-free": {
+                    "id": "opencode/glm-4.7-free",
+                    "name": "GLM 4.7 Free",
+                    "reasoning": false,
+                    "limit": { "context": 128000, "output": 4096 },
+                    "cost": { "input": 0, "output": 0 },
+                    "modalities": {
+                        "input": ["text"],
+                        "output": ["text"]
+                    }
+                },
                 "gemini-claude-sonnet-4-5-thinking": {
                     "id": "gemini-claude-sonnet-4-5-thinking",
                     "name": "Sonnet 4.5",
@@ -223,7 +251,12 @@ const loadConfig = () => {
     const configPath = getConfigPath();
     if (!configPath || !fs.existsSync(configPath)) return null;
     try {
-        return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const studioConfig = loadStudioConfig();
+        if (studioConfig.activeGooglePlugin === 'antigravity' && !config.small_model) {
+            config.small_model = "google/gemini-3-flash";
+        }
+        return config;
     } catch {
         return null;
     }
@@ -733,12 +766,22 @@ app.get('/api/usage', async (req, res) => {
 
                             const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
                             stats.totalCost += c; stats.totalTokens += t;
-                            [stats.byModel, stats.byTime, stats.byProject].forEach((obj, i) => {
-                                const key = i === 0 ? mid : (i === 1 ? tk : pid);
+                            [stats.byModel, stats.byProject].forEach((obj, i) => {
+                                const key = i === 0 ? mid : pid;
                                 if (!obj[key]) obj[key] = { name: key, id: key, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                if (i === 2) obj[key].name = pmap.get(s)?.name || 'Unassigned';
+                                if (i === 1) obj[key].name = pmap.get(s)?.name || 'Unassigned';
                                 obj[key].cost += c; obj[key].tokens += t; obj[key].inputTokens += it; obj[key].outputTokens += ot;
                             });
+
+                            if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                            const te = stats.byTime[tk];
+                            te.cost += c; te.tokens += t; te.inputTokens += it; te.outputTokens += ot;
+                            if (!te[mid]) te[mid] = 0;
+                            te[mid] += c;
+                            
+                            const kIn = `${mid}_input`, kOut = `${mid}_output`;
+                            te[kIn] = (te[kIn] || 0) + it;
+                            te[kOut] = (te[kOut] || 0) + ot;
                         }
                     } catch {}
                 });

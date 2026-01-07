@@ -1,6 +1,6 @@
 {
   "name": "opencode-studio-server",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Backend server for OpenCode Studio - manages opencode configurations",
   "main": "index.js",
   "bin": {

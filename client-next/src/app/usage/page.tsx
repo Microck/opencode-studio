@@ -6,7 +6,7 @@ import { getUsageStats, UsageStats } from "@/lib/api";
 import { 
   Loader2, DollarSign, MessageSquare, Calendar, Download, 
   TrendingUp, Filter, Users, Image as ImageIcon,
-  BarChart3, PieChart as PieChartIcon
+  BarChart3, PieChart as PieChartIcon, Activity
 } from "lucide-react";
 import { calculateCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
@@ -24,6 +24,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useFilterStore } from "@/lib/store/filters";
 import { toPng } from 'html-to-image';
 
@@ -41,13 +48,14 @@ import {
   Legend,
 } from "recharts";
 
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"];
+const COLORS = ["#D1C6C6", "#AC9F9F", "#877A7A", "#615757", "#3C3636"];
 
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [showAllModels, setShowAllModels] = useState(false);
+  const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   
   const { projectId, setProjectId, dateRange, setDateRange, granularity, setGranularity } = useFilterStore();
 
@@ -63,10 +71,22 @@ export default function UsagePage() {
           ...m,
           cost: calculateCost(m.name, m.inputTokens, m.outputTokens)
         })).sort((a, b) => b.cost - a.cost),
-        byDay: (data.byDay || []).map(d => ({
-          ...d,
-          cost: calculateCost("default", d.inputTokens, d.outputTokens) 
-        })),
+        byDay: (data.byDay || []).map((d: any) => {
+          const modelCosts: Record<string, number> = {};
+          (data.byModel || []).forEach(m => {
+             const mid = m.name;
+             const it = d[`${mid}_input`] || 0;
+             const ot = d[`${mid}_output`] || 0;
+             if (it > 0 || ot > 0) {
+                 modelCosts[mid] = calculateCost(mid, it, ot);
+             }
+          });
+          return {
+            ...d,
+            ...modelCosts,
+            cost: calculateCost("default", d.inputTokens, d.outputTokens)
+          };
+        }),
         byProject: (data.byProject || []).map(p => ({
           ...p,
           cost: calculateCost("default", p.inputTokens, p.outputTokens)
@@ -126,6 +146,11 @@ export default function UsagePage() {
       return [...data, others];
     }
     return data;
+  }, [stats]);
+
+  const modelIds = useMemo(() => {
+    if (!stats) return [];
+    return stats.byModel.map(m => m.name).filter(name => name !== "Others");
   }, [stats]);
 
   const exportToCSV = () => {
@@ -290,7 +315,7 @@ export default function UsagePage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="col-span-2 border-primary/10 bg-muted/5 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <BarChart3 className="h-3.5 w-3.5 text-primary" />
               Usage Timeline
             </CardTitle>
@@ -327,7 +352,7 @@ export default function UsagePage() {
                           <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
                             <div className="flex flex-col gap-1">
                               <span className="uppercase text-muted-foreground font-bold">{new Date(label || "").toLocaleString()}</span>
-                              <span className="text-base font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
+                              <span className="text-base font-bold text-primary">{formatCurrency(Number(payload[0].payload.cost))}</span>
                               <div className="mt-1 pt-1 border-t border-border/50 flex flex-col gap-0.5">
                                 <span className="flex justify-between gap-4">
                                   <span className="text-muted-foreground">Input</span>
@@ -345,7 +370,15 @@ export default function UsagePage() {
                       return null
                     }}
                   />
-                  <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
+                  {modelIds.map((modelId, index) => (
+                    <Bar 
+                      key={modelId}
+                      dataKey={modelId}
+                      stackId="a"
+                      fill={COLORS[index % COLORS.length]}
+                      radius={[0, 0, 0, 0]}
+                    />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -354,27 +387,91 @@ export default function UsagePage() {
 
         <Card className="col-span-1 border-primary/10 bg-muted/5 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <PieChartIcon className="h-3.5 w-3.5 text-primary" />
               Cost Breakdown
             </CardTitle>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-6 text-[8px] uppercase px-2 font-black opacity-60 hover:opacity-100"
-              onClick={() => setShowAllModels(!showAllModels)}
-            >
-              {showAllModels ? "Hide Small" : "View All"}
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 text-[8px] uppercase px-2 font-black opacity-60 hover:opacity-100"
+                >
+                  View All
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-6xl h-[80vh]">
+                <DialogHeader>
+                  <DialogTitle>Cost Breakdown</DialogTitle>
+                </DialogHeader>
+                <div className="h-full w-full pb-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={stats?.byModel || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={150}
+                        outerRadius={250}
+                        paddingAngle={2}
+                        dataKey="cost"
+                      >
+                        {(stats?.byModel || []).map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={COLORS[index % COLORS.length]} 
+                            stroke="hsl(var(--background))" 
+                            strokeWidth={2} 
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        isAnimationActive={false}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="rounded-lg border bg-background/95 p-2 shadow-xl text-xs backdrop-blur-md border-primary/20">
+                                <div className="flex flex-col">
+                                  <span className="font-bold truncate max-w-[200px]">{payload[0].name}</span>
+                                  <span className="font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return null
+                        }}
+                      />
+                      <Legend 
+                        layout="vertical" 
+                        verticalAlign="middle" 
+                        align="right"
+                        wrapperStyle={{ fontSize: "12px", right: 20, overflowY: 'auto', maxHeight: '100%' }}
+                        content={({ payload }) => (
+                          <ul className="space-y-2 max-h-full overflow-y-auto pr-2">
+                            {payload?.map((entry: any, index: number) => (
+                              <li key={`item-${index}`} className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                                <span className="truncate font-medium opacity-80" title={entry.value}>{entry.value}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
-          <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
-            <div className="h-full w-full">
+          <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
+            <div className="h-full w-full relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={pieData}
-                    cx="65%"
-                    cy="50%"
+                    cx={pieConfig.cx}
+                    cy={pieConfig.cy}
                     innerRadius={65}
                     outerRadius={90}
                     paddingAngle={3}
@@ -383,13 +480,14 @@ export default function UsagePage() {
                     {pieData.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
-                        fill={entry.name === "Others" ? "#475569" : COLORS[index % COLORS.length]} 
+                        fill={entry.name === "Others" ? "#2e2e2e" : COLORS[index % COLORS.length]} 
                         stroke="hsl(var(--background))" 
                         strokeWidth={2} 
                       />
                     ))}
                   </Pie>
                   <Tooltip 
+                    isAnimationActive={false}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
@@ -407,14 +505,14 @@ export default function UsagePage() {
                   <Legend 
                     layout="vertical" 
                     verticalAlign="middle" 
-                    align="left"
-                    wrapperStyle={{ fontSize: "11px", maxWidth: "120px", left: 0 }}
+                    align="right"
+                    wrapperStyle={{ fontSize: "11px", right: pieConfig.legendRight }}
                     content={({ payload }) => (
                       <ul className="space-y-2">
                         {payload?.map((entry: any, index: number) => (
                           <li key={`item-${index}`} className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                            <span className="truncate text-[10px] font-medium opacity-80 max-w-[90px]" title={entry.value}>{entry.value}</span>
+                            <span className="truncate text-[10px] font-medium opacity-80" title={entry.value}>{entry.value}</span>
                           </li>
                         ))}
                       </ul>
@@ -422,6 +520,11 @@ export default function UsagePage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="absolute bottom-0 left-0 flex gap-2 p-1 bg-background/50 text-[10px] backdrop-blur">
+                <label>CX: <input value={pieConfig.cx} onChange={e => setPieConfig({...pieConfig, cx: e.target.value})} className="border w-8 px-1 bg-transparent" /></label>
+                <label>CY: <input value={pieConfig.cy} onChange={e => setPieConfig({...pieConfig, cy: e.target.value})} className="border w-8 px-1 bg-transparent" /></label>
+                <label>LegR: <input value={pieConfig.legendRight} onChange={e => setPieConfig({...pieConfig, legendRight: Number(e.target.value)})} className="border w-8 px-1 bg-transparent" type="number" /></label>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -430,7 +533,7 @@ export default function UsagePage() {
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
           <CardHeader className="bg-muted/10 border-b py-3 px-6">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
               Top Projects
             </CardTitle>
@@ -464,7 +567,10 @@ export default function UsagePage() {
 
         <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
           <CardHeader className="bg-muted/10 border-b py-3 px-6">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Model Performance Analysis</CardTitle>
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5 text-primary" />
+              Model Performance Analysis
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0 flex-1 overflow-auto max-h-[400px]">
             <div className="w-full">

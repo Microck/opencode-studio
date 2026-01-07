@@ -8,19 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Save, ArrowLeft } from "lucide-react";
-import { getSkill, saveSkill, getPlugin, savePlugin } from "@/lib/api";
+import { getSkill, saveSkill, getPlugin, savePlugin, deleteSkill, getCommand, saveCommand, deleteCommand } from "@/lib/api";
 import { toast } from "sonner";
 import type { SkillInfo, PluginInfo } from "@/types";
 
 function EditorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const type = searchParams.get("type") as "skills" | "plugins" | null;
+  const type = searchParams.get("type") as "skills" | "plugins" | "commands" | null;
   const name = searchParams.get("name");
   const isNew = searchParams.get("new") === "true";
 
   const [content, setContent] = useState("");
   const [description, setDescription] = useState("");
+  const [currentName, setCurrentName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -31,7 +32,11 @@ function EditorContent() {
     }
 
     if (isNew) {
-      setContent(type === "skills" ? "## When to Use\n\n## Instructions\n\n" : "// New Plugin\n\n");
+      const defaultContent = type === "skills" ? "## When to Use\n\n## Instructions\n\n" : 
+                             type === "commands" ? "Instructions:\n" : 
+                             "// New Plugin\n\n";
+      setContent(defaultContent);
+      setCurrentName(name);
       setLoading(false);
       return;
     }
@@ -42,10 +47,17 @@ function EditorContent() {
         if (type === "skills") {
           const data = await getSkill(name);
           setContent(data.content);
-          setDescription(data.description || "");
+          const match = data.content.match(/<description>([\s\S]*?)<\/description>/);
+          setDescription(data.description || (match ? match[1].trim() : ""));
+          setCurrentName(name);
+        } else if (type === "commands") {
+          const data = await getCommand(name);
+          setContent(data.template);
+          setCurrentName(name);
         } else {
           const data = await getPlugin(name);
           setContent(data.content);
+          setCurrentName(name);
         }
       } catch {
         toast.error("Failed to load file");
@@ -68,11 +80,31 @@ function EditorContent() {
           toast.error("Description is required for skills");
           return;
         }
-        await saveSkill(name, description, content);
+        const targetName = currentName.trim() || name;
+        let finalContent = content;
+        if (finalContent.includes("<description>")) {
+            finalContent = finalContent.replace(/<description>[\s\S]*?<\/description>/, `<description>${description}</description>`);
+        } else {
+            finalContent = `<description>\n${description}\n</description>\n\n${finalContent}`;
+        }
+
+        await saveSkill(targetName, description, finalContent);
+
+        if (targetName !== name && !isNew) {
+            await deleteSkill(name);
+            router.replace(`/editor?type=skills&name=${encodeURIComponent(targetName)}`);
+        }
+      } else if (type === "commands") {
+        const targetName = currentName.trim() || name;
+        await saveCommand(targetName, content);
+        if (targetName !== name && !isNew) {
+            await deleteCommand(name);
+            router.replace(`/editor?type=commands&name=${encodeURIComponent(targetName)}`);
+        }
       } else {
         await savePlugin(name, content);
       }
-      toast.success(`Saved ${name}`);
+      toast.success(`Saved ${currentName || name}`);
     } catch {
       toast.error("Failed to save file");
     } finally {
@@ -106,7 +138,15 @@ function EditorContent() {
         <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-bold font-mono">{name}</h1>
+        {type === "skills" ? (
+            <Input 
+                value={currentName} 
+                onChange={(e) => setCurrentName(e.target.value)} 
+                className="max-w-md font-mono font-bold h-9"
+            />
+        ) : (
+            <h1 className="text-xl font-bold font-mono">{name}</h1>
+        )}
         <Button onClick={handleSave} disabled={saving}>
           <Save className="h-4 w-4 mr-2" />
           {saving ? "Saving..." : "Save"}

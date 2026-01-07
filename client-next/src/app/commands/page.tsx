@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +26,9 @@ interface CommandEntry {
 
 export default function CommandsPage() {
   const { config, loading, saveConfig, refreshData } = useApp();
+  const router = useRouter();
   const [commands, setCommands] = useState<CommandEntry[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingCommand, setEditingCommand] = useState<CommandEntry | null>(null);
   const [newName, setNewName] = useState("");
   const [newTemplate, setNewTemplate] = useState("");
 
@@ -78,32 +78,7 @@ export default function CommandsPage() {
     }
   };
 
-  const handleEdit = async () => {
-    if (!editingCommand) return;
-    if (!newTemplate.trim()) {
-      toast.error("Template is required");
-      return;
-    }
 
-    const updatedConfig = {
-      ...config,
-      command: {
-        ...config?.command,
-        [editingCommand.name]: { template: newTemplate },
-      },
-    };
-
-    try {
-      await saveConfig(updatedConfig);
-      toast.success(`Command "${editingCommand.name}" updated`);
-      setEditingCommand(null);
-      setNewTemplate("");
-      setEditOpen(false);
-      refreshData();
-    } catch {
-      toast.error("Failed to update command");
-    }
-  };
 
   const handleDelete = async (name: string) => {
     if (!confirm(`Delete command "${name}"?`)) return;
@@ -126,9 +101,7 @@ export default function CommandsPage() {
   };
 
   const openEdit = (cmd: CommandEntry) => {
-    setEditingCommand(cmd);
-    setNewTemplate(cmd.template);
-    setEditOpen(true);
+    router.push(`/editor?type=commands&name=${encodeURIComponent(cmd.name)}`);
   };
 
   if (loading) {
@@ -198,30 +171,7 @@ export default function CommandsPage() {
         </Dialog>
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Command: {editingCommand?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-template">Template</Label>
-              <Textarea
-                id="edit-template"
-                value={newTemplate}
-                onChange={(e) => setNewTemplate(e.target.value)}
-                className="font-mono text-sm min-h-[200px]"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setEditOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleEdit}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       {commands.length === 0 ? (
         <p className="text-muted-foreground italic">No commands configured.</p>
