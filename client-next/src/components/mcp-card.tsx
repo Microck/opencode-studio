@@ -36,6 +36,17 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
             </Badge>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="h-8 w-8 text-muted-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
             <Switch
               checked={config.enabled}
               onCheckedChange={onToggle}

@@ -310,6 +310,7 @@ export default function AuthPage() {
                 <div className="text-left flex flex-col justify-center h-full relative z-10">
                   <div className="font-bold flex items-center gap-2 text-base">
                     {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
+                    Gemini Auth
                   </div>
                 </div>
                 <GeminiLogo className={`h-10 w-10 ml-4 transition-opacity ${activeGooglePlugin === 'gemini' ? 'text-primary-foreground' : 'opacity-20 group-hover:opacity-40'}`} />
@@ -328,6 +329,10 @@ export default function AuthPage() {
                 <div className="text-left flex flex-col justify-center h-full relative z-10">
                   <div className="font-bold flex items-center gap-2 text-base">
                     {activeGooglePlugin === 'antigravity' && <Check className="h-4 w-4" />}
+                    Antigravity
+                  </div>
+                  <div className="text-[10px] text-primary-foreground/80 mt-1 font-medium italic">
+                    Supports up to 10 accounts!
                   </div>
                 </div>
                 <AntigravityLogo className={`h-10 w-10 ml-4 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'text-primary-foreground' : 'opacity-20 group-hover:opacity-40'}`} />
