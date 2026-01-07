@@ -11,8 +11,8 @@ interface IsometricHeatmapProps {
   }[];
 }
 
-const BUCKET_NAMES = ["Morning", "Day", "Night"];
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEK_NAMES = ["Mon", "Wed", "Fri"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,16 +30,21 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
     canvas.width = width;
     canvas.height = height;
 
-    const point = new obelisk.Point(width / 2, 80);
+    const point = new obelisk.Point(width / 2, 60);
     const pixelView = new obelisk.PixelView(canvas, point);
 
-    const dimension = new obelisk.CubeDimension(24, 24, 6);
-    const grayColor = new obelisk.CubeColor().getByHorizontalColor(0x1e293b); 
-    const base = new obelisk.Cube(dimension, grayColor);
+    const weeks = 52;
+    const days = 7;
+    const cellSize = 12;
+    const cellGap = 4;
+    
+    const dimension = new obelisk.CubeDimension(cellSize, cellSize, 2);
+    const emptyColor = new obelisk.CubeColor().getByHorizontalColor(0x1e293b); 
+    const base = new obelisk.Cube(dimension, emptyColor);
 
-    for (let x = 0; x < 7; x++) {
-      for (let y = 0; y < 3; y++) {
-        const p3d = new obelisk.Point3D(x * 28, y * 28, 0);
+    for (let x = 0; x < weeks; x++) {
+      for (let y = 0; y < days; y++) {
+        const p3d = new obelisk.Point3D(x * (cellSize + cellGap), y * (cellSize + cellGap), 0);
         pixelView.renderObject(base, p3d);
       }
     }
@@ -47,21 +52,30 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
     const maxValue = Math.max(...data.map(d => d.value)) || 1;
 
     data.forEach(item => {
-      const x = item.day;
-      const y = item.hourBucket;
+      const weekIndex = Math.floor(item.day / 7);
+      const dayIndex = item.day % 7;
       
-      const barHeight = Math.max(6, (item.value / maxValue) * 80);
-      
-      let color = 0x3b82f6; 
-      if (item.value > maxValue * 0.8) color = 0xef4444; 
-      else if (item.value > maxValue * 0.5) color = 0xf59e0b; 
-      else if (item.value > 0) color = 0x22c55e; 
+      if (weekIndex >= weeks) return;
 
-      const barDim = new obelisk.CubeDimension(20, 20, barHeight);
+      const intensity = item.value / maxValue;
+      const barHeight = Math.max(4, intensity * 40);
+      
+      let color = 0x1e293b; 
+      
+      if (item.value > 0) {
+        if (intensity < 0.25) color = 0x14532d; 
+        else if (intensity < 0.5) color = 0x166534;
+        else if (intensity < 0.75) color = 0x22c55e;
+        else color = 0x4ade80; 
+      }
+
+      if (item.value === 0) return;
+
+      const barDim = new obelisk.CubeDimension(cellSize, cellSize, barHeight);
       const barColor = new obelisk.CubeColor().getByHorizontalColor(color);
       const bar = new obelisk.Cube(barDim, barColor);
       
-      const p3d = new obelisk.Point3D(x * 28 + 4, y * 28 + 4, 0);
+      const p3d = new obelisk.Point3D(weekIndex * (cellSize + cellGap), dayIndex * (cellSize + cellGap), 0);
       pixelView.renderObject(bar, p3d);
     });
   }, [data]);
@@ -73,26 +87,7 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
   }, [render]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    const gridX = Math.floor((mx - (rect.width / 2 - 100)) / 28);
-    const gridY = Math.floor((my - 80) / 28);
-
-    if (gridX >= 0 && gridX < 7 && gridY >= 0 && gridY < 3) {
-      const item = data.find(d => d.day === gridX && d.hourBucket === gridY);
-      if (item && item.value > 0) {
-        setTooltip({
-          x: mx,
-          y: my,
-          text: `${DAY_NAMES[gridX]} ${BUCKET_NAMES[gridY]}: $${item.value.toFixed(2)}`
-        });
-        return;
-      }
-    }
-    setTooltip(null);
+    setTooltip(null); 
   };
 
   return (
@@ -105,44 +100,32 @@ export function IsometricHeatmap({ data }: IsometricHeatmapProps) {
       <div className="absolute top-4 left-5 flex flex-col gap-1 z-10 pointer-events-none text-left">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          Dimensional Analysis
+          Yearly Intensity
         </span>
         <div className="flex gap-4 mt-2 text-[9px] text-muted-foreground font-bold font-mono uppercase">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-blue-500" /> Low
+            <div className="w-2.5 h-2.5 rounded-sm bg-[#14532d]" /> Low
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-green-500" /> Normal
+            <div className="w-2.5 h-2.5 rounded-sm bg-[#166534]" /> Med
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-amber-500" /> Busy
+            <div className="w-2.5 h-2.5 rounded-sm bg-[#22c55e]" /> High
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-red-500" /> Peak
+            <div className="w-2.5 h-2.5 rounded-sm bg-[#4ade80]" /> Max
           </div>
         </div>
       </div>
       
       <div className="absolute bottom-4 right-6 text-[10px] font-black font-mono text-muted-foreground/30 z-10 uppercase tracking-widest">
-        Iso • 7x3 Grid
+        Iso • 52 Weeks
       </div>
 
       <canvas 
         ref={canvasRef} 
         className="w-full h-full cursor-none transition-all duration-700 group-hover:brightness-110" 
       />
-      
-      {tooltip && (
-        <div 
-          className="absolute bg-background/90 backdrop-blur-md border border-primary/20 p-2.5 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] text-[11px] font-bold pointer-events-none z-50 animate-in fade-in zoom-in-90 duration-150"
-          style={{ left: tooltip.x + 15, top: tooltip.y - 40 }}
-        >
-          <div className="flex flex-col gap-0.5">
-            <span className="text-muted-foreground uppercase text-[9px] tracking-tighter">{tooltip.text.split(':')[0]}</span>
-            <span className="text-primary text-sm tracking-tight">{tooltip.text.split(':')[1]}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
