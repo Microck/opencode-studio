@@ -22,6 +22,7 @@ import {
   Snowflake,
   Play,
   Star,
+  Plus,
 } from "lucide-react";
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
 
@@ -32,7 +33,9 @@ interface AccountPoolCardProps {
   onActivate: (name: string) => Promise<void>;
   onCooldown: (name: string) => Promise<void>;
   onClearCooldown: (name: string) => Promise<void>;
+  onAddAccount: () => void;
   rotating: boolean;
+  isAdding: boolean;
 }
 
 function formatTimeRemaining(until: number | null): string {
@@ -82,7 +85,9 @@ export function AccountPoolCard({
   onActivate,
   onCooldown,
   onClearCooldown,
+  onAddAccount,
   rotating,
+  isAdding,
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
 
@@ -111,6 +116,13 @@ export function AccountPoolCard({
           <p className="text-xs text-muted-foreground mt-1">
             Add Google accounts to enable multi-account rotation
           </p>
+          <Button 
+            onClick={onAddAccount} 
+            disabled={isAdding}
+            className="mt-4 bg-[#4285f4] hover:bg-[#3367d6] text-white"
+          >
+            {isAdding ? "Connecting..." : "Add Google Account"}
+          </Button>
         </CardContent>
       </Card>
     );
@@ -125,6 +137,16 @@ export function AccountPoolCard({
             Account Pool
           </CardTitle>
           <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onAddAccount}
+              disabled={isAdding}
+              className="h-8 bg-[#4285f4] hover:bg-[#3367d6] text-white border-0"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Account
+            </Button>
             <Badge variant="outline" className="text-xs">
               {pool.availableAccounts}/{pool.totalAccounts} available
             </Badge>

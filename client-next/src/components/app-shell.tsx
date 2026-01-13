@@ -25,11 +25,11 @@ function CrimeSceneTape() {
       className="fixed top-6 -left-20 z-50 rotate-[-35deg] origin-center cursor-pointer hover:opacity-90 transition-opacity"
       style={{ width: '400px' }}
     >
-      <div className="bg-yellow-400 dark:bg-yellow-500 border-y-2 border-black py-1.5 overflow-hidden shadow-lg">
+      <div className="bg-yellow-400 dark:bg-yellow-500 border-y-2 border-black py-2 overflow-hidden shadow-lg">
         <div 
-          className="whitespace-nowrap font-bold text-[10px] uppercase tracking-wider text-black"
+          className="whitespace-nowrap font-extrabold text-xs uppercase tracking-widest text-black"
           style={{
-            animation: 'crime-tape-scroll 15s linear infinite',
+            animation: 'crime-tape-scroll 8s linear infinite',
           }}
         >
           {repeatedContent}
