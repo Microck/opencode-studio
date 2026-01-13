@@ -398,7 +398,7 @@ export default function UsagePage() {
                     dataKey="date" 
                     tickFormatter={(v) => {
                       const date = new Date(v || "");
-                      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }}
                     fontSize={9}
                     tickLine={false}
@@ -424,7 +424,7 @@ export default function UsagePage() {
                           const costs = calculateDetailedCost(hovered, inputTokens, outputTokens);
                           const tooltip = barTooltipRef.current;
                           tooltip.style.opacity = '1';
-                          tooltip.querySelector('[data-bar-date]')!.textContent = new Date(label || "").toLocaleDateString(undefined, { dateStyle: 'medium' });
+                          tooltip.querySelector('[data-bar-date]')!.textContent = new Date(label || "").toLocaleDateString('en-US', { dateStyle: 'medium' });
                           tooltip.querySelector('[data-bar-color]')!.setAttribute('style', `background-color: ${entry.color}`);
                           tooltip.querySelector('[data-bar-model]')!.textContent = hovered;
                           tooltip.querySelector('[data-bar-input]')!.textContent = formatCurrency(costs.inputCost);
@@ -555,7 +555,7 @@ export default function UsagePage() {
 
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between bg-muted/10 border-b py-3 px-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
               Top Projects
@@ -589,7 +589,7 @@ export default function UsagePage() {
         </Card>
 
         <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between bg-muted/10 border-b py-3 px-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-primary" />
               Model Performance Analysis

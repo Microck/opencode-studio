@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
+import { PresetsManager } from "@/components/presets-manager";
 import type { MCPConfig } from "@/types";
 
 export default function MCPPage() {
@@ -99,7 +100,10 @@ export default function MCPPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">MCP Servers</h1>
-        <AddMCPDialog onAdd={handleAdd} />
+        <div className="flex gap-2">
+          <PresetsManager />
+          <AddMCPDialog onAdd={handleAdd} />
+        </div>
       </div>
 
       {mcpEntries.length > 0 && (

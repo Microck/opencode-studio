@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
+import { PresetsManager } from "@/components/presets-manager";
 
 export default function PluginsPage() {
   const { plugins, loading, refreshData, togglePlugin } = useApp();
@@ -80,8 +81,9 @@ export default function PluginsPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Plugins</h1>
         <div className="flex gap-2">
+          <PresetsManager />
           <BulkImportDialog 
-            type="plugins" 
+            type="plugins"
             existingNames={plugins.map(p => p.name)} 
             onSuccess={refreshData} 
           />

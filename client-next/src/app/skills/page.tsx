@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { deleteSkill } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
+import { PresetsManager } from "@/components/presets-manager";
 
 export default function SkillsPage() {
   const { skills, loading, refreshData, toggleSkill } = useApp();
@@ -73,8 +74,9 @@ export default function SkillsPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Skills</h1>
         <div className="flex gap-2">
+          <PresetsManager />
           <BulkImportDialog 
-            type="skills" 
+            type="skills"
             existingNames={skills.map(s => s.name)} 
             onSuccess={refreshData} 
           />
