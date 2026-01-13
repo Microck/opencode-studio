@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-01-13
+
+### Added
+- **Presets**: New feature to save and apply groups of Skills, Plugins, and MCPs.
+  - **Presets Manager**: Access from Skills, Plugins, or MCP tabs.
+  - **Partial Selection**: Choose exactly which items to include in a preset.
+  - **Modes**: Apply presets in "Exclusive" (disable others) or "Additive" (keep others) mode.
+- **Toggle API**: Added missing endpoints for toggling Skills and Plugins.
+
+### Changed
+- **Auth UI**: Refined palette (standardized colors) and descriptions.
+- **Usage UI**: Fixed timeline locale, header alignment, and bottom spacing.
+- **Commands**: Updated Edit icon to standard Pencil.
+- **React Grab**: Hidden by default in production, toggle visibility with `F1`.
+
 ## [1.2.2] - 2026-01-13
 
 ### Added
