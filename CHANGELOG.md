@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-01-13
+
+### Changed
+- **Icons**: Updated application favicon and icons to new branding.
+
 ## [1.3.0] - 2026-01-13
 
 ### Added
