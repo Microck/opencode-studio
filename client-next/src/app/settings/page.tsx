@@ -65,7 +65,7 @@ export default function SettingsPage() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     general: true,
     permissions: false,
-    agents: false,
+    agent: false,
     keybinds: false,
     tui: false,
     path: false,
@@ -85,8 +85,9 @@ export default function SettingsPage() {
     try {
       await saveConfig({ ...config, ...updates });
       toast.success("Settings saved");
-    } catch {
-      toast.error("Failed to save settings");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to save settings: ${msg}`);
     }
   };
 
@@ -98,8 +99,9 @@ export default function SettingsPage() {
       await refreshData();
       toast.success(manualPath ? "Config path updated" : "Reset to auto-detect");
       setManualPath("");
-    } catch {
-      toast.error("Failed to set config path");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to set config path: ${msg}`);
     }
   };
 
@@ -110,8 +112,9 @@ export default function SettingsPage() {
       setPathsInfo(newPaths);
       await refreshData();
       toast.success("Reset to auto-detect");
-    } catch {
-      toast.error("Failed to reset path");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to reset path: ${msg}`);
     }
   };
 
@@ -128,8 +131,9 @@ export default function SettingsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Backup downloaded");
-    } catch {
-      toast.error("Failed to create backup");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to create backup: ${msg}`);
     }
   };
 
@@ -142,15 +146,16 @@ export default function SettingsPage() {
       const backup = JSON.parse(content) as BackupData;
       
       if (!backup.version || backup.version !== 1) {
-        toast.error("Invalid backup file format");
+        toast.error("Invalid backup file format (expected version 1)");
         return;
       }
 
       await restoreBackup(backup);
       await refreshData();
       toast.success("Backup restored successfully");
-    } catch {
-      toast.error("Failed to restore backup");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to restore backup: ${msg}`);
     }
     
     if (fileInputRef.current) {
@@ -304,20 +309,26 @@ export default function SettingsPage() {
           </CollapsibleTrigger>
           <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-4 pt-0">
-              {(["edit", "bash", "skill", "webfetch", "doom_loop", "external_directory"] as const).map((perm) => (
+              {(["read", "edit", "glob", "grep", "list", "bash", "task", "skill", "lsp", "webfetch", "external_directory", "doom_loop"] as const).map((perm) => (
                 <div key={perm} className="flex items-center justify-between p-4 bg-background rounded-lg">
                   <div>
                     <Label className="capitalize">{perm.replace("_", " ")}</Label>
                     <p className="text-sm text-muted-foreground">
+                      {perm === "read" && "Allow reading files"}
                       {perm === "edit" && "Allow editing files"}
+                      {perm === "glob" && "Allow finding files with patterns"}
+                      {perm === "grep" && "Allow searching file contents"}
+                      {perm === "list" && "Allow listing directory contents"}
                       {perm === "bash" && "Allow running shell commands"}
+                      {perm === "task" && "Allow creating sub-agent tasks"}
                       {perm === "skill" && "Allow using skills"}
+                      {perm === "lsp" && "Allow LSP operations"}
                       {perm === "webfetch" && "Allow fetching web content"}
-                      {perm === "doom_loop" && "Allow repeated automated actions"}
                       {perm === "external_directory" && "Allow accessing external directories"}
+                      {perm === "doom_loop" && "Allow repeated automated actions"}
                     </p>
                   </div>
-                  <Select value={getPermissionValue(perm)} onValueChange={(v) => setPermission(perm, v as PermissionValue)}>
+                  <Select value={getPermissionValue(perm as any)} onValueChange={(v) => setPermission(perm as any, v as PermissionValue)}>
                     <SelectTrigger className="w-28">
                       <SelectValue />
                     </SelectTrigger>
@@ -334,7 +345,7 @@ export default function SettingsPage() {
         </Card>
       </Collapsible>
 
-      <Collapsible open={openSections.agents} onOpenChange={() => toggleSection("agents")}>
+      <Collapsible open={openSections.agent} onOpenChange={() => toggleSection("agent")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -343,7 +354,7 @@ export default function SettingsPage() {
                   <Bot className="h-5 w-5" />
                   <CardTitle>Agents</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.agents ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.agent ? "rotate-180" : ""}`} />
               </div>
               <CardDescription>Configure individual agent behavior</CardDescription>
             </CardHeader>
@@ -355,11 +366,11 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium capitalize">{agent}</Label>
                     <Switch
-                      checked={!config?.agents?.[agent]?.disable}
+                      checked={!config?.agent?.[agent]?.disable}
                       onCheckedChange={(v) => updateConfig({
-                        agents: {
-                          ...config?.agents,
-                          [agent]: { ...config?.agents?.[agent], disable: !v },
+                        agent: {
+                          ...config?.agent,
+                          [agent]: { ...config?.agent?.[agent], disable: !v },
                         },
                       })}
                     />
@@ -368,11 +379,11 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">Model</Label>
                       <Input
-                        value={config?.agents?.[agent]?.model || ""}
+                        value={config?.agent?.[agent]?.model || ""}
                         onChange={(e) => updateConfig({
-                          agents: {
-                            ...config?.agents,
-                            [agent]: { ...config?.agents?.[agent], model: e.target.value || undefined },
+                          agent: {
+                            ...config?.agent,
+                            [agent]: { ...config?.agent?.[agent], model: e.target.value || undefined },
                           },
                         })}
                         placeholder="Default"
@@ -385,11 +396,11 @@ export default function SettingsPage() {
                         step="0.1"
                         min="0"
                         max="2"
-                        value={config?.agents?.[agent]?.temperature ?? ""}
+                        value={config?.agent?.[agent]?.temperature ?? ""}
                         onChange={(e) => updateConfig({
-                          agents: {
-                            ...config?.agents,
-                            [agent]: { ...config?.agents?.[agent], temperature: e.target.value ? parseFloat(e.target.value) : undefined },
+                          agent: {
+                            ...config?.agent,
+                            [agent]: { ...config?.agent?.[agent], temperature: e.target.value ? parseFloat(e.target.value) : undefined },
                           },
                         })}
                         placeholder="0.7"
@@ -399,11 +410,11 @@ export default function SettingsPage() {
                       <Label className="text-xs text-muted-foreground">Color</Label>
                       <Input
                         type="color"
-                        value={config?.agents?.[agent]?.color || "#888888"}
+                        value={config?.agent?.[agent]?.color || "#888888"}
                         onChange={(e) => updateConfig({
-                          agents: {
-                            ...config?.agents,
-                            [agent]: { ...config?.agents?.[agent], color: e.target.value },
+                          agent: {
+                            ...config?.agent,
+                            [agent]: { ...config?.agent?.[agent], color: e.target.value },
                           },
                         })}
                         className="h-9 p-1"
@@ -486,7 +497,7 @@ export default function SettingsPage() {
                   <Select
                     value={config?.tui?.diff_style || "auto"}
                     onValueChange={(v) => updateConfig({
-                      tui: { ...config?.tui, diff_style: v as "auto" | "stacked" | "inline" },
+                      tui: { ...config?.tui, diff_style: v as "auto" | "stacked" },
                     })}
                   >
                     <SelectTrigger>
@@ -495,7 +506,6 @@ export default function SettingsPage() {
                     <SelectContent>
                       <SelectItem value="auto">auto</SelectItem>
                       <SelectItem value="stacked">stacked</SelectItem>
-                      <SelectItem value="inline">inline</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -41,8 +41,9 @@ export default function MCPPage() {
     try {
       await toggleMCP(key);
       toast.success(`${key} ${config?.mcp?.[key]?.enabled ? "disabled" : "enabled"}`);
-    } catch {
-      toast.error("Failed to toggle server");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to toggle server: ${msg}`);
     }
   };
 
@@ -51,23 +52,34 @@ export default function MCPPage() {
     try {
       await deleteMCP(deleteTarget);
       toast.success(`${deleteTarget} deleted`);
-    } catch {
-      toast.error("Failed to delete server");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to delete server: ${msg}`);
     } finally {
       setDeleteTarget(null);
     }
   };
 
   const handleAdd = async (name: string, mcpConfig: Parameters<typeof addMCP>[1]) => {
-    await addMCP(name, mcpConfig);
-    toast.success(`${name} added`);
+    try {
+      await addMCP(name, mcpConfig);
+      toast.success(`${name} added`);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to add server: ${msg}`);
+    }
   };
 
   const handleEdit = async (key: string) => {
     const mcpConfig = config?.mcp?.[key];
     if (!mcpConfig) return;
-    await updateMCP(key, mcpConfig);
-    toast.success(`${key} updated`);
+    try {
+      await updateMCP(key, mcpConfig);
+      toast.success(`${key} updated`);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to update server: ${msg}`);
+    }
   };
 
   if (loading) {

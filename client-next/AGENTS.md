@@ -8,19 +8,9 @@ React 19 + Next.js 16 App Router frontend with shadcn/ui components.
 
 ```
 src/
-├── app/           # Pages (App Router)
-│   ├── mcp/       # MCP server management (default)
-│   ├── skills/    # Skill editor
-│   ├── plugins/   # Plugin manager
-│   ├── models/    # Model config
-│   ├── commands/  # Command browser
-│   ├── editor/    # Editor settings
-│   ├── auth/      # OAuth/API credentials
-│   ├── settings/  # Advanced config
-│   ├── config/    # Raw JSON editor
-│   └── quickstart/# Setup wizard
+├── app/           # Pages (App Router) - See app/AGENTS.md
 ├── components/    # See components/AGENTS.md
-├── lib/
+├── lib/           # Core Logic - See lib/AGENTS.md
 │   ├── api.ts     # axios client → Express backend
 │   ├── context.tsx# Global state (AppProvider)
 │   └── utils.ts   # cn() helper

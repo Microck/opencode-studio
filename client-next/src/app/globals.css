@@ -100,7 +100,7 @@
     opacity: 1;
   }
   100% {
-    transform: translateY(-180px) scale(1);
+    transform: translateY(-190px) scale(1);
     opacity: 1;
   }
 }
@@ -111,8 +111,17 @@
     opacity: 1;
   }
   100% {
-    transform: translateY(-180px) scale(1);
+    transform: translateY(-190px) scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes crime-tape-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
   }
 }
 

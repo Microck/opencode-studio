@@ -184,7 +184,9 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
           await savePlugin(pluginName, item.result!.content || "");
         }
         successCount++;
-      } catch {
+      } catch (err: any) {
+        const msg = err.response?.data?.error || err.message || "Unknown error";
+        console.error(`Failed to import ${item.result?.name}:`, msg);
         failCount++;
       }
     }

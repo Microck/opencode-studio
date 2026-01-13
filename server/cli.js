@@ -40,16 +40,17 @@ if (protocolArg) {
                 break;
 
             case 'install-mcp':
-                // Queue MCP server installation
-                if (params.cmd || params.name) {
+                // Security: Do NOT accept 'cmd' or 'env' from deep links to prevent RCE.
+                // Only allow the name to be passed, user must configure the rest manually.
+                if (params.name) {
                     pendingAction = {
                         type: 'install-mcp',
-                        name: params.name || 'MCP Server',
-                        command: params.cmd ? decodeURIComponent(params.cmd) : null,
-                        env: params.env ? JSON.parse(decodeURIComponent(params.env)) : null,
+                        name: params.name,
+                        // command: params.cmd ? decodeURIComponent(params.cmd) : null, // DISABLED FOR SECURITY
+                        // env: params.env ? JSON.parse(decodeURIComponent(params.env)) : null, // DISABLED FOR SECURITY
                         timestamp: Date.now(),
                     };
-                    console.log(`Queued MCP install: ${pendingAction.name}`);
+                    console.log(`Queued MCP install (name only): ${pendingAction.name}`);
                 }
                 break;
 

@@ -480,8 +480,9 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       resetForm();
       setOpen(false);
       onSuccess();
-    } catch {
-      setError("Failed to create plugin");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Failed to create plugin";
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -57,8 +57,15 @@ import {
   deleteAuthProfile,
   renameAuthProfile,
   setActiveGooglePlugin,
+  startGoogleOAuth,
+  getGoogleOAuthStatus,
+  getAccountPool,
+  rotateAccount,
+  markAccountCooldown,
+  clearAccountCooldown,
 } from "@/lib/api";
-import type { AuthCredential, AuthProfilesInfo } from "@/types";
+import type { AuthCredential, AuthProfilesInfo, AccountPool, QuotaInfo } from "@/types";
+import { AccountPoolCard } from "@/components/account-pool-card";
 
 const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
 const ANTIGRAVITY_AUTH_PLUGIN = "opencode-google-antigravity-auth";
@@ -84,6 +91,7 @@ export default function AuthPage() {
   const [logoutTarget, setLogoutTarget] = useState<AuthCredential | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [addingPlugin, setAddingPlugin] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   
   const [profiles, setProfiles] = useState<AuthProfilesInfo>({});
   const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
@@ -96,19 +104,29 @@ export default function AuthPage() {
   const [installedGooglePlugins, setInstalledGooglePlugins] = useState<('gemini' | 'antigravity')[]>([]);
   const [activeGooglePlugin, setActiveGooglePluginState] = useState<'gemini' | 'antigravity' | null>(null);
   const [switchingPlugin, setSwitchingPlugin] = useState(false);
+  const [googleOAuthLoading, setGoogleOAuthLoading] = useState(false);
 
-  const loadData = async (silent = false) => {
+  const [pool, setPool] = useState<AccountPool | null>(null);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [rotating, setRotating] = useState(false);
+
+const loadData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [authInfo, profilesData] = await Promise.all([
+      const [authInfo, profilesData, poolData] = await Promise.all([
         getAuthInfo(),
         getAuthProfiles(),
+        getAccountPool('google').catch(() => null),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
       setInstalledGooglePlugins(authInfo.installedGooglePlugins || []);
       setActiveGooglePluginState(authInfo.activeGooglePlugin || null);
       setProfiles(profilesData || {});
+      if (poolData) {
+        setPool(poolData.pool);
+        setQuota(poolData.quota);
+      }
     } catch {
       if (!silent) toast.error("Failed to load auth info");
     } finally {
@@ -118,10 +136,6 @@ export default function AuthPage() {
 
   useEffect(() => {
     loadData();
-    
-    // Poll for changes every 3 seconds to detect terminal login
-    const interval = setInterval(() => loadData(true), 3000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleLogin = async (providerId: string = "") => {
@@ -132,10 +146,64 @@ export default function AuthPage() {
       const result = await authLogin(pid);
       toast.success(result.message);
       toast.info(result.note, { duration: 10000 });
+      if (result.command) {
+        toast.info(`Command: ${result.command}`, { duration: 30000 });
+      }
     } catch {
       toast.error("Failed to open terminal");
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleVerifyLogin = async () => {
+    try {
+      setVerifying(true);
+      await loadData(true);
+      toast.success("Auth status refreshed");
+    } catch {
+      toast.error("Failed to verify login");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setGoogleOAuthLoading(true);
+      await startGoogleOAuth();
+      toast.info("Browser opened for Google login...", { duration: 5000 });
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getGoogleOAuthStatus();
+          if (status.status === 'success') {
+            clearInterval(pollInterval);
+            setGoogleOAuthLoading(false);
+            toast.success(`Logged in as ${status.email || 'Google User'}`);
+            await loadData();
+          } else if (status.status === 'error') {
+            clearInterval(pollInterval);
+            setGoogleOAuthLoading(false);
+            toast.error(status.error || 'Login failed');
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setGoogleOAuthLoading(false);
+        }
+      }, 2000);
+      
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (googleOAuthLoading) {
+          setGoogleOAuthLoading(false);
+          toast.error("Login timed out");
+        }
+      }, 120000);
+      
+    } catch {
+      setGoogleOAuthLoading(false);
+      toast.error("Failed to start Google login");
     }
   };
 
@@ -145,8 +213,9 @@ export default function AuthPage() {
     try {
       await authLogout(logoutTarget.id);
       loadData();
-    } catch {
-      toast.error("Failed to logout");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to logout: ${msg}`);
     } finally {
       setLogoutTarget(null);
     }
@@ -157,8 +226,9 @@ export default function AuthPage() {
       await deleteAuthProfile(providerId, profileName);
       toast.success(`Logged out from ${profileName}`);
       loadData();
-    } catch {
-      toast.error("Failed to logout from profile");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to logout from profile: ${msg}`);
     }
   };
 
@@ -172,8 +242,9 @@ export default function AuthPage() {
       } else {
         toast.info("Plugin already in config");
       }
-    } catch {
-      toast.error("Failed to add plugin");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to add plugin: ${msg}`);
     } finally {
       setAddingPlugin(null);
     }
@@ -186,8 +257,9 @@ export default function AuthPage() {
       setActiveGooglePluginState(plugin);
       toast.success(`Switched to ${plugin === 'gemini' ? 'Gemini Auth' : 'Antigravity Auth'}`);
       await loadData();
-    } catch {
-      toast.error("Failed to switch plugin");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to switch plugin: ${msg}`);
     } finally {
       setSwitchingPlugin(false);
     }
@@ -199,8 +271,9 @@ export default function AuthPage() {
       const result = await saveAuthProfile(provider);
       toast.success(`Saved as ${result.name}`);
       loadData();
-    } catch {
-      toast.error("Failed to save profile");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to save profile: ${msg}`);
     } finally {
       setSavingProfile(null);
     }
@@ -212,8 +285,9 @@ export default function AuthPage() {
       await activateAuthProfile(provider, name);
       toast.success(`Switched to ${name}`);
       loadData();
-    } catch {
-      toast.error("Failed to switch profile");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to switch profile: ${msg}`);
     } finally {
       setActivatingProfile(null);
     }
@@ -225,8 +299,9 @@ export default function AuthPage() {
       await deleteAuthProfile(deleteTarget.provider, deleteTarget.name);
       toast.success(`Deleted ${deleteTarget.name}`);
       loadData();
-    } catch {
-      toast.error("Failed to delete profile");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to delete profile: ${msg}`);
     } finally {
       setDeleteTarget(null);
     }
@@ -238,16 +313,64 @@ export default function AuthPage() {
       const result = await renameAuthProfile(renameTarget.provider, renameTarget.name, newName.trim());
       toast.success(`Renamed to ${result.name}`);
       loadData();
-    } catch {
-      toast.error("Failed to rename profile");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to rename profile: ${msg}`);
     } finally {
       setRenameTarget(null);
       setNewName("");
     }
   };
 
-  const toggleProfileExpansion = (provider: string) => {
+const toggleProfileExpansion = (provider: string) => {
     setExpandedProfiles(prev => ({ ...prev, [provider]: !prev[provider] }));
+  };
+
+  const handlePoolRotate = async () => {
+    try {
+      setRotating(true);
+      const result = await rotateAccount('google');
+      toast.success(`Switched from ${result.previousAccount || 'none'} to ${result.newAccount}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "No available accounts";
+      toast.error(`Failed to rotate: ${msg}`);
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const handlePoolActivate = async (name: string) => {
+    try {
+      await activateAuthProfile('google', name);
+      toast.success(`Activated ${name}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to activate: ${msg}`);
+    }
+  };
+
+  const handlePoolCooldown = async (name: string) => {
+    try {
+      await markAccountCooldown(name, 'google', 3600000);
+      toast.success(`${name} marked as cooldown for 1 hour`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to set cooldown: ${msg}`);
+    }
+  };
+
+  const handlePoolClearCooldown = async (name: string) => {
+    try {
+      await clearAccountCooldown(name, 'google');
+      toast.success(`${name} cooldown cleared`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to clear cooldown: ${msg}`);
+    }
   };
 
   if (loading) {
@@ -282,14 +405,33 @@ export default function AuthPage() {
             Add Provider
           </CardTitle>
           <CardDescription>
-            Opens a terminal to authenticate with OpenCode
+            Login with Google directly, or open terminal for other providers.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button onClick={() => handleLogin()} disabled={loginLoading}>
-            {loginLoading ? "Opening..." : "Open Terminal"}
-            <Terminal className="h-4 w-4 ml-2" />
+        <CardContent className="space-y-3">
+          <Button 
+            onClick={handleGoogleLogin} 
+            disabled={googleOAuthLoading}
+            className="w-full bg-[#4285f4] hover:bg-[#3367d6] text-white"
+          >
+            <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            {googleOAuthLoading ? "Logging in..." : "Login with Google"}
           </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleLogin()} disabled={loginLoading} className="flex-1">
+              {loginLoading ? "Opening..." : "Open Terminal"}
+              <Terminal className="h-4 w-4 ml-2" />
+            </Button>
+            <Button variant="outline" onClick={handleVerifyLogin} disabled={verifying}>
+              {verifying ? "Checking..." : "Verify"}
+              <Check className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -350,7 +492,19 @@ export default function AuthPage() {
               </Button>
             </div>
           </CardContent>
-        </Card>
+</Card>
+      )}
+
+      {pool && quota && pool.totalAccounts > 0 && (
+        <AccountPoolCard
+          pool={pool}
+          quota={quota}
+          onRotate={handlePoolRotate}
+          onActivate={handlePoolActivate}
+          onCooldown={handlePoolCooldown}
+          onClearCooldown={handlePoolClearCooldown}
+          rotating={rotating}
+        />
       )}
 
       {installedGooglePlugins.length < 2 && (

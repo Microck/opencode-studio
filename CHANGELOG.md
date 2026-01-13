@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - 2026-01-13
+
+### Added
+- **Account Pool**: Manage multiple Google accounts with status tracking (Active, Ready, Cooldown).
+- **Quota Visibility**: Real-time progress bar showing daily quota usage and reset time.
+- **Rotation**: Manual rotation button to switch accounts when rate-limited.
+- **Landing Page**: Added "Crime Scene" tape to indicate work-in-progress status.
+
+### Changed
+- **Logo Animation**: Adjusted logo entrance position (moved up 10px).
+
 ## [1.0.11] - 2026-01-05
 
 ### Added

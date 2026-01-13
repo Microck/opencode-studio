@@ -77,15 +77,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // We are connected because the requests succeeded
       setConnected(true);
     } catch (err: any) {
-      // If the error is a 404, it means the server is up but opencode.json is missing
-      if (err.response?.status === 404) {
-        setError('OpenCode configuration not found. Please run "opencode --version" in your terminal to initialize it.');
-        setConfig(null);
-        setConnected(true); // The server IS connected, just has no data
-      } else {
-        setError('Failed to load data from backend');
-        setConnected(false);
+      let errorMessage = 'Failed to load data from backend';
+      
+      if (err.code === 'ERR_NETWORK') {
+        errorMessage = 'Backend server is unreachable. Ensure "npm start" is running.';
+      } else if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 404) {
+          errorMessage = 'OpenCode configuration not found. Please run "opencode --version" in your terminal to initialize it.';
+          setConfig(null);
+          setConnected(true);
+        } else if (status === 500) {
+          errorMessage = `Server Error (500): ${data?.error || data?.message || 'Check backend logs'}`;
+        } else if (status === 403) {
+          errorMessage = 'Access Denied (403): Check backend CORS or permission settings.';
+        } else {
+          errorMessage = `HTTP Error ${status}: ${data?.error || data?.message || 'Unknown server error'}`;
+        }
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
       }
+
+      setError(errorMessage);
+      setConnected(err.response ? true : false);
       console.error(err);
     } finally {
       setLoading(false);
@@ -120,14 +136,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           if (connected) {
             setConnected(false);
-            setError('Backend disconnected');
+            setError('Backend disconnected. Attempting to reconnect...');
             checkedPendingRef.current = false;
           }
         }
       } catch {
         if (connected) {
           setConnected(false);
-          setError('Backend disconnected');
+          setError('Backend connection lost. Check if the server is still running.');
         }
       }
     };

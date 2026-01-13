@@ -13,6 +13,32 @@ import { useEffect, useState } from "react";
 const FIRST_LOAD_KEY = "opencode-studio-loaded";
 const LAUNCH_ATTEMPT_KEY = "opencode-studio-launch-attempt";
 
+function CrimeSceneTape() {
+  const tapeContent = "WORK IN PROGRESS • REPORT ISSUES ON GITHUB • WORK IN PROGRESS • REPORT ISSUES ON GITHUB • ";
+  const repeatedContent = tapeContent.repeat(8);
+  
+  return (
+    <a
+      href="https://github.com/Microck/opencode-studio/issues"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed top-6 -left-20 z-50 rotate-[-35deg] origin-center cursor-pointer hover:opacity-90 transition-opacity"
+      style={{ width: '400px' }}
+    >
+      <div className="bg-yellow-400 dark:bg-yellow-500 border-y-2 border-black py-1.5 overflow-hidden shadow-lg">
+        <div 
+          className="whitespace-nowrap font-bold text-[10px] uppercase tracking-wider text-black"
+          style={{
+            animation: 'crime-tape-scroll 15s linear infinite',
+          }}
+        >
+          {repeatedContent}
+        </div>
+      </div>
+    </a>
+  );
+}
+
 function useIsFirstLoad() {
   const [isFirst, setIsFirst] = useState(true);
 
@@ -60,14 +86,15 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
   const animClass = isFirstLoad ? "animate-logo-entrance" : "animate-logo-entrance-fast";
   const contentClass = isFirstLoad ? "animate-content-appear" : "animate-content-appear-fast";
 
-  return (
+return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden">
+      <CrimeSceneTape />
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
       
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className={`${animClass} mt-[-10px]`}>
+        <div className={`${animClass} mt-[-20px]`}>
           <Logo className="w-24 h-24" />
         </div>
       </div>
@@ -106,25 +133,12 @@ function DisconnectedLanding({ isFirstLoad }: { isFirstLoad: boolean }) {
                 </code>
               </div>
 
-              <div className="pt-2 border-t border-border/30">
+            <div className="pt-2 border-t border-border/30">
                 <p className="text-[10px] text-primary/70 font-semibold italic">
                   Important: Run <code className="bg-background px-1 rounded not-italic">opencode --version</code> once after install to initialize your configuration.
                 </p>
               </div>
             </div>
-
-            {hasAttempted && (
-              <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5 text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertCircle className="h-3 w-3 text-orange-500" />
-                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-tight">Troubleshooting</p>
-              </div>
-              <p className="text-[10px] text-orange-700/80 leading-snug">
-                Stuck in a loading loop? Make sure the server is running in your terminal and you have initialized opencode. 
-                Try clearing browser cache if the issue persists.
-              </p>
-              </div>
-            )}
           </div>
         </div>
 

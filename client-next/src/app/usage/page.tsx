@@ -8,6 +8,7 @@ import {
   TrendingUp, Filter, Users, Image as ImageIcon,
   BarChart3, PieChart as PieChartIcon, Activity
 } from "lucide-react";
+import { toast } from "sonner";
 import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -69,7 +70,9 @@ export default function UsagePage() {
   const [showAllModels, setShowAllModels] = useState(false);
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   const [timeRange, setTimeRange] = useState("30d");
-  const [hoveredModel, setHoveredModel] = useState<string | null>(null);
+  const hoveredModelRef = useRef<string | null>(null);
+  const barTooltipRef = useRef<HTMLDivElement>(null);
+  const pieTooltipRef = useRef<HTMLDivElement>(null);
   
   const { projectId, setProjectId } = useFilterStore();
 
@@ -114,7 +117,9 @@ export default function UsagePage() {
 
       enrichedStats.totalCost = enrichedStats.byModel.reduce((acc, m) => acc + m.cost, 0);
       setStats(enrichedStats);
-    } catch (e) {
+    } catch (e: any) {
+      const msg = e.response?.data?.error || e.message || "Unknown error";
+      toast.error(`Failed to fetch usage stats: ${msg}`);
       console.error(e);
     } finally {
       setLoading(false);
@@ -344,8 +349,48 @@ export default function UsagePage() {
               Usage Timeline
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
-            <div className="h-full w-full">
+<CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
+            <div 
+              className="h-full w-full relative"
+              onMouseMove={(e) => {
+                if (barTooltipRef.current) {
+                  barTooltipRef.current.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 12}px)`;
+                }
+              }}
+              onMouseLeave={() => {
+                if (barTooltipRef.current) {
+                  barTooltipRef.current.style.opacity = '0';
+                  barTooltipRef.current.style.pointerEvents = 'none';
+                }
+              }}
+            >
+              <div
+                ref={barTooltipRef}
+                className="fixed left-0 top-0 z-50 pointer-events-none rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20 will-change-transform transition-opacity duration-75"
+                style={{ opacity: 0 }}
+              >
+                <div className="flex flex-col gap-1">
+                  <span data-bar-date className="uppercase text-muted-foreground font-bold border-b pb-1 mb-1"></span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span data-bar-color className="w-2 h-2 rounded-full" />
+                    <span data-bar-model className="font-bold text-sm"></span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Input Cost</span>
+                      <span data-bar-input className="font-mono"></span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Output Cost</span>
+                      <span data-bar-output className="font-mono"></span>
+                    </div>
+                    <div className="flex justify-between gap-4 border-t pt-1 mt-0.5 font-bold">
+                      <span>Total Cost</span>
+                      <span data-bar-total className="text-primary"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats.byDay}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
@@ -370,53 +415,26 @@ export default function UsagePage() {
                   <Tooltip 
                     cursor={false}
                     content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        const targetModel = hoveredModel;
-                        const entry = targetModel ? payload.find((p: any) => p.name === targetModel) : null;
-
-                        if (targetModel && entry) {
-                           const inputTokens = entry.payload[`${targetModel}_input`] || 0;
-                           const outputTokens = entry.payload[`${targetModel}_output`] || 0;
-                           const costs = calculateDetailedCost(targetModel, inputTokens, outputTokens);
-                           
-                           return (
-                            <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
-                              <div className="flex flex-col gap-1">
-                                <span className="uppercase text-muted-foreground font-bold border-b pb-1 mb-1">{new Date(label || "").toLocaleString()}</span>
-                                <div className="flex items-center gap-2 mb-1">
-                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                   <span className="font-bold text-sm">{targetModel}</span>
-                                </div>
-                                <div className="flex flex-col gap-0.5">
-                                  <div className="flex justify-between gap-4">
-                                    <span className="text-muted-foreground">Input Cost</span>
-                                    <span className="font-mono">{formatCurrency(costs.inputCost)}</span>
-                                  </div>
-                                  <div className="flex justify-between gap-4">
-                                    <span className="text-muted-foreground">Output Cost</span>
-                                    <span className="font-mono">{formatCurrency(costs.outputCost)}</span>
-                                  </div>
-                                  <div className="flex justify-between gap-4 border-t pt-1 mt-0.5 font-bold">
-                                    <span>Total Cost</span>
-                                    <span className="text-primary">{formatCurrency(costs.total)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                           )
+                      const hovered = hoveredModelRef.current;
+                      if (barTooltipRef.current && active && payload && payload.length && hovered) {
+                        const entry = payload.find((p: any) => p.name === hovered);
+                        if (entry) {
+                          const inputTokens = entry.payload[`${hovered}_input`] || 0;
+                          const outputTokens = entry.payload[`${hovered}_output`] || 0;
+                          const costs = calculateDetailedCost(hovered, inputTokens, outputTokens);
+                          const tooltip = barTooltipRef.current;
+                          tooltip.style.opacity = '1';
+                          tooltip.querySelector('[data-bar-date]')!.textContent = new Date(label || "").toLocaleString();
+                          tooltip.querySelector('[data-bar-color]')!.setAttribute('style', `background-color: ${entry.color}`);
+                          tooltip.querySelector('[data-bar-model]')!.textContent = hovered;
+                          tooltip.querySelector('[data-bar-input]')!.textContent = formatCurrency(costs.inputCost);
+                          tooltip.querySelector('[data-bar-output]')!.textContent = formatCurrency(costs.outputCost);
+                          tooltip.querySelector('[data-bar-total]')!.textContent = formatCurrency(costs.total);
                         }
-
-                        return (
-                          <div className="rounded-lg border bg-background/95 p-3 shadow-2xl text-[10px] backdrop-blur-md border-primary/20">
-                            <span className="uppercase text-muted-foreground font-bold">{new Date(label || "").toLocaleString()}</span>
-                            <div className="mt-1 font-bold flex justify-between gap-4">
-                                <span>Total</span>
-                                <span className="text-primary">{formatCurrency(payload.reduce((acc: number, p: any) => acc + Number(p.value), 0))}</span>
-                            </div>
-                          </div>
-                        )
+                      } else if (barTooltipRef.current) {
+                        barTooltipRef.current.style.opacity = '0';
                       }
-                      return null
+                      return null;
                     }}
                   />
                   {modelIds.map((modelId, index) => (
@@ -426,11 +444,8 @@ export default function UsagePage() {
                       stackId="a"
                       fill={modelId === "Others" ? "#2e2e2e" : STACK_COLORS[index % STACK_COLORS.length]}
                       radius={[0, 0, 0, 0]}
-                      onMouseEnter={() => setHoveredModel(modelId)}
-                      onMouseLeave={() => setHoveredModel(null)}
-                      stroke={hoveredModel === modelId ? "hsl(var(--background))" : "none"}
-                      strokeWidth={hoveredModel === modelId ? 2 : 0}
-                      strokeOpacity={0.8}
+                      onMouseEnter={() => { hoveredModelRef.current = modelId; }}
+                      onMouseLeave={() => { hoveredModelRef.current = null; }}
                     />
                   ))}
                 </BarChart>
@@ -519,7 +534,29 @@ export default function UsagePage() {
             </Dialog>
           </CardHeader>
           <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
-            <div className="h-full w-full relative">
+            <div 
+              className="h-full w-full relative"
+              onMouseMove={(e) => {
+                if (pieTooltipRef.current) {
+                  pieTooltipRef.current.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 12}px)`;
+                }
+              }}
+              onMouseLeave={() => {
+                if (pieTooltipRef.current) {
+                  pieTooltipRef.current.style.opacity = '0';
+                }
+              }}
+            >
+              <div
+                ref={pieTooltipRef}
+                className="fixed left-0 top-0 z-50 pointer-events-none rounded-lg border bg-background/95 p-2 shadow-xl text-[10px] backdrop-blur-md border-primary/20 will-change-transform transition-opacity duration-75"
+                style={{ opacity: 0 }}
+              >
+                <div className="flex flex-col">
+                  <span data-pie-name className="font-bold truncate max-w-[150px]"></span>
+                  <span data-pie-value className="text-sm font-bold text-primary"></span>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -543,17 +580,17 @@ export default function UsagePage() {
                   <Tooltip 
                     isAnimationActive={false}
                     content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="rounded-lg border bg-background/95 p-2 shadow-xl text-[10px] backdrop-blur-md border-primary/20">
-                            <div className="flex flex-col">
-                              <span className="font-bold truncate max-w-[150px]">{payload[0].name}</span>
-                              <span className="text-sm font-bold text-primary">{formatCurrency(Number(payload[0].value))}</span>
-                            </div>
-                          </div>
-                        )
+                      if (pieTooltipRef.current && active && payload && payload.length) {
+                        const name = payload[0].name as string;
+                        const value = Number(payload[0].value);
+                        const tooltip = pieTooltipRef.current;
+                        tooltip.style.opacity = '1';
+                        tooltip.querySelector('[data-pie-name]')!.textContent = name;
+                        tooltip.querySelector('[data-pie-value]')!.textContent = formatCurrency(value);
+                      } else if (pieTooltipRef.current) {
+                        pieTooltipRef.current.style.opacity = '0';
                       }
-                      return null
+                      return null;
                     }}
                   />
                   <Legend 
@@ -561,16 +598,25 @@ export default function UsagePage() {
                     verticalAlign="middle" 
                     align="right"
                     wrapperStyle={{ fontSize: "11px", right: pieConfig.legendRight }}
-                    content={({ payload }) => (
-                      <ul className="space-y-2">
-                        {payload?.map((entry: any, index: number) => (
-                          <li key={`item-${index}`} className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                            <span className="truncate text-[10px] font-medium opacity-80" title={entry.value}>{entry.value}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    content={({ payload }) => {
+                      const sortedPayload = [...(payload || [])].sort((a: any, b: any) => {
+                        if (a.value === "Others") return 1;
+                        if (b.value === "Others") return -1;
+                        const aCost = pieData.find(p => p.name === a.value)?.cost || 0;
+                        const bCost = pieData.find(p => p.name === b.value)?.cost || 0;
+                        return bCost - aCost;
+                      });
+                      return (
+                        <ul className="space-y-2">
+                          {sortedPayload.map((entry: any, index: number) => (
+                            <li key={`item-${index}`} className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                              <span className="truncate text-[10px] font-medium opacity-80" title={entry.value}>{entry.value}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>

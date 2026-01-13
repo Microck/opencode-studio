@@ -226,7 +226,7 @@ export async function getAuthProviders(): Promise<AuthProvider[]> {
   return data;
 }
 
-export async function authLogin(provider: string): Promise<{ success: boolean; message: string; note: string }> {
+export async function authLogin(provider: string): Promise<{ success: boolean; message: string; note: string; command?: string }> {
   const { data } = await api.post('/auth/login', { provider });
   return data;
 }
@@ -315,6 +315,74 @@ export async function deleteAuthProfile(provider: string, name: string): Promise
 
 export async function renameAuthProfile(provider: string, name: string, newName: string): Promise<{ success: boolean; name: string }> {
   const { data } = await api.put(`/auth/profiles/${provider}/${name}`, { newName });
+  return data;
+}
+
+export interface GoogleOAuthStatus {
+  status: 'idle' | 'pending' | 'success' | 'error';
+  email?: string;
+  error?: string;
+}
+
+export async function startGoogleOAuth(): Promise<{ success: boolean; authUrl: string; message: string }> {
+  const { data } = await api.post('/auth/google/start');
+  return data;
+}
+
+export async function getGoogleOAuthStatus(): Promise<GoogleOAuthStatus> {
+  const { data } = await api.get('/auth/google/status');
+  return data;
+}
+
+export async function cancelGoogleOAuth(): Promise<{ success: boolean }> {
+  const { data } = await api.post('/auth/google/cancel');
+  return data;
+}
+
+import type { AccountPool, QuotaInfo, PoolRotationResult } from '@/types';
+
+export interface PoolResponse {
+  pool: AccountPool;
+  quota: QuotaInfo;
+}
+
+export async function getAccountPool(provider: string = 'google'): Promise<PoolResponse> {
+  const { data } = await api.get<PoolResponse>(`/auth/pool?provider=${provider}`);
+  return data;
+}
+
+export async function rotateAccount(provider: string = 'google'): Promise<PoolRotationResult> {
+  const { data } = await api.post<PoolRotationResult>('/auth/pool/rotate', { provider });
+  return data;
+}
+
+export async function markAccountCooldown(name: string, provider: string = 'google', duration: number = 3600000): Promise<{ success: boolean; cooldownUntil: number }> {
+  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/cooldown`, { provider, duration });
+  return data;
+}
+
+export async function clearAccountCooldown(name: string, provider: string = 'google'): Promise<{ success: boolean }> {
+  const { data } = await api.delete(`/auth/pool/${encodeURIComponent(name)}/cooldown?provider=${provider}`);
+  return data;
+}
+
+export async function incrementAccountUsage(name: string, provider: string = 'google'): Promise<{ success: boolean; usageCount: number }> {
+  const { data } = await api.post(`/auth/pool/${encodeURIComponent(name)}/usage`, { provider });
+  return data;
+}
+
+export async function updateAccountMetadata(name: string, provider: string = 'google', email?: string): Promise<{ success: boolean }> {
+  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/metadata`, { provider, email });
+  return data;
+}
+
+export async function getQuotaInfo(provider: string = 'google'): Promise<QuotaInfo> {
+  const { data } = await api.get<QuotaInfo>(`/auth/pool/quota?provider=${provider}`);
+  return data;
+}
+
+export async function setQuotaLimit(limit: number, provider: string = 'google'): Promise<{ success: boolean; dailyLimit: number }> {
+  const { data } = await api.post('/auth/pool/quota/limit', { provider, limit });
   return data;
 }
 

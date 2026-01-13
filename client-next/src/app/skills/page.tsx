@@ -35,8 +35,9 @@ export default function SkillsPage() {
       await toggleSkill(name);
       const skill = skills.find(s => s.name === name);
       toast.success(`${name} ${skill?.enabled ? "disabled" : "enabled"}`);
-    } catch {
-      toast.error("Failed to toggle skill");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to toggle skill: ${msg}`);
     }
   };
 
@@ -46,8 +47,9 @@ export default function SkillsPage() {
       await deleteSkill(name);
       toast.success(`${name} deleted`);
       refreshData();
-    } catch {
-      toast.error("Failed to delete skill");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to delete skill: ${msg}`);
     }
   };
 

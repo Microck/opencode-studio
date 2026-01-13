@@ -55,7 +55,7 @@ open http://localhost:3000
 - **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
 - **commands:** browse and manage custom slash commands
-- **auth:** view connected providers, login via oauth/api key, **multi-account support**, and **Gemini plugin detection**
+- **auth:** view connected providers, login via oauth/api key, **multi-account pool**, **quota tracking**, and **Gemini plugin detection**
 - **settings:** permissions, agents config, keybinds, tui settings, backup/restore
 - **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
 
@@ -125,9 +125,10 @@ flowchart LR
 ```
 /auth → view connected providers
       → [Open Terminal] launches `opencode auth login` for interactive auth
-      → save multiple accounts per provider (click "Save Current" after logging in)
+      → **account pool:** manage multiple Google accounts with status tracking
+      → **quota:** view remaining daily quota and reset time
+      → **rotation:** manually rotate active accounts or mark cooldowns
       → switch between accounts instantly by clicking the profile name
-      → rename/delete saved profiles
 ```
 
 #### settings

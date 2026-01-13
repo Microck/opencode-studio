@@ -214,8 +214,9 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
       resetForm();
       setOpen(false);
       onSuccess();
-    } catch {
-      setError("Failed to create skill");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Failed to create skill";
+      setError(msg);
     } finally {
       setLoading(false);
     }

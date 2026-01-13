@@ -24,12 +24,20 @@ export interface ModelAlias {
 export type PermissionValue = 'ask' | 'allow' | 'deny';
 
 export interface PermissionConfig {
+  read?: PermissionValue | { allow?: string[]; deny?: string[] };
   edit?: PermissionValue | { allow?: string[]; deny?: string[] };
+  glob?: PermissionValue | { allow?: string[]; deny?: string[] };
+  grep?: PermissionValue | { allow?: string[]; deny?: string[] };
+  list?: PermissionValue | { allow?: string[]; deny?: string[] };
   bash?: PermissionValue | { allow?: string[]; deny?: string[] };
+  task?: PermissionValue | { allow?: string[]; deny?: string[] };
   skill?: PermissionValue;
+  lsp?: PermissionValue;
+  todoread?: PermissionValue;
+  todowrite?: PermissionValue;
   webfetch?: PermissionValue | { allow?: string[]; deny?: string[] };
-  doom_loop?: PermissionValue;
   external_directory?: PermissionValue | { allow?: string[]; deny?: string[] };
+  doom_loop?: PermissionValue;
 }
 
 export interface AgentConfig {
@@ -112,9 +120,8 @@ export interface TUIConfig {
   scroll_speed?: number;
   scroll_acceleration?: {
     enabled?: boolean;
-    factor?: number;
   };
-  diff_style?: 'auto' | 'stacked' | 'inline';
+  diff_style?: 'auto' | 'stacked';
 }
 
 export interface KeybindsConfig {
@@ -210,7 +217,7 @@ export interface OpencodeConfig {
   snapshot?: boolean;
   mcp?: Record<string, MCPConfig>;
   permission?: PermissionConfig;
-  agents?: AgentsConfig;
+  agent?: AgentsConfig;
   tools?: Record<string, boolean>;
   tui?: TUIConfig;
   keybinds?: KeybindsConfig;
@@ -303,4 +310,47 @@ export interface AuthProfilesInfo {
     active: string | null;
     hasCurrentAuth: boolean;
   };
+}
+
+// Account Pool types for multi-account management
+export type AccountStatus = 'active' | 'ready' | 'cooldown' | 'expired';
+
+export interface AccountPoolEntry {
+  name: string;
+  email: string | null;
+  status: AccountStatus;
+  lastUsed: number;
+  usageCount: number;
+  cooldownUntil: number | null;
+  createdAt: number;
+}
+
+export interface AccountPool {
+  provider: string;
+  namespace: string;
+  accounts: AccountPoolEntry[];
+  activeAccount: string | null;
+  totalAccounts: number;
+  availableAccounts: number;
+}
+
+export interface QuotaInfo {
+  dailyLimit: number;
+  remaining: number;
+  used: number;
+  resetAt: string;
+  percentage: number;
+  byAccount: {
+    name: string;
+    email: string | null;
+    used: number;
+    limit: number;
+  }[];
+}
+
+export interface PoolRotationResult {
+  success: boolean;
+  previousAccount: string | null;
+  newAccount: string;
+  reason?: string;
 }

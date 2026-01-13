@@ -38,8 +38,9 @@ export default function PluginsPage() {
       await togglePlugin(name);
       const plugin = plugins.find(p => p.name === name);
       toast.success(`${name} ${plugin?.enabled ? "disabled" : "enabled"}`);
-    } catch {
-      toast.error("Failed to toggle plugin");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to toggle plugin: ${msg}`);
     }
   };
 
@@ -53,8 +54,9 @@ export default function PluginsPage() {
       }
       toast.success(`${name} deleted`);
       refreshData();
-    } catch {
-      toast.error("Failed to delete plugin");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to delete plugin: ${msg}`);
     }
   };
 

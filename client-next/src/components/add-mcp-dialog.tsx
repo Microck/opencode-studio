@@ -180,8 +180,9 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
       await onAdd(name, config);
       resetForm();
       setOpen(false);
-    } catch {
-      setError("Failed to add server");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Failed to add server";
+      setError(msg);
     } finally {
       setLoading(false);
     }
