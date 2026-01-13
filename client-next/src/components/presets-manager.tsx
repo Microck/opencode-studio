@@ -121,7 +121,7 @@ export function PresetsManager() {
             Presets
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-4xl max-h-[75vh] flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[65vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Presets Manager</DialogTitle>
             <DialogDescription>

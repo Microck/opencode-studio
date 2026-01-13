@@ -47,11 +47,26 @@ export function GrabToggle() {
       body:not(.react-grab-visible) [data-react-grab-toolbar-toggle],
       body:not(.react-grab-visible) [data-react-grab-toolbar-collapse] {
         display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
       }
       
       /* Hide the white container box */
-      body:not(.react-grab-visible) div:has([data-react-grab-toolbar-toggle]) {
+      /* Primary method using :has */
+      body:not(.react-grab-visible) div:has(> [data-react-grab-toolbar-collapse]) {
         display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      
+      /* Fallback method targeting likely classes */
+      body:not(.react-grab-visible) div[class*="contain-layout"][class*="bg-white"][class*="rounded-sm"] {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
       }
     `}</style>
   );
