@@ -22,6 +22,14 @@ export function GrabToggle() {
         const api = (window as any).__REACT_GRAB__;
         if (api) {
           api.toggle();
+          // Sync class for CSS hiding
+          if (api.isActive()) {
+            document.body.classList.add('react-grab-visible');
+          } else {
+            document.body.classList.remove('react-grab-visible');
+          }
+        } else {
+          document.body.classList.toggle('react-grab-visible');
         }
       }
     };
@@ -33,5 +41,20 @@ export function GrabToggle() {
     };
   }, []);
 
-  return null;
+  return (
+    <style jsx global>{`
+      /* Hide React Grab UI by default */
+      body:not(.react-grab-visible) [data-react-grab-toolbar-toggle],
+      body:not(.react-grab-visible) [data-react-grab-toolbar-collapse] {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      
+      /* Hide the white container box */
+      body:not(.react-grab-visible) div:has(> div > [data-react-grab-toolbar-toggle]) {
+        display: none !important;
+      }
+    `}</style>
+  );
 }
