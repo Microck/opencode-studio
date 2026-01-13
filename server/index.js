@@ -1660,51 +1660,55 @@ app.post('/api/presets/:id/apply', (req, res) => {
     const skillDir = path.join(configDir, 'skill');
     const pluginDir = path.join(configDir, 'plugin');
     
-    const targetSkills = new Set(preset.config.skills || []);
-    const targetPlugins = new Set(preset.config.plugins || []);
-    const targetMcps = new Set(preset.config.mcps || []);
-    
-    if (mode === 'exclusive') {
-        // Skills
-        const allSkills = [];
-        if (fs.existsSync(skillDir)) {
-            const dirents = fs.readdirSync(skillDir, { withFileTypes: true });
-            for (const dirent of dirents) {
-                if (dirent.isDirectory()) {
-                    if (fs.existsSync(path.join(skillDir, dirent.name, 'SKILL.md'))) {
-                        allSkills.push(dirent.name);
+    // Skills
+    if (preset.config.skills !== undefined && preset.config.skills !== null) {
+        const targetSkills = new Set(preset.config.skills);
+        if (mode === 'exclusive') {
+            const allSkills = [];
+            if (fs.existsSync(skillDir)) {
+                const dirents = fs.readdirSync(skillDir, { withFileTypes: true });
+                for (const dirent of dirents) {
+                    if (dirent.isDirectory()) {
+                        if (fs.existsSync(path.join(skillDir, dirent.name, 'SKILL.md'))) {
+                            allSkills.push(dirent.name);
+                        }
+                    } else if (dirent.name.endsWith('.md')) {
+                        allSkills.push(dirent.name.replace('.md', ''));
                     }
-                } else if (dirent.name.endsWith('.md')) {
-                    allSkills.push(dirent.name.replace('.md', ''));
                 }
             }
+            studio.disabledSkills = allSkills.filter(s => !targetSkills.has(s));
+        } else { // additive
+            studio.disabledSkills = (studio.disabledSkills || []).filter(s => !targetSkills.has(s));
         }
-        studio.disabledSkills = allSkills.filter(s => !targetSkills.has(s));
-        
-        // Plugins
-        const allPlugins = [...(config.plugin || [])];
-        if (fs.existsSync(pluginDir)) {
-            const files = fs.readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
-            allPlugins.push(...files.map(f => f.replace(/\.[^/.]+$/, "")));
+    }
+    
+    // Plugins
+    if (preset.config.plugins !== undefined && preset.config.plugins !== null) {
+        const targetPlugins = new Set(preset.config.plugins);
+        if (mode === 'exclusive') {
+            const allPlugins = [...(config.plugin || [])];
+            if (fs.existsSync(pluginDir)) {
+                const files = fs.readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+                allPlugins.push(...files.map(f => f.replace(/\.[^/.]+$/, "")));
+            }
+            const uniquePlugins = [...new Set(allPlugins)];
+            studio.disabledPlugins = uniquePlugins.filter(p => !targetPlugins.has(p));
+        } else { // additive
+            studio.disabledPlugins = (studio.disabledPlugins || []).filter(p => !targetPlugins.has(p));
         }
-        // Deduplicate
-        const uniquePlugins = [...new Set(allPlugins)];
-        studio.disabledPlugins = uniquePlugins.filter(p => !targetPlugins.has(p));
-        
-        // MCPs
+    }
+    
+    // MCPs
+    if (preset.config.mcps !== undefined && preset.config.mcps !== null) {
+        const targetMcps = new Set(preset.config.mcps);
         if (config.mcp) {
             for (const key in config.mcp) {
-                config.mcp[key].enabled = targetMcps.has(key);
-            }
-        }
-        
-    } else { // additive
-        studio.disabledSkills = (studio.disabledSkills || []).filter(s => !targetSkills.has(s));
-        studio.disabledPlugins = (studio.disabledPlugins || []).filter(p => !targetPlugins.has(p));
-        
-        if (config.mcp) {
-            for (const key of preset.config.mcps || []) {
-                if (config.mcp[key]) config.mcp[key].enabled = true;
+                if (mode === 'exclusive') {
+                    config.mcp[key].enabled = targetMcps.has(key);
+                } else { // additive
+                    if (targetMcps.has(key)) config.mcp[key].enabled = true;
+                }
             }
         }
     }

@@ -46,13 +46,11 @@ export function GrabToggle() {
       /* Hide React Grab UI by default */
       body:not(.react-grab-visible) [data-react-grab-toolbar-toggle],
       body:not(.react-grab-visible) [data-react-grab-toolbar-collapse] {
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
+        display: none !important;
       }
       
       /* Hide the white container box */
-      body:not(.react-grab-visible) div:has(> div > [data-react-grab-toolbar-toggle]) {
+      body:not(.react-grab-visible) div:has([data-react-grab-toolbar-toggle]) {
         display: none !important;
       }
     `}</style>

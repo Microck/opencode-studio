@@ -40,12 +40,20 @@ export function PresetsManager() {
   const [selectedPlugins, setSelectedPlugins] = useState<string[]>([]);
   const [selectedMcps, setSelectedMcps] = useState<string[]>([]);
 
+  const [includeSkills, setIncludeSkills] = useState(true);
+  const [includePlugins, setIncludePlugins] = useState(true);
+  const [includeMcps, setIncludeMcps] = useState(true);
+
   useEffect(() => {
     if (createOpen) {
       // Initialize with currently enabled items
       setSelectedSkills(skills.filter(s => s.enabled).map(s => s.name));
       setSelectedPlugins(plugins.filter(p => p.enabled).map(p => p.name));
       setSelectedMcps(config?.mcp ? Object.entries(config.mcp).filter(([_, c]) => c.enabled).map(([k]) => k) : []);
+      
+      setIncludeSkills(true);
+      setIncludePlugins(true);
+      setIncludeMcps(true);
     }
   }, [createOpen, skills, plugins, config]);
 
@@ -67,9 +75,9 @@ export function PresetsManager() {
     
     try {
       await savePreset(newName, newDesc, {
-        skills: selectedSkills,
-        plugins: selectedPlugins,
-        mcps: selectedMcps,
+        skills: includeSkills ? selectedSkills : undefined,
+        plugins: includePlugins ? selectedPlugins : undefined,
+        mcps: includeMcps ? selectedMcps : undefined,
         commands: []
       });
       toast.success("Preset created");
@@ -113,7 +121,7 @@ export function PresetsManager() {
             Presets
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Presets Manager</DialogTitle>
             <DialogDescription>
@@ -228,13 +236,18 @@ export function PresetsManager() {
                   </TabsList>
                   
                   <TabsContent value="skills" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+                      <Switch id="include-skills" checked={includeSkills} onCheckedChange={setIncludeSkills} />
+                      <Label htmlFor="include-skills" className="cursor-pointer font-medium">Include Skills in Preset</Label>
+                    </div>
                     {skills.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No skills found</p>}
                     {skills.map(skill => (
-                      <div key={skill.name} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                      <div key={skill.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includeSkills ? 'opacity-50' : ''}`}>
                         <Label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer">{skill.name}</Label>
                         <Switch 
                           id={`skill-${skill.name}`}
                           checked={selectedSkills.includes(skill.name)}
+                          disabled={!includeSkills}
                           onCheckedChange={(c) => {
                             if (c) setSelectedSkills([...selectedSkills, skill.name]);
                             else setSelectedSkills(selectedSkills.filter(s => s !== skill.name));
@@ -245,13 +258,18 @@ export function PresetsManager() {
                   </TabsContent>
                   
                   <TabsContent value="plugins" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+                      <Switch id="include-plugins" checked={includePlugins} onCheckedChange={setIncludePlugins} />
+                      <Label htmlFor="include-plugins" className="cursor-pointer font-medium">Include Plugins in Preset</Label>
+                    </div>
                     {plugins.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No plugins found</p>}
                     {plugins.map(plugin => (
-                      <div key={plugin.name} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                      <div key={plugin.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includePlugins ? 'opacity-50' : ''}`}>
                         <Label htmlFor={`plugin-${plugin.name}`} className="flex-1 cursor-pointer">{plugin.name}</Label>
                         <Switch 
                           id={`plugin-${plugin.name}`}
                           checked={selectedPlugins.includes(plugin.name)}
+                          disabled={!includePlugins}
                           onCheckedChange={(c) => {
                             if (c) setSelectedPlugins([...selectedPlugins, plugin.name]);
                             else setSelectedPlugins(selectedPlugins.filter(p => p !== plugin.name));
@@ -262,15 +280,20 @@ export function PresetsManager() {
                   </TabsContent>
                   
                   <TabsContent value="mcps" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+                      <Switch id="include-mcps" checked={includeMcps} onCheckedChange={setIncludeMcps} />
+                      <Label htmlFor="include-mcps" className="cursor-pointer font-medium">Include MCPs in Preset</Label>
+                    </div>
                     {!config?.mcp || Object.keys(config.mcp).length === 0 ? (
                       <p className="text-sm text-muted-foreground italic p-2">No MCP servers found</p>
                     ) : (
                       Object.keys(config.mcp).map(key => (
-                        <div key={key} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                        <div key={key} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includeMcps ? 'opacity-50' : ''}`}>
                           <Label htmlFor={`mcp-${key}`} className="flex-1 cursor-pointer">{key}</Label>
                           <Switch 
                             id={`mcp-${key}`}
                             checked={selectedMcps.includes(key)}
+                            disabled={!includeMcps}
                             onCheckedChange={(c) => {
                               if (c) setSelectedMcps([...selectedMcps, key]);
                               else setSelectedMcps(selectedMcps.filter(k => k !== key));

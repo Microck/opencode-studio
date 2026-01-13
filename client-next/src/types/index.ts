@@ -299,10 +299,10 @@ export interface StudioConfig {
 }
 
 export interface PresetConfig {
-  skills: string[];
-  plugins: string[];
-  mcps: string[];
-  commands: string[];
+  skills?: string[];
+  plugins?: string[];
+  mcps?: string[];
+  commands?: string[];
 }
 
 export interface Preset {
