@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layers, Plus, MoreVertical, Play, Trash2, Save, Check } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +35,19 @@ export function PresetsManager() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedPlugins, setSelectedPlugins] = useState<string[]>([]);
+  const [selectedMcps, setSelectedMcps] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (createOpen) {
+      // Initialize with currently enabled items
+      setSelectedSkills(skills.filter(s => s.enabled).map(s => s.name));
+      setSelectedPlugins(plugins.filter(p => p.enabled).map(p => p.name));
+      setSelectedMcps(config?.mcp ? Object.entries(config.mcp).filter(([_, c]) => c.enabled).map(([k]) => k) : []);
+    }
+  }, [createOpen, skills, plugins, config]);
 
   const loadPresets = async () => {
     try {
@@ -50,16 +65,11 @@ export function PresetsManager() {
   const handleCreate = async () => {
     if (!newName.trim()) return toast.error("Name is required");
     
-    // Capture current state
-    const currentSkills = skills.filter(s => s.enabled).map(s => s.name);
-    const currentPlugins = plugins.filter(p => p.enabled).map(p => p.name);
-    const currentMcps = config?.mcp ? Object.entries(config.mcp).filter(([_, c]) => c.enabled).map(([k]) => k) : [];
-    
     try {
       await savePreset(newName, newDesc, {
-        skills: currentSkills,
-        plugins: currentPlugins,
-        mcps: currentMcps,
+        skills: selectedSkills,
+        plugins: selectedPlugins,
+        mcps: selectedMcps,
         commands: []
       });
       toast.success("Preset created");
@@ -186,7 +196,7 @@ export function PresetsManager() {
           <DialogFooter className="border-t pt-4">
              <Button onClick={() => setCreateOpen(true)}>
                <Plus className="h-4 w-4 mr-2" />
-               New Preset (Capture Current State)
+               New Preset
              </Button>
           </DialogFooter>
         </DialogContent>
@@ -197,26 +207,85 @@ export function PresetsManager() {
           <DialogHeader>
             <DialogTitle>Create Preset</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Coding Mode" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Enables coding skills..." />
-            </div>
-            <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground">
-              <p className="font-semibold mb-1">Captures current state:</p>
-              <ul className="list-disc pl-4 space-y-0.5">
-                <li>{skills.filter(s => s.enabled).length} enabled skills</li>
-                <li>{plugins.filter(p => p.enabled).length} enabled plugins</li>
-                <li>{config?.mcp ? Object.values(config.mcp).filter(c => c.enabled).length : 0} enabled MCPs</li>
-              </ul>
+          <div className="flex-1 overflow-y-auto p-1 py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Coding Mode" />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Enables coding skills..." />
+              </div>
+              
+              <div className="border rounded-md p-4">
+                <h4 className="text-sm font-medium mb-3">Configuration</h4>
+                <Tabs defaultValue="skills">
+                  <TabsList className="w-full">
+                    <TabsTrigger value="skills" className="flex-1">Skills ({selectedSkills.length})</TabsTrigger>
+                    <TabsTrigger value="plugins" className="flex-1">Plugins ({selectedPlugins.length})</TabsTrigger>
+                    <TabsTrigger value="mcps" className="flex-1">MCPs ({selectedMcps.length})</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="skills" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    {skills.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No skills found</p>}
+                    {skills.map(skill => (
+                      <div key={skill.name} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                        <Label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer">{skill.name}</Label>
+                        <Switch 
+                          id={`skill-${skill.name}`}
+                          checked={selectedSkills.includes(skill.name)}
+                          onCheckedChange={(c) => {
+                            if (c) setSelectedSkills([...selectedSkills, skill.name]);
+                            else setSelectedSkills(selectedSkills.filter(s => s !== skill.name));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </TabsContent>
+                  
+                  <TabsContent value="plugins" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    {plugins.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No plugins found</p>}
+                    {plugins.map(plugin => (
+                      <div key={plugin.name} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                        <Label htmlFor={`plugin-${plugin.name}`} className="flex-1 cursor-pointer">{plugin.name}</Label>
+                        <Switch 
+                          id={`plugin-${plugin.name}`}
+                          checked={selectedPlugins.includes(plugin.name)}
+                          onCheckedChange={(c) => {
+                            if (c) setSelectedPlugins([...selectedPlugins, plugin.name]);
+                            else setSelectedPlugins(selectedPlugins.filter(p => p !== plugin.name));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </TabsContent>
+                  
+                  <TabsContent value="mcps" className="h-[200px] overflow-y-auto pt-2 space-y-2">
+                    {!config?.mcp || Object.keys(config.mcp).length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic p-2">No MCP servers found</p>
+                    ) : (
+                      Object.keys(config.mcp).map(key => (
+                        <div key={key} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
+                          <Label htmlFor={`mcp-${key}`} className="flex-1 cursor-pointer">{key}</Label>
+                          <Switch 
+                            id={`mcp-${key}`}
+                            checked={selectedMcps.includes(key)}
+                            onCheckedChange={(c) => {
+                              if (c) setSelectedMcps([...selectedMcps, key]);
+                              else setSelectedMcps(selectedMcps.filter(k => k !== key));
+                            }}
+                          />
+                        </div>
+                      ))
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleCreate}>Save</Button>
+          <DialogFooter className="mt-4">
+            <Button onClick={handleCreate}>Save Preset</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
