@@ -295,6 +295,21 @@ export interface StudioConfig {
   activeGooglePlugin: 'gemini' | 'antigravity' | null;
   pluginModels: PluginModelsConfig;
   activeProfiles: Record<string, string>;
+  presets: Preset[];
+}
+
+export interface PresetConfig {
+  skills: string[];
+  plugins: string[];
+  mcps: string[];
+  commands: string[];
+}
+
+export interface Preset {
+  id: string;
+  name: string;
+  description?: string;
+  config: PresetConfig;
 }
 
 export interface AuthProvider {

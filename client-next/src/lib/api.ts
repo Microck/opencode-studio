@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001/api';
 
@@ -384,6 +384,29 @@ export async function getQuotaInfo(provider: string = 'google'): Promise<QuotaIn
 export async function setQuotaLimit(limit: number, provider: string = 'google'): Promise<{ success: boolean; dailyLimit: number }> {
   const { data } = await api.post('/auth/pool/quota/limit', { provider, limit });
   return data;
+}
+
+export async function getPresets(): Promise<Preset[]> {
+  const { data } = await api.get<Preset[]>('/presets');
+  return data;
+}
+
+export async function savePreset(name: string, description: string, config: PresetConfig): Promise<Preset> {
+  const { data } = await api.post<Preset>('/presets', { name, description, config });
+  return data;
+}
+
+export async function updatePreset(id: string, name: string, description: string, config: PresetConfig): Promise<Preset> {
+  const { data } = await api.put<Preset>(`/presets/${id}`, { name, description, config });
+  return data;
+}
+
+export async function deletePreset(id: string): Promise<void> {
+  await api.delete(`/presets/${id}`);
+}
+
+export async function applyPreset(id: string, mode: 'exclusive' | 'additive'): Promise<void> {
+  await api.post(`/presets/${id}/apply`, { mode });
 }
 
 export default api;

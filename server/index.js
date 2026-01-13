@@ -79,6 +79,7 @@ function loadStudioConfig() {
         activeProfiles: {},
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
+        presets: [],
         pluginModels: {
             gemini: {
                 "gemini-3-pro-preview": {
@@ -1518,6 +1519,111 @@ app.post('/api/plugins/config/add', (req, res) => {
     
     saveConfig(opencode);
     res.json({ added, skipped });
+});
+
+// Presets
+app.get('/api/presets', (req, res) => {
+    const studio = loadStudioConfig();
+    res.json(studio.presets || []);
+});
+
+app.post('/api/presets', (req, res) => {
+    const { name, description, config } = req.body;
+    const studio = loadStudioConfig();
+    const id = crypto.randomUUID();
+    const preset = { id, name, description, config };
+    studio.presets = studio.presets || [];
+    studio.presets.push(preset);
+    saveStudioConfig(studio);
+    res.json(preset);
+});
+
+app.put('/api/presets/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, description, config } = req.body;
+    const studio = loadStudioConfig();
+    const index = (studio.presets || []).findIndex(p => p.id === id);
+    if (index === -1) return res.status(404).json({ error: 'Preset not found' });
+    
+    studio.presets[index] = { ...studio.presets[index], name, description, config };
+    saveStudioConfig(studio);
+    res.json(studio.presets[index]);
+});
+
+app.delete('/api/presets/:id', (req, res) => {
+    const { id } = req.params;
+    const studio = loadStudioConfig();
+    studio.presets = (studio.presets || []).filter(p => p.id !== id);
+    saveStudioConfig(studio);
+    res.json({ success: true });
+});
+
+app.post('/api/presets/:id/apply', (req, res) => {
+    const { id } = req.params;
+    const { mode } = req.body; // 'exclusive', 'additive'
+    
+    const studio = loadStudioConfig();
+    const preset = (studio.presets || []).find(p => p.id === id);
+    if (!preset) return res.status(404).json({ error: 'Preset not found' });
+    
+    const config = loadConfig() || {};
+    const cp = getConfigPath();
+    const configDir = path.dirname(cp);
+    const skillDir = path.join(configDir, 'skill');
+    const pluginDir = path.join(configDir, 'plugin');
+    
+    const targetSkills = new Set(preset.config.skills || []);
+    const targetPlugins = new Set(preset.config.plugins || []);
+    const targetMcps = new Set(preset.config.mcps || []);
+    
+    if (mode === 'exclusive') {
+        // Skills
+        const allSkills = [];
+        if (fs.existsSync(skillDir)) {
+            const dirents = fs.readdirSync(skillDir, { withFileTypes: true });
+            for (const dirent of dirents) {
+                if (dirent.isDirectory()) {
+                    if (fs.existsSync(path.join(skillDir, dirent.name, 'SKILL.md'))) {
+                        allSkills.push(dirent.name);
+                    }
+                } else if (dirent.name.endsWith('.md')) {
+                    allSkills.push(dirent.name.replace('.md', ''));
+                }
+            }
+        }
+        studio.disabledSkills = allSkills.filter(s => !targetSkills.has(s));
+        
+        // Plugins
+        const allPlugins = [...(config.plugin || [])];
+        if (fs.existsSync(pluginDir)) {
+            const files = fs.readdirSync(pluginDir).filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+            allPlugins.push(...files.map(f => f.replace(/\.[^/.]+$/, "")));
+        }
+        // Deduplicate
+        const uniquePlugins = [...new Set(allPlugins)];
+        studio.disabledPlugins = uniquePlugins.filter(p => !targetPlugins.has(p));
+        
+        // MCPs
+        if (config.mcp) {
+            for (const key in config.mcp) {
+                config.mcp[key].enabled = targetMcps.has(key);
+            }
+        }
+        
+    } else { // additive
+        studio.disabledSkills = (studio.disabledSkills || []).filter(s => !targetSkills.has(s));
+        studio.disabledPlugins = (studio.disabledPlugins || []).filter(p => !targetPlugins.has(p));
+        
+        if (config.mcp) {
+            for (const key of preset.config.mcps || []) {
+                if (config.mcp[key]) config.mcp[key].enabled = true;
+            }
+        }
+    }
+    
+    saveStudioConfig(studio);
+    saveConfig(config);
+    res.json({ success: true });
 });
 
 app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));

@@ -246,7 +246,7 @@ export default function UsagePage() {
   const totalOutputTokens = stats.byModel.reduce((acc, m) => acc + m.outputTokens, 0);
 
   return (
-    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-32 h-full overflow-y-auto bg-background">
+    <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-8 bg-background">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Token Usage</h1>
@@ -398,7 +398,7 @@ export default function UsagePage() {
                     dataKey="date" 
                     tickFormatter={(v) => {
                       const date = new Date(v || "");
-                      return date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+                      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     }}
                     fontSize={9}
                     tickLine={false}
@@ -424,7 +424,7 @@ export default function UsagePage() {
                           const costs = calculateDetailedCost(hovered, inputTokens, outputTokens);
                           const tooltip = barTooltipRef.current;
                           tooltip.style.opacity = '1';
-                          tooltip.querySelector('[data-bar-date]')!.textContent = new Date(label || "").toLocaleString();
+                          tooltip.querySelector('[data-bar-date]')!.textContent = new Date(label || "").toLocaleDateString(undefined, { dateStyle: 'medium' });
                           tooltip.querySelector('[data-bar-color]')!.setAttribute('style', `background-color: ${entry.color}`);
                           tooltip.querySelector('[data-bar-model]')!.textContent = hovered;
                           tooltip.querySelector('[data-bar-input]')!.textContent = formatCurrency(costs.inputCost);
@@ -460,78 +460,6 @@ export default function UsagePage() {
               <PieChartIcon className="h-3.5 w-3.5 text-primary" />
               Cost Breakdown
             </CardTitle>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8 text-xs"
-                >
-                  View All
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-[95vw] h-[95vh] flex flex-col p-0 gap-0">
-                <DialogHeader className="px-6 py-4 border-b shrink-0">
-                  <DialogTitle>Cost Breakdown</DialogTitle>
-                </DialogHeader>
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row w-full overflow-hidden">
-                  <div className="flex-1 h-full relative min-w-0 p-8">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={stats?.byModel || []}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius="30%"
-                          outerRadius="80%"
-                          paddingAngle={2}
-                          dataKey="cost"
-                        >
-                          {(stats?.byModel || []).map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[index % COLORS.length]} 
-                              stroke="hsl(var(--background))" 
-                              strokeWidth={2} 
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          isAnimationActive={false}
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              return (
-                                <div className="rounded-lg border bg-background/95 p-3 shadow-xl text-sm backdrop-blur-md border-primary/20 z-50">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-bold truncate max-w-[300px]">{payload[0].name}</span>
-                                    <span className="font-bold text-primary text-lg">{formatCurrency(Number(payload[0].value))}</span>
-                                  </div>
-                                </div>
-                              )
-                            }
-                            return null
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="w-full lg:w-[450px] border-t lg:border-t-0 lg:border-l h-[40%] lg:h-full overflow-y-auto bg-muted/5 p-6 shrink-0">
-                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Models ({legendData.length})</h3>
-                    <ul className="space-y-3">
-                      {legendData.map((entry, index) => (
-                        <li key={`item-${index}`} className="flex items-center justify-between text-sm gap-4 group hover:bg-muted/50 p-2 rounded-md transition-colors">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                            <span className="font-medium truncate" title={entry.name}>{entry.name}</span>
-                          </div>
-                          <span className="font-mono font-bold text-primary shrink-0 opacity-80 group-hover:opacity-100">{formatCurrency(entry.cost)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
           </CardHeader>
           <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
             <div 
@@ -627,7 +555,7 @@ export default function UsagePage() {
 
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="bg-muted/10 border-b py-3 px-6">
+          <CardHeader className="flex flex-row items-center justify-between bg-muted/10 border-b py-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
               Top Projects
@@ -637,8 +565,8 @@ export default function UsagePage() {
             <table className="w-full text-[11px] text-left border-collapse">
               <thead>
                 <tr className="bg-muted text-muted-foreground border-b text-[9px] uppercase font-bold sticky top-0 z-10">
-                  <th className="px-6 py-3">Project</th>
-                  <th className="px-6 py-3 text-right">Estimated Cost</th>
+                  <th className="px-6 py-2">Project</th>
+                  <th className="px-6 py-2 text-right">Estimated Cost</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -651,8 +579,8 @@ export default function UsagePage() {
                     )}
                     onClick={() => setProjectId(proj.id === projectId ? null : proj.id)}
                   >
-                    <td className="px-6 py-3 font-medium truncate max-w-[150px]">{proj.name}</td>
-                    <td className="px-6 py-3 text-right font-bold tabular-nums text-primary/80">{formatCurrency(proj.cost)}</td>
+                    <td className="px-6 py-2 font-medium truncate max-w-[150px]">{proj.name}</td>
+                    <td className="px-6 py-2 text-right font-bold tabular-nums text-primary/80">{formatCurrency(proj.cost)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -661,7 +589,7 @@ export default function UsagePage() {
         </Card>
 
         <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="bg-muted/10 border-b py-3 px-6">
+          <CardHeader className="flex flex-row items-center justify-between bg-muted/10 border-b py-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-primary" />
               Model Performance Analysis
@@ -672,19 +600,19 @@ export default function UsagePage() {
               <table className="w-full text-[11px] text-left border-collapse">
                 <thead className="sticky top-0 bg-muted z-10 shadow-sm">
                   <tr className="text-muted-foreground border-b text-[9px] uppercase tracking-wider font-bold">
-                    <th className="px-6 py-4">Model Interface</th>
-                    <th className="px-6 py-4 text-right">Input</th>
-                    <th className="px-6 py-4 text-right">Output</th>
-                    <th className="px-6 py-4 text-right text-primary">Cost</th>
+                    <th className="px-6 py-2">Model Interface</th>
+                    <th className="px-6 py-2 text-right">Input</th>
+                    <th className="px-6 py-2 text-right">Output</th>
+                    <th className="px-6 py-2 text-right text-primary">Cost</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
                   {(tableData || []).map((model) => (
                     <tr key={model.name} className="hover:bg-muted/20 transition-colors group">
-                      <td className="px-6 py-4 font-bold text-foreground/80">{model.name}</td>
-                      <td className="px-6 py-4 text-right text-muted-foreground font-mono tabular-nums">{model.inputTokens.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-right text-muted-foreground font-mono tabular-nums">{model.outputTokens.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-right font-black tabular-nums text-primary">{formatCurrency(model.cost)}</td>
+                      <td className="px-6 py-2 font-bold text-foreground/80">{model.name}</td>
+                      <td className="px-6 py-2 text-right text-muted-foreground font-mono tabular-nums">{model.inputTokens.toLocaleString()}</td>
+                      <td className="px-6 py-2 text-right text-muted-foreground font-mono tabular-nums">{model.outputTokens.toLocaleString()}</td>
+                      <td className="px-6 py-2 text-right font-black tabular-nums text-primary">{formatCurrency(model.cost)}</td>
                     </tr>
                   ))}
                 </tbody>

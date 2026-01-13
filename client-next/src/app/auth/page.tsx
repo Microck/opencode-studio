@@ -428,7 +428,7 @@ export default function AuthPage() {
                         {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
                         Gemini Auth
                       </div>
-                      <div className="text-xs opacity-70 mt-1">Standard quota</div>
+                      <div className="text-xs opacity-70 mt-1">Standard single-account access</div>
                     </div>
                     <GeminiLogo className={`h-8 w-8 opacity-50 group-hover:opacity-100 transition-opacity ${activeGooglePlugin === 'gemini' ? 'opacity-100 text-primary-foreground' : ''}`} />
                   </Button>
@@ -445,7 +445,7 @@ export default function AuthPage() {
                         {activeGooglePlugin === 'antigravity' && <Check className="h-4 w-4" />}
                         Antigravity
                       </div>
-                      <div className="text-xs opacity-70 mt-1">Multi-account pool</div>
+                      <div className="text-xs opacity-70 mt-1">Manage multiple accounts with rotation</div>
                     </div>
                     <AntigravityLogo className={`h-8 w-8 opacity-50 group-hover:opacity-100 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'text-primary-foreground' : ''}`} />
                   </Button>
@@ -477,7 +477,7 @@ export default function AuthPage() {
                   Connect your Google account to access Gemini models. 
                   Install <b>antigravity-auth</b> to enable multi-account pooling.
                 </p>
-                <Button onClick={handleGoogleLogin} disabled={googleOAuthLoading} className="bg-[#4285f4] hover:bg-[#3367d6] text-white">
+                <Button onClick={handleGoogleLogin} disabled={googleOAuthLoading} variant="outline">
                   {googleOAuthLoading ? "Connecting..." : "Login with Google"}
                 </Button>
               </CardContent>

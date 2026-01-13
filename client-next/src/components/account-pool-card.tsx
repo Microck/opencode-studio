@@ -51,13 +51,13 @@ function formatTimeRemaining(until: number | null): string {
 function getStatusColor(status: AccountPoolEntry["status"]): string {
   switch (status) {
     case "active":
-      return "bg-green-500/10 text-green-600 border-green-200 dark:border-green-900/30";
+      return "bg-primary/10 text-primary border-primary/20";
     case "ready":
-      return "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-900/30";
+      return "bg-muted text-muted-foreground border-border";
     case "cooldown":
       return "bg-yellow-500/10 text-yellow-600 border-yellow-200 dark:border-yellow-900/30";
     case "expired":
-      return "bg-red-500/10 text-red-600 border-red-200 dark:border-red-900/30";
+      return "bg-destructive/10 text-destructive border-destructive/20";
     default:
       return "";
   }
@@ -119,7 +119,8 @@ export function AccountPoolCard({
           <Button 
             onClick={onAddAccount} 
             disabled={isAdding}
-            className="mt-4 bg-[#4285f4] hover:bg-[#3367d6] text-white"
+            variant="outline"
+            className="mt-4"
           >
             {isAdding ? "Connecting..." : "Add Google Account"}
           </Button>
@@ -138,11 +139,11 @@ export function AccountPoolCard({
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
               onClick={onAddAccount}
               disabled={isAdding}
-              className="h-8 bg-[#4285f4] hover:bg-[#3367d6] text-white border-0"
+              className="h-8"
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add Account

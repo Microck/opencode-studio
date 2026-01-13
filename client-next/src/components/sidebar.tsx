@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Rocket, Circle, Play, Power, BarChart, Github } from "lucide-react";
+import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Rocket, Circle, Play, Power, BarChart, Github, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -32,6 +32,7 @@ const navItems = [
   { href: "/skills", label: "Skills", icon: Puzzle },
   { href: "/plugins", label: "Plugins", icon: FileCode },
   { href: "/commands", label: "Commands", icon: Command },
+  { href: "/presets", label: "Presets", icon: Layers },
   { href: "/usage", label: "Usage", icon: BarChart },
   { href: "/auth", label: "Auth", icon: Key },
   { href: "/settings", label: "Settings", icon: Settings },

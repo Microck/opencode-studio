@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Command, LogOut } from "lucide-react";
+import { Plus, Trash2, Pencil, Command, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 interface CommandEntry {
@@ -279,7 +279,7 @@ export default function CommandsPage() {
                       onClick={() => openEdit(cmd)}
                       className="h-8 w-8"
                     >
-                      <Edit className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
