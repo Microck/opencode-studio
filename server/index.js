@@ -361,6 +361,21 @@ app.delete('/api/skills/:name', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/skills/:name/toggle', (req, res) => {
+    const { name } = req.params;
+    const studio = loadStudioConfig();
+    studio.disabledSkills = studio.disabledSkills || [];
+    
+    if (studio.disabledSkills.includes(name)) {
+        studio.disabledSkills = studio.disabledSkills.filter(s => s !== name);
+    } else {
+        studio.disabledSkills.push(name);
+    }
+    
+    saveStudioConfig(studio);
+    res.json({ success: true, enabled: !studio.disabledSkills.includes(name) });
+});
+
 const getPluginDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'plugin') : null;
@@ -402,6 +417,79 @@ app.get('/api/plugins', (req, res) => {
         });
     }
     res.json(plugins);
+});
+
+app.get('/api/plugins/:name', (req, res) => {
+    const { name } = req.params;
+    const pd = getPluginDir();
+    
+    const possiblePaths = [
+        path.join(pd, name + '.js'),
+        path.join(pd, name + '.ts'),
+        path.join(pd, name, 'index.js'),
+        path.join(pd, name, 'index.ts')
+    ];
+    
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            const content = fs.readFileSync(p, 'utf8');
+            return res.json({ name, content });
+        }
+    }
+    res.status(404).json({ error: 'Plugin not found' });
+});
+
+app.post('/api/plugins/:name', (req, res) => {
+    const { name } = req.params;
+    const { content } = req.body;
+    const pd = getPluginDir();
+    if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
+    
+    // Default to .js if new
+    const filePath = path.join(pd, name.endsWith('.js') || name.endsWith('.ts') ? name : name + '.js');
+    atomicWriteFileSync(filePath, content);
+    res.json({ success: true });
+});
+
+app.delete('/api/plugins/:name', (req, res) => {
+    const { name } = req.params;
+    const pd = getPluginDir();
+    
+    const possiblePaths = [
+        path.join(pd, name),
+        path.join(pd, name + '.js'),
+        path.join(pd, name + '.ts')
+    ];
+    
+    let deleted = false;
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            if (fs.statSync(p).isDirectory()) {
+                fs.rmSync(p, { recursive: true, force: true });
+            } else {
+                fs.unlinkSync(p);
+            }
+            deleted = true;
+        }
+    }
+    
+    if (deleted) res.json({ success: true });
+    else res.status(404).json({ error: 'Plugin not found' });
+});
+
+app.post('/api/plugins/:name/toggle', (req, res) => {
+    const { name } = req.params;
+    const studio = loadStudioConfig();
+    studio.disabledPlugins = studio.disabledPlugins || [];
+    
+    if (studio.disabledPlugins.includes(name)) {
+        studio.disabledPlugins = studio.disabledPlugins.filter(p => p !== name);
+    } else {
+        studio.disabledPlugins.push(name);
+    }
+    
+    saveStudioConfig(studio);
+    res.json({ success: true, enabled: !studio.disabledPlugins.includes(name) });
 });
 
 const getActiveGooglePlugin = () => {
