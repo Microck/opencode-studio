@@ -112,6 +112,11 @@ export default function AuthPage() {
   const [pool, setPool] = useState<AccountPool | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [rotating, setRotating] = useState(false);
+  
+  const [openaiPool, setOpenaiPool] = useState<AccountPool | null>(null);
+  const [openaiQuota, setOpenaiQuota] = useState<QuotaInfo | null>(null);
+  const [openaiRotating, setOpenaiRotating] = useState(false);
+
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
@@ -129,10 +134,11 @@ export default function AuthPage() {
   const loadData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [authInfo, profilesData, poolData] = await Promise.all([
+      const [authInfo, profilesData, poolData, openaiPoolData] = await Promise.all([
         getAuthInfo(),
         getAuthProfiles(),
         getAccountPool('google').catch(() => null),
+        getAccountPool('openai').catch(() => null),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
@@ -142,6 +148,10 @@ export default function AuthPage() {
       if (poolData) {
         setPool(poolData.pool);
         setQuota(poolData.quota);
+      }
+      if (openaiPoolData) {
+        setOpenaiPool(openaiPoolData.pool);
+        setOpenaiQuota(openaiPoolData.quota);
       }
     } catch {
       if (!silent) toast.error("Failed to load auth info");
@@ -387,6 +397,53 @@ export default function AuthPage() {
     }
   };
 
+  const handleOpenaiPoolRotate = async () => {
+    try {
+      setOpenaiRotating(true);
+      const result = await rotateAccount('openai');
+      toast.success(`Switched from ${result.previousAccount || 'none'} to ${result.newAccount}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "No available accounts";
+      toast.error(`Failed to rotate: ${msg}`);
+    } finally {
+      setOpenaiRotating(false);
+    }
+  };
+  
+  const handleOpenaiPoolActivate = async (name: string) => {
+    try {
+      await activateAuthProfile('openai', name);
+      toast.success(`Activated ${name}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to activate: ${msg}`);
+    }
+  };
+  
+  const handleOpenaiPoolCooldown = async (name: string) => {
+    try {
+      await markAccountCooldown(name, 'openai', 3600000);
+      toast.success(`${name} marked as cooldown for 1 hour`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to set cooldown: ${msg}`);
+    }
+  };
+  
+  const handleOpenaiPoolClearCooldown = async (name: string) => {
+    try {
+      await clearAccountCooldown(name, 'openai');
+      toast.success(`${name} cooldown cleared`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to clear cooldown: ${msg}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 pb-12 animate-fade-in">
@@ -491,6 +548,7 @@ export default function AuthPage() {
               onCooldown={handlePoolCooldown}
               onClearCooldown={handlePoolClearCooldown}
               rotating={rotating}
+              providerName="Google"
             />
           ) : (
             <Card className="border-dashed">
@@ -508,6 +566,24 @@ export default function AuthPage() {
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {openaiPool && openaiQuota && (openaiPool.accounts.length > 0) && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-3">OpenAI Pool</h3>
+              <AccountPoolCard
+                pool={openaiPool}
+                quota={openaiQuota}
+                onAddAccount={() => handleLogin('openai')}
+                isAdding={loginLoading}
+                onRotate={handleOpenaiPoolRotate}
+                onActivate={handleOpenaiPoolActivate}
+                onCooldown={handleOpenaiPoolCooldown}
+                onClearCooldown={handleOpenaiPoolClearCooldown}
+                rotating={openaiRotating}
+                providerName="OpenAI"
+              />
+            </div>
           )}
 
           {installedGooglePlugins.length < 2 && (

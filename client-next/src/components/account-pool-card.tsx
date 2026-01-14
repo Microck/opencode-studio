@@ -36,6 +36,7 @@ interface AccountPoolCardProps {
   onAddAccount: () => void;
   rotating: boolean;
   isAdding: boolean;
+  providerName?: string;
 }
 
 function formatTimeRemaining(until: number | null): string {
@@ -88,6 +89,7 @@ export function AccountPoolCard({
   onAddAccount,
   rotating,
   isAdding,
+  providerName = "Google",
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
 
@@ -114,7 +116,7 @@ export function AccountPoolCard({
           <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">No accounts in pool</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Add Google accounts to enable multi-account rotation
+            Add {providerName} accounts to enable multi-account rotation
           </p>
           <Button 
             onClick={onAddAccount} 
@@ -122,7 +124,7 @@ export function AccountPoolCard({
             variant="outline"
             className="mt-4"
           >
-            {isAdding ? "Connecting..." : "Add Google Account"}
+            {isAdding ? "Connecting..." : `Add ${providerName} Account`}
           </Button>
         </CardContent>
       </Card>

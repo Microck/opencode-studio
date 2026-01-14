@@ -125,7 +125,7 @@ flowchart LR
 ```
 /auth → view connected providers
       → [Open Terminal] launches `opencode auth login` for interactive auth
-      → **account pool:** manage multiple Google accounts with status tracking
+      → **account pool:** manage multiple Google/OpenAI accounts with status tracking
       → **quota:** view remaining daily quota and reset time
       → **rotation:** manually rotate active accounts or mark cooldowns
       → switch between accounts instantly by clicking the profile name
