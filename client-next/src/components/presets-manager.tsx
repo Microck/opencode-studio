@@ -84,8 +84,9 @@ export function PresetsManager() {
       setNewName("");
       setNewDesc("");
       loadPresets();
-    } catch {
-      toast.error("Failed to create preset");
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || "Unknown error";
+      toast.error(`Failed to create preset: ${msg}`);
     }
   };
 
@@ -210,7 +211,7 @@ export function PresetsManager() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-[95vw] w-[1400px] max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-[98vw] w-[1800px] max-h-[95vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create Preset</DialogTitle>
           </DialogHeader>
@@ -236,11 +237,11 @@ export function PresetsManager() {
                       <Switch id="include-skills" checked={includeSkills} onCheckedChange={setIncludeSkills} />
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto max-h-[50vh] p-2 space-y-1">
+                  <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
                     {skills.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No skills found</p>}
                     {skills.map(skill => (
-                      <div key={skill.name} className={`flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeSkills ? 'opacity-50' : ''}`}>
-                        <Label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer break-words leading-tight" title={skill.name}>{skill.name}</Label>
+                      <div key={skill.name} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeSkills ? 'opacity-50' : ''}`}>
+                        <label htmlFor={`skill-${skill.name}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={skill.name}>{skill.name}</label>
                         <Switch 
                           id={`skill-${skill.name}`}
                           checked={selectedSkills.includes(skill.name)}
@@ -264,11 +265,11 @@ export function PresetsManager() {
                       <Switch id="include-plugins" checked={includePlugins} onCheckedChange={setIncludePlugins} />
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto max-h-[50vh] p-2 space-y-1">
+                  <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
                     {plugins.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No plugins found</p>}
                     {plugins.map(plugin => (
-                      <div key={plugin.name} className={`flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includePlugins ? 'opacity-50' : ''}`}>
-                        <Label htmlFor={`plugin-${plugin.name}`} className="flex-1 cursor-pointer break-words leading-tight" title={plugin.name}>{plugin.name}</Label>
+                      <div key={plugin.name} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includePlugins ? 'opacity-50' : ''}`}>
+                        <label htmlFor={`plugin-${plugin.name}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={plugin.name}>{plugin.name}</label>
                         <Switch 
                           id={`plugin-${plugin.name}`}
                           checked={selectedPlugins.includes(plugin.name)}
@@ -292,13 +293,13 @@ export function PresetsManager() {
                       <Switch id="include-mcps" checked={includeMcps} onCheckedChange={setIncludeMcps} />
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto max-h-[50vh] p-2 space-y-1">
+                  <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
                     {!config?.mcp || Object.keys(config.mcp).length === 0 ? (
                       <p className="text-xs text-muted-foreground italic p-2">No MCP servers found</p>
                     ) : (
                       Object.keys(config.mcp).map(key => (
-                        <div key={key} className={`flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeMcps ? 'opacity-50' : ''}`}>
-                          <Label htmlFor={`mcp-${key}`} className="flex-1 cursor-pointer break-words leading-tight" title={key}>{key}</Label>
+                        <div key={key} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeMcps ? 'opacity-50' : ''}`}>
+                          <label htmlFor={`mcp-${key}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={key}>{key}</label>
                           <Switch 
                             id={`mcp-${key}`}
                             checked={selectedMcps.includes(key)}

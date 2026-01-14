@@ -1626,7 +1626,7 @@ app.get('/api/presets', (req, res) => {
 app.post('/api/presets', (req, res) => {
     const { name, description, config } = req.body;
     const studio = loadStudioConfig();
-    const id = crypto.randomUUID();
+    const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
     const preset = { id, name, description, config };
     studio.presets = studio.presets || [];
     studio.presets.push(preset);
