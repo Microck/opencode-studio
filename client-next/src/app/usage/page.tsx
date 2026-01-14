@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,9 +30,10 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { useFilterStore } from "@/lib/store/filters";
 import { toPng } from 'html-to-image';
@@ -57,82 +60,11 @@ const TIME_RANGES = [
   { label: "24 Hours", value: "24h", granularity: "hourly" },
   { label: "7 Days", value: "7d", granularity: "daily" },
   { label: "30 Days", value: "30d", granularity: "daily" },
-  { label: "3 Months", value: "3m", granularity: "daily" }, // Approx 90 days
-  { label: "6 Months", value: "6m", granularity: "weekly" }, // Weekly is better for 6m
+  { label: "3 Months", value: "3m", granularity: "daily" },
+  { label: "6 Months", value: "6m", granularity: "weekly" },
   { label: "1 Year", value: "1y", granularity: "monthly" },
-  { label: "Custom", value: "custom", granularity: "daily" }, // Placeholder for now
+  { label: "Custom", value: "custom", granularity: "daily" },
 ];
-
-// Fill missing dates in byDay data to ensure continuous timeline
-function fillDateGaps(byDay: any[], range: string, granularity: string, modelIds: string[]): any[] {
-  if (byDay.length === 0) return [];
-  
-  const now = new Date();
-  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours());
-  let startUtc: number;
-  
-  switch (range) {
-    case "24h": startUtc = nowUtc - 24 * 60 * 60 * 1000; break;
-    case "7d": startUtc = nowUtc - 7 * 24 * 60 * 60 * 1000; break;
-    case "30d": startUtc = nowUtc - 30 * 24 * 60 * 60 * 1000; break;
-    case "3m": startUtc = nowUtc - 90 * 24 * 60 * 60 * 1000; break;
-    case "6m": startUtc = nowUtc - 180 * 24 * 60 * 60 * 1000; break;
-    case "1y": startUtc = nowUtc - 365 * 24 * 60 * 60 * 1000; break;
-    default: startUtc = nowUtc - 30 * 24 * 60 * 60 * 1000;
-  }
-
-  const dataMap = new Map(byDay.map(d => [d.date, d]));
-  const result: any[] = [];
-  
-  let currentUtc = startUtc;
-  while (currentUtc <= nowUtc) {
-    const current = new Date(currentUtc);
-    let dateKey: string;
-    let increment: number;
-    
-    if (granularity === "hourly") {
-      dateKey = current.toISOString().substring(0, 13) + ":00:00Z";
-      increment = 60 * 60 * 1000;
-    } else if (granularity === "weekly") {
-      const day = current.getUTCDay();
-      const diff = current.getUTCDate() - day + (day === 0 ? -6 : 1);
-      const weekStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), diff));
-      dateKey = weekStart.toISOString().split("T")[0];
-      increment = 7 * 24 * 60 * 60 * 1000;
-    } else if (granularity === "monthly") {
-      dateKey = current.toISOString().substring(0, 7) + "-01";
-      const nextMonth = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
-      increment = nextMonth.getTime() - currentUtc;
-    } else {
-      dateKey = current.toISOString().split("T")[0];
-      increment = 24 * 60 * 60 * 1000;
-    }
-    
-    if (dataMap.has(dateKey)) {
-      result.push(dataMap.get(dateKey));
-    } else {
-      const emptyEntry: any = {
-        date: dateKey,
-        name: dateKey,
-        id: dateKey,
-        cost: 0,
-        tokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-      };
-      modelIds.forEach(mid => {
-        emptyEntry[mid] = 0;
-        emptyEntry[`${mid}_input`] = 0;
-        emptyEntry[`${mid}_output`] = 0;
-      });
-      result.push(emptyEntry);
-    }
-    
-    currentUtc += increment;
-  }
-  
-  return result;
-}
 
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
@@ -141,17 +73,70 @@ export default function UsagePage() {
   const [showAllModels, setShowAllModels] = useState(false);
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   const [timeRange, setTimeRange] = useState("30d");
+  const [customRange, setCustomRange] = useState({ start: "", end: "" });
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [customError, setCustomError] = useState<string | null>(null);
   const hoveredModelRef = useRef<string | null>(null);
   const barTooltipRef = useRef<HTMLDivElement>(null);
   const pieTooltipRef = useRef<HTMLDivElement>(null);
   
   const { projectId, setProjectId } = useFilterStore();
 
+  const handleRangeChange = (value: string) => {
+    if (value === "custom") {
+      setCustomDialogOpen(true);
+      return;
+    }
+    setTimeRange(value);
+  };
+
+  const closeCustomDialog = (open: boolean) => {
+    setCustomDialogOpen(open);
+    if (!open) setCustomError(null);
+  };
+
+  const applyCustomRange = () => {
+    if (!customRange.start || !customRange.end) {
+      setCustomError("Select both start and end dates.");
+      return;
+    }
+    if (new Date(customRange.start) > new Date(customRange.end)) {
+      setCustomError("Start date must be before end date.");
+      return;
+    }
+    setCustomError(null);
+    setCustomDialogOpen(false);
+    setTimeRange("custom");
+  };
+
   const fetchStats = async () => {
     setLoading(true);
     try {
       const selectedRange = TIME_RANGES.find(r => r.value === timeRange) || TIME_RANGES[2];
-      const data = await getUsageStats(projectId, selectedRange.granularity, selectedRange.value);
+      const isCustom = timeRange === "custom";
+      let from: number | undefined;
+      let to: number | undefined;
+      
+      if (isCustom) {
+        if (!customRange.start || !customRange.end) {
+          setLoading(false);
+          return;
+        }
+        from = Date.parse(`${customRange.start}T00:00:00.000Z`);
+        to = Date.parse(`${customRange.end}T23:59:59.999Z`);
+        if (Number.isNaN(from) || Number.isNaN(to)) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      const data = await getUsageStats(
+        projectId,
+        selectedRange.granularity,
+        isCustom ? "custom" : selectedRange.value,
+        from,
+        to
+      );
       
       const enrichedStats: UsageStats = {
         totalCost: 0,
@@ -187,7 +172,7 @@ export default function UsagePage() {
         };
       });
       
-      enrichedStats.byDay = fillDateGaps(processedByDay, selectedRange.value, selectedRange.granularity, modelNames);
+      enrichedStats.byDay = processedByDay;
       setStats(enrichedStats);
     } catch (e: any) {
       const msg = e.response?.data?.error || e.message || "Unknown error";
@@ -200,7 +185,7 @@ export default function UsagePage() {
 
   useEffect(() => {
     fetchStats();
-  }, [projectId, timeRange]);
+  }, [projectId, timeRange, customRange.start, customRange.end]);
 
   const pieData = useMemo(() => {
     if (!stats) return [];
@@ -327,7 +312,7 @@ export default function UsagePage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={timeRange} onValueChange={handleRangeChange}>
              <SelectTrigger className="w-[120px] h-9 text-xs">
                 <div className="flex items-center gap-2">
                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
@@ -340,6 +325,50 @@ export default function UsagePage() {
                 ))}
              </SelectContent>
           </Select>
+
+          <Dialog open={customDialogOpen} onOpenChange={closeCustomDialog}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Custom Date Range</DialogTitle>
+                <DialogDescription>Select a start and end date.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1">
+                  <Label htmlFor="custom-start" className="text-xs text-muted-foreground">Start Date</Label>
+                  <Input
+                    id="custom-start"
+                    type="date"
+                    value={customRange.start}
+                    onChange={(e) => {
+                      setCustomRange(prev => ({ ...prev, start: e.target.value }));
+                      setCustomError(null);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="custom-end" className="text-xs text-muted-foreground">End Date</Label>
+                  <Input
+                    id="custom-end"
+                    type="date"
+                    value={customRange.end}
+                    onChange={(e) => {
+                      setCustomRange(prev => ({ ...prev, end: e.target.value }));
+                      setCustomError(null);
+                    }}
+                  />
+                </div>
+                {customError && (
+                  <p className="text-xs text-destructive">{customError}</p>
+                )}
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => closeCustomDialog(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={applyCustomRange}>Apply</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Select value={projectId || "all"} onValueChange={(v) => setProjectId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[160px] h-9 text-xs">
@@ -476,8 +505,10 @@ export default function UsagePage() {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: 'currentColor', opacity: 0.5 }}
-                    interval="preserveStartEnd"
-                    minTickGap={15}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={40}
                   />
                   <YAxis 
                     tickFormatter={(v) => `$${v}`}
@@ -534,6 +565,16 @@ export default function UsagePage() {
               <PieChartIcon className="h-3.5 w-3.5 text-primary" />
               Cost Breakdown
             </CardTitle>
+            {stats.byModel.length > 6 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[10px] px-2"
+                onClick={() => setShowAllModels(!showAllModels)}
+              >
+                {showAllModels ? "Show less" : "View all"}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
             <div 
@@ -627,9 +668,9 @@ export default function UsagePage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 mb-8">
-        <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 px-6">
+<div className="grid gap-4 md:grid-cols-3 mb-8">
+        <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5 gap-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 py-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
               Top Projects
@@ -662,8 +703,8 @@ export default function UsagePage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 px-6">
+        <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5 gap-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 py-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-primary" />
               Model Performance Analysis

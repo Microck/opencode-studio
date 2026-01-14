@@ -267,12 +267,20 @@ export interface UsageStats {
   byProject: { id: string; name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
 }
 
-export const getUsageStats = async (projectId?: string | null, granularity: string = 'daily', range: string = '30d'): Promise<UsageStats> => {
+export const getUsageStats = async (
+  projectId?: string | null,
+  granularity: string = 'daily',
+  range: string = '30d',
+  from?: number,
+  to?: number
+): Promise<UsageStats> => {
   try {
     const params = new URLSearchParams();
     if (projectId) params.set('projectId', projectId);
     if (granularity) params.set('granularity', granularity);
     if (range) params.set('range', range);
+    if (from) params.set('from', String(from));
+    if (to) params.set('to', String(to));
     
     const res = await api.get(`/usage?${params.toString()}`);
     return res.data;

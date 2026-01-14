@@ -1227,13 +1227,18 @@ app.get('/api/usage', async (req, res) => {
         const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
         const seen = new Set();
         const now = Date.now();
+        const from = Number(req.query.from || 0);
+        const to = Number(req.query.to || 0);
         let min = 0;
+        let max = 0;
         if (range === '24h') min = now - 86400000;
         else if (range === '7d') min = now - 604800000;
         else if (range === '30d') min = now - 2592000000;
         else if (range === '3m') min = now - 7776000000;
         else if (range === '6m') min = now - 15552000000;
         else if (range === '1y') min = now - 31536000000;
+        if (from) min = from;
+        if (to) max = to;
 
         const sessionDirs = await fs.promises.readdir(md);
         await Promise.all(sessionDirs.map(async s => {
@@ -1254,6 +1259,7 @@ app.get('/api/usage', async (req, res) => {
                             const pid = pmap.get(s)?.id || 'unknown';
                             if (fid && fid !== 'all' && pid !== fid) continue;
                             if (min > 0 && msg.time.created < min) continue;
+                            if (max > 0 && msg.time.created > max) continue;
                             
                             if (msg.role === 'assistant' && msg.tokens) {
                                 const c = msg.cost || 0, it = msg.tokens.input || 0, ot = msg.tokens.output || 0, t = it + ot;
