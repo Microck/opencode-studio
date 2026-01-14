@@ -110,8 +110,8 @@ export default function PluginsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {filteredPlugins.map((plugin) => {
-             const isGemini = plugin.name === 'gemini';
-             const isAntigravity = plugin.name === 'antigravity';
+             const isGemini = plugin.name.includes('gemini-auth');
+             const isAntigravity = plugin.name.includes('antigravity-auth');
              const locked = (isGemini && activeGPlugin === 'antigravity') || (isAntigravity && activeGPlugin === 'gemini');
              
              const displayPlugin = locked ? { ...plugin, enabled: false } : plugin;

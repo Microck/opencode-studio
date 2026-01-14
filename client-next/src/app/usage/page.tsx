@@ -63,6 +63,77 @@ const TIME_RANGES = [
   { label: "Custom", value: "custom", granularity: "daily" }, // Placeholder for now
 ];
 
+// Fill missing dates in byDay data to ensure continuous timeline
+function fillDateGaps(byDay: any[], range: string, granularity: string, modelIds: string[]): any[] {
+  if (byDay.length === 0) return [];
+  
+  const now = new Date();
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours());
+  let startUtc: number;
+  
+  switch (range) {
+    case "24h": startUtc = nowUtc - 24 * 60 * 60 * 1000; break;
+    case "7d": startUtc = nowUtc - 7 * 24 * 60 * 60 * 1000; break;
+    case "30d": startUtc = nowUtc - 30 * 24 * 60 * 60 * 1000; break;
+    case "3m": startUtc = nowUtc - 90 * 24 * 60 * 60 * 1000; break;
+    case "6m": startUtc = nowUtc - 180 * 24 * 60 * 60 * 1000; break;
+    case "1y": startUtc = nowUtc - 365 * 24 * 60 * 60 * 1000; break;
+    default: startUtc = nowUtc - 30 * 24 * 60 * 60 * 1000;
+  }
+
+  const dataMap = new Map(byDay.map(d => [d.date, d]));
+  const result: any[] = [];
+  
+  let currentUtc = startUtc;
+  while (currentUtc <= nowUtc) {
+    const current = new Date(currentUtc);
+    let dateKey: string;
+    let increment: number;
+    
+    if (granularity === "hourly") {
+      dateKey = current.toISOString().substring(0, 13) + ":00:00Z";
+      increment = 60 * 60 * 1000;
+    } else if (granularity === "weekly") {
+      const day = current.getUTCDay();
+      const diff = current.getUTCDate() - day + (day === 0 ? -6 : 1);
+      const weekStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), diff));
+      dateKey = weekStart.toISOString().split("T")[0];
+      increment = 7 * 24 * 60 * 60 * 1000;
+    } else if (granularity === "monthly") {
+      dateKey = current.toISOString().substring(0, 7) + "-01";
+      const nextMonth = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
+      increment = nextMonth.getTime() - currentUtc;
+    } else {
+      dateKey = current.toISOString().split("T")[0];
+      increment = 24 * 60 * 60 * 1000;
+    }
+    
+    if (dataMap.has(dateKey)) {
+      result.push(dataMap.get(dateKey));
+    } else {
+      const emptyEntry: any = {
+        date: dateKey,
+        name: dateKey,
+        id: dateKey,
+        cost: 0,
+        tokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      modelIds.forEach(mid => {
+        emptyEntry[mid] = 0;
+        emptyEntry[`${mid}_input`] = 0;
+        emptyEntry[`${mid}_output`] = 0;
+      });
+      result.push(emptyEntry);
+    }
+    
+    currentUtc += increment;
+  }
+  
+  return result;
+}
+
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,26 +160,7 @@ export default function UsagePage() {
           ...m,
           cost: calculateCost(m.name, m.inputTokens, m.outputTokens)
         })).sort((a, b) => b.cost - a.cost),
-        byDay: (data.byDay || []).map((d: any) => {
-          const modelCosts: Record<string, number> = {};
-          (data.byModel || []).forEach(m => {
-             modelCosts[m.name] = 0;
-          });
-          
-          (data.byModel || []).forEach(m => {
-             const mid = m.name;
-             const it = d[`${mid}_input`] || 0;
-             const ot = d[`${mid}_output`] || 0;
-             if (it > 0 || ot > 0) {
-                 modelCosts[mid] = calculateCost(mid, it, ot);
-             }
-          });
-          return {
-            ...d,
-            ...modelCosts,
-            cost: calculateCost("default", d.inputTokens, d.outputTokens)
-          };
-        }),
+        byDay: [],
         byProject: (data.byProject || []).map(p => ({
           ...p,
           cost: calculateCost("default", p.inputTokens, p.outputTokens)
@@ -116,6 +168,26 @@ export default function UsagePage() {
       };
 
       enrichedStats.totalCost = enrichedStats.byModel.reduce((acc, m) => acc + m.cost, 0);
+      
+      const modelNames = enrichedStats.byModel.map(m => m.name);
+      const processedByDay = (data.byDay || []).map((d: any) => {
+        const modelCosts: Record<string, number> = {};
+        modelNames.forEach(mid => {
+          modelCosts[mid] = 0;
+          const it = d[`${mid}_input`] || 0;
+          const ot = d[`${mid}_output`] || 0;
+          if (it > 0 || ot > 0) {
+            modelCosts[mid] = calculateCost(mid, it, ot);
+          }
+        });
+        return {
+          ...d,
+          ...modelCosts,
+          cost: calculateCost("default", d.inputTokens, d.outputTokens)
+        };
+      });
+      
+      enrichedStats.byDay = fillDateGaps(processedByDay, selectedRange.value, selectedRange.granularity, modelNames);
       setStats(enrichedStats);
     } catch (e: any) {
       const msg = e.response?.data?.error || e.message || "Unknown error";
@@ -404,6 +476,8 @@ export default function UsagePage() {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: 'currentColor', opacity: 0.5 }}
+                    interval="preserveStartEnd"
+                    minTickGap={15}
                   />
                   <YAxis 
                     tickFormatter={(v) => `$${v}`}
@@ -555,7 +629,7 @@ export default function UsagePage() {
 
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card className="col-span-1 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
               Top Projects
@@ -589,7 +663,7 @@ export default function UsagePage() {
         </Card>
 
         <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-primary" />
               Model Performance Analysis

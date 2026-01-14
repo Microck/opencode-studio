@@ -17,6 +17,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,6 +46,8 @@ import {
   Edit2,
   MoreVertical,
   Terminal,
+  HelpCircle,
+  ArrowRight,
 } from "lucide-react";
 import { 
   getAuthInfo, 
@@ -102,6 +112,19 @@ export default function AuthPage() {
   const [pool, setPool] = useState<AccountPool | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [rotating, setRotating] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    const seen = localStorage.getItem('auth-tutorial-seen');
+    if (!seen) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const dismissTutorial = () => {
+    localStorage.setItem('auth-tutorial-seen', 'true');
+    setShowTutorial(false);
+  };
 
   const loadData = async (silent = false) => {
     try {
@@ -391,6 +414,9 @@ export default function AuthPage() {
           )}
         </div>
         <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowTutorial(true)} title="Show help">
+            <HelpCircle className="h-4 w-4" />
+          </Button>
           <Button variant="outline" size="sm" onClick={() => loadData()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
@@ -701,6 +727,81 @@ export default function AuthPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showTutorial} onOpenChange={(o) => !o && dismissTutorial()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Welcome to Authentication
+            </DialogTitle>
+            <DialogDescription>
+              Manage your AI provider connections in one place.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Key className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Google Auth Plugins</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  <b>Gemini</b> = standard single-account. <b>Antigravity</b> = multi-account with rotation. 
+                  Switch between them anytime if both are installed.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Account Pool</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Add multiple Google accounts and rotate between them. Useful when you hit rate limits - 
+                  just click Rotate or mark an account as "cooldown".
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Save className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Saved Profiles</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  For other providers (Anthropic, OpenRouter, etc.), save credentials as named profiles 
+                  to quickly switch between API keys or accounts.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Terminal className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Terminal Login</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Click "Terminal Login" or the provider's Connect button to open an interactive terminal 
+                  for OAuth or API key entry.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={dismissTutorial} className="w-full sm:w-auto">
+              Got it
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

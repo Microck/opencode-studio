@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Layers, Plus, MoreVertical, Play, Trash2, Save, Check } from "lucide-react";
+import { Layers, Plus, MoreVertical, Play, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -211,39 +210,37 @@ export function PresetsManager() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create Preset</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-1 py-4">
+          <div className="flex-1 overflow-y-auto py-4">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Coding Mode" />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Enables coding skills..." />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Coding Mode" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Enables coding skills..." />
+                </div>
               </div>
               
-              <div className="border rounded-md p-4">
-                <h4 className="text-sm font-medium mb-3">Configuration</h4>
-                <Tabs defaultValue="skills">
-                  <TabsList className="w-full">
-                    <TabsTrigger value="skills" className="flex-1">Skills ({selectedSkills.length})</TabsTrigger>
-                    <TabsTrigger value="plugins" className="flex-1">Plugins ({selectedPlugins.length})</TabsTrigger>
-                    <TabsTrigger value="mcps" className="flex-1">MCPs ({selectedMcps.length})</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="skills" className="h-[200px] overflow-y-auto pt-2 space-y-2">
-                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="border rounded-md flex flex-col">
+                  <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+                    <Label htmlFor="include-skills" className="cursor-pointer font-medium text-sm">Skills</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{selectedSkills.length}</span>
                       <Switch id="include-skills" checked={includeSkills} onCheckedChange={setIncludeSkills} />
-                      <Label htmlFor="include-skills" className="cursor-pointer font-medium">Include Skills in Preset</Label>
                     </div>
-                    {skills.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No skills found</p>}
+                  </div>
+                  <div className="flex-1 overflow-y-auto max-h-[280px] p-2 space-y-1">
+                    {skills.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No skills found</p>}
                     {skills.map(skill => (
-                      <div key={skill.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includeSkills ? 'opacity-50' : ''}`}>
-                        <Label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer">{skill.name}</Label>
+                      <div key={skill.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 text-sm ${!includeSkills ? 'opacity-50' : ''}`}>
+                        <Label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer truncate">{skill.name}</Label>
                         <Switch 
                           id={`skill-${skill.name}`}
                           checked={selectedSkills.includes(skill.name)}
@@ -255,17 +252,22 @@ export function PresetsManager() {
                         />
                       </div>
                     ))}
-                  </TabsContent>
-                  
-                  <TabsContent value="plugins" className="h-[200px] overflow-y-auto pt-2 space-y-2">
-                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+                  </div>
+                </div>
+
+                <div className="border rounded-md flex flex-col">
+                  <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+                    <Label htmlFor="include-plugins" className="cursor-pointer font-medium text-sm">Plugins</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{selectedPlugins.length}</span>
                       <Switch id="include-plugins" checked={includePlugins} onCheckedChange={setIncludePlugins} />
-                      <Label htmlFor="include-plugins" className="cursor-pointer font-medium">Include Plugins in Preset</Label>
                     </div>
-                    {plugins.length === 0 && <p className="text-sm text-muted-foreground italic p-2">No plugins found</p>}
+                  </div>
+                  <div className="flex-1 overflow-y-auto max-h-[280px] p-2 space-y-1">
+                    {plugins.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No plugins found</p>}
                     {plugins.map(plugin => (
-                      <div key={plugin.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includePlugins ? 'opacity-50' : ''}`}>
-                        <Label htmlFor={`plugin-${plugin.name}`} className="flex-1 cursor-pointer">{plugin.name}</Label>
+                      <div key={plugin.name} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 text-sm ${!includePlugins ? 'opacity-50' : ''}`}>
+                        <Label htmlFor={`plugin-${plugin.name}`} className="flex-1 cursor-pointer truncate">{plugin.name}</Label>
                         <Switch 
                           id={`plugin-${plugin.name}`}
                           checked={selectedPlugins.includes(plugin.name)}
@@ -277,19 +279,24 @@ export function PresetsManager() {
                         />
                       </div>
                     ))}
-                  </TabsContent>
-                  
-                  <TabsContent value="mcps" className="h-[200px] overflow-y-auto pt-2 space-y-2">
-                    <div className="flex items-center space-x-2 mb-2 p-2 bg-muted/30 rounded sticky top-0 backdrop-blur-sm z-10">
+                  </div>
+                </div>
+
+                <div className="border rounded-md flex flex-col">
+                  <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+                    <Label htmlFor="include-mcps" className="cursor-pointer font-medium text-sm">MCPs</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{selectedMcps.length}</span>
                       <Switch id="include-mcps" checked={includeMcps} onCheckedChange={setIncludeMcps} />
-                      <Label htmlFor="include-mcps" className="cursor-pointer font-medium">Include MCPs in Preset</Label>
                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto max-h-[280px] p-2 space-y-1">
                     {!config?.mcp || Object.keys(config.mcp).length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic p-2">No MCP servers found</p>
+                      <p className="text-xs text-muted-foreground italic p-2">No MCP servers found</p>
                     ) : (
                       Object.keys(config.mcp).map(key => (
-                        <div key={key} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 ${!includeMcps ? 'opacity-50' : ''}`}>
-                          <Label htmlFor={`mcp-${key}`} className="flex-1 cursor-pointer">{key}</Label>
+                        <div key={key} className={`flex items-center justify-between p-2 rounded hover:bg-muted/50 text-sm ${!includeMcps ? 'opacity-50' : ''}`}>
+                          <Label htmlFor={`mcp-${key}`} className="flex-1 cursor-pointer truncate">{key}</Label>
                           <Switch 
                             id={`mcp-${key}`}
                             checked={selectedMcps.includes(key)}
@@ -302,12 +309,12 @@ export function PresetsManager() {
                         </div>
                       ))
                     )}
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <DialogFooter className="mt-4">
+          <DialogFooter>
             <Button onClick={handleCreate}>Save Preset</Button>
           </DialogFooter>
         </DialogContent>

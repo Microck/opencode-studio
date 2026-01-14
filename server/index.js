@@ -1231,6 +1231,8 @@ app.get('/api/usage', async (req, res) => {
         if (range === '24h') min = now - 86400000;
         else if (range === '7d') min = now - 604800000;
         else if (range === '30d') min = now - 2592000000;
+        else if (range === '3m') min = now - 7776000000;
+        else if (range === '6m') min = now - 15552000000;
         else if (range === '1y') min = now - 31536000000;
 
         const sessionDirs = await fs.promises.readdir(md);
