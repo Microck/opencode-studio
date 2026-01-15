@@ -157,6 +157,9 @@ export default function AuthPage() {
       if (!silent) toast.error("Failed to load auth info");
     } finally {
       if (!silent) setLoading(false);
+      if (activeGooglePlugin === 'antigravity') {
+        setTimeout(() => loadData(true), 120000);
+      }
     }
   };
 
@@ -194,6 +197,11 @@ export default function AuthPage() {
   };
 
   const handleGoogleLogin = async () => {
+    if (activeGooglePlugin === 'antigravity') {
+      await handleLogin('google');
+      return;
+    }
+
     try {
       setGoogleOAuthLoading(true);
       await startGoogleOAuth();

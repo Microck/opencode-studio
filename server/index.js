@@ -69,6 +69,7 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
 const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
+const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
 
 let pendingActionMemory = null;
 
@@ -576,6 +577,7 @@ app.get('/api/auth/providers', (req, res) => {
 });
 
 app.get('/api/auth', (req, res) => {
+    syncAntigravityPool();
     const authCfg = loadAuthConfig() || {};
     const studio = loadStudioConfig();
     const ac = studio.activeProfiles || {};
@@ -646,6 +648,7 @@ app.get('/api/auth', (req, res) => {
 });
 
 app.get('/api/auth/profiles', (req, res) => {
+    syncAntigravityPool();
     const authCfg = loadAuthConfig() || {};
     const studio = loadStudioConfig();
     const ac = studio.activeProfiles || {};
@@ -913,6 +916,10 @@ app.delete('/api/auth/:provider', (req, res) => {
         delete metadata['google.gemini'];
         delete metadata['google.antigravity'];
         savePoolMetadata(metadata);
+
+        if (activePlugin === 'antigravity' && fs.existsSync(ANTIGRAVITY_ACCOUNTS_PATH)) {
+            fs.rmSync(ANTIGRAVITY_ACCOUNTS_PATH, { force: true });
+        }
     } else {
         delete authCfg[provider];
         if (studio.activeProfiles) delete studio.activeProfiles[provider];
@@ -957,6 +964,74 @@ function savePoolMetadata(metadata) {
     const dir = path.dirname(POOL_METADATA_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     atomicWriteFileSync(POOL_METADATA_FILE, JSON.stringify(metadata, null, 2));
+}
+
+function loadAntigravityAccounts() {
+    if (!fs.existsSync(ANTIGRAVITY_ACCOUNTS_PATH)) return null;
+    try {
+        return JSON.parse(fs.readFileSync(ANTIGRAVITY_ACCOUNTS_PATH, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function listAntigravityAccounts() {
+    const data = loadAntigravityAccounts();
+    if (!data?.accounts || !Array.isArray(data.accounts)) return [];
+    return data.accounts.map(a => ({
+        email: a.email || null,
+        refreshToken: a.refreshToken || null
+    }));
+}
+
+function syncAntigravityPool() {
+    const accounts = listAntigravityAccounts();
+    const namespace = 'google.antigravity';
+    const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
+
+    if (!accounts.length) {
+        if (fs.existsSync(profileDir)) fs.rmSync(profileDir, { recursive: true, force: true });
+        const metadata = loadPoolMetadata();
+        if (metadata[namespace]) {
+            delete metadata[namespace];
+            savePoolMetadata(metadata);
+        }
+        return;
+    }
+
+    if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
+    const metadata = loadPoolMetadata();
+    if (!metadata[namespace]) metadata[namespace] = {};
+
+    const seen = new Set();
+    accounts.forEach((account, idx) => {
+        const name = account.email || `account-${idx + 1}`;
+        seen.add(name);
+        const profilePath = path.join(profileDir, `${name}.json`);
+        if (!fs.existsSync(profilePath)) {
+            atomicWriteFileSync(profilePath, JSON.stringify({ email: account.email }, null, 2));
+        }
+        if (!metadata[namespace][name]) {
+            metadata[namespace][name] = {
+                email: account.email || null,
+                createdAt: Date.now(),
+                lastUsed: 0,
+                usageCount: 0
+            };
+        }
+    });
+
+    const profileFiles = fs.existsSync(profileDir) ? fs.readdirSync(profileDir).filter(f => f.endsWith('.json')) : [];
+    profileFiles.forEach(file => {
+        const name = file.replace('.json', '');
+        if (!seen.has(name)) {
+            fs.unlinkSync(path.join(profileDir, file));
+            if (metadata[namespace]?.[name]) delete metadata[namespace][name];
+        }
+    });
+
+    savePoolMetadata(metadata);
 }
 
 function getAccountStatus(meta, now) {
@@ -1032,38 +1107,9 @@ function buildAccountPool(provider) {
 // GET /api/auth/pool - Get account pool for Google (or specified provider)
 app.get('/api/auth/pool', (req, res) => {
     const provider = req.query.provider || 'google';
+    syncAntigravityPool();
     const pool = buildAccountPool(provider);
-    
-    // Also include quota estimate (local tracking)
-    const metadata = loadPoolMetadata();
-    const activePlugin = getActiveGooglePlugin();
-    const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
-        : provider;
-    
-    const quotaMeta = metadata._quota?.[namespace] || {};
-    const today = new Date().toISOString().split('T')[0];
-    const todayUsage = quotaMeta[today] || 0;
-    
-    // Estimate: 1000 requests/day limit (configurable)
-    const dailyLimit = quotaMeta.dailyLimit || 1000;
-    const remaining = Math.max(0, dailyLimit - todayUsage);
-    const percentage = Math.round((remaining / dailyLimit) * 100);
-    
-    const quota = {
-        dailyLimit,
-        remaining,
-        used: todayUsage,
-        percentage,
-        resetAt: new Date(new Date().setHours(24, 0, 0, 0)).toISOString(),
-        byAccount: pool.accounts.map(acc => ({
-            name: acc.name,
-            email: acc.email,
-            used: acc.usageCount,
-            limit: Math.floor(dailyLimit / Math.max(1, pool.totalAccounts))
-        }))
-    };
-    
+    const quota = getPoolQuota(provider, pool);
     res.json({ pool, quota });
 });
 
@@ -1483,6 +1529,14 @@ app.get('/api/auth/google/plugin', (req, res) => {
 
 const GEMINI_CLIENT_ID = process.env.GEMINI_CLIENT_ID || "";
 const GEMINI_CLIENT_SECRET = process.env.GEMINI_CLIENT_SECRET || "";
+
+function getGeminiClientId() {
+    if (GEMINI_CLIENT_ID) return GEMINI_CLIENT_ID;
+    const opencodeCfg = loadConfig();
+    const oauth = opencodeCfg?.mcp?.google?.oauth;
+    return oauth?.clientId || "";
+}
+
 const GEMINI_SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -1508,14 +1562,19 @@ app.post('/api/auth/google/start', async (req, res) => {
     if (oauthCallbackServer) {
         return res.status(400).json({ error: 'OAuth flow already in progress' });
     }
-    
+
+    const clientId = getGeminiClientId();
+    if (!clientId) {
+        return res.status(400).json({ error: 'Missing Gemini OAuth client_id. Set GEMINI_CLIENT_ID or mcp.google.oauth.clientId.' });
+    }
+
     const { verifier, challenge } = generatePKCE();
     const state = encodeOAuthState({ verifier });
     
     pendingOAuthState = { verifier, status: 'pending', startedAt: Date.now() };
     
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', GEMINI_CLIENT_ID);
+    authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('redirect_uri', GEMINI_REDIRECT_URI);
     authUrl.searchParams.set('scope', GEMINI_SCOPES.join(' '));
@@ -1549,7 +1608,7 @@ app.post('/api/auth/google/start', async (req, res) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
-                    client_id: GEMINI_CLIENT_ID,
+                    client_id: clientId,
                     client_secret: GEMINI_CLIENT_SECRET,
                     code,
                     grant_type: 'authorization_code',
