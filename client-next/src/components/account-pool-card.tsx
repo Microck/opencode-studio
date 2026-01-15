@@ -23,6 +23,7 @@ import {
   Play,
   Star,
   Plus,
+  Trash2,
 } from "lucide-react";
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
 
@@ -33,6 +34,7 @@ interface AccountPoolCardProps {
   onActivate: (name: string) => Promise<void>;
   onCooldown: (name: string) => Promise<void>;
   onClearCooldown: (name: string) => Promise<void>;
+  onRemove: (name: string) => Promise<void>;
   onAddAccount: () => void;
   rotating: boolean;
   isAdding: boolean;
@@ -86,6 +88,7 @@ export function AccountPoolCard({
   onActivate,
   onCooldown,
   onClearCooldown,
+  onRemove,
   onAddAccount,
   rotating,
   isAdding,
@@ -135,10 +138,10 @@ export function AccountPoolCard({
     <Card className="border-primary/20">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Account Pool
-          </CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              {providerName} Pool
+            </CardTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -187,6 +190,8 @@ export function AccountPoolCard({
               className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
                 account.status === "active"
                   ? "bg-primary/5 border border-primary/20"
+                  : account.status === "cooldown"
+                  ? "bg-yellow-500/10 border border-yellow-200/60 dark:border-yellow-900/30"
                   : "bg-muted/30 hover:bg-muted/50"
               }`}
             >
@@ -205,7 +210,7 @@ export function AccountPoolCard({
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{account.usageCount} requests</span>
                     {account.status === "cooldown" && cooldownTimers[account.name] && (
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400">
                         <Clock className="h-3 w-3" />
                         {cooldownTimers[account.name]}
                       </span>
@@ -238,6 +243,11 @@ export function AccountPoolCard({
                       Mark Cooldown
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onRemove(account.name)} className="text-destructive">
+                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                    Remove Account
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

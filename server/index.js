@@ -681,8 +681,25 @@ app.post('/api/auth/profiles/:provider', (req, res) => {
     const dir = path.join(AUTH_PROFILES_DIR, namespace);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     
-    const profilePath = path.join(dir, `${name || Date.now()}.json`);
+    if (!auth[provider]) {
+        return res.status(400).json({ error: 'No current auth for provider' });
+    }
+
+    const profileName = name || auth[provider].email || `profile-${Date.now()}`;
+    const profilePath = path.join(dir, `${profileName}.json`);
     atomicWriteFileSync(profilePath, JSON.stringify(auth[provider], null, 2));
+
+    const metadata = loadPoolMetadata();
+    if (!metadata[namespace]) metadata[namespace] = {};
+    metadata[namespace][profileName] = {
+        ...(metadata[namespace][profileName] || {}),
+        email: auth[provider].email || metadata[namespace][profileName]?.email || null,
+        createdAt: metadata[namespace][profileName]?.createdAt || Date.now(),
+        lastUsed: Date.now(),
+        usageCount: metadata[namespace][profileName]?.usageCount || 0
+    };
+    savePoolMetadata(metadata);
+
     res.json({ success: true, name: path.basename(profilePath, '.json') });
 });
 
@@ -714,6 +731,22 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
     const cp = getConfigPath();
     const ap = path.join(path.dirname(cp), 'auth.json');
     atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+
+    const metadata = loadPoolMetadata();
+    if (!metadata[namespace]) metadata[namespace] = {};
+    metadata[namespace][name] = {
+        ...(metadata[namespace][name] || {}),
+        email: profileData.email || metadata[namespace][name]?.email || null,
+        createdAt: metadata[namespace][name]?.createdAt || Date.now(),
+        lastUsed: Date.now(),
+        usageCount: (metadata[namespace][name]?.usageCount || 0) + 1
+    };
+    if (!metadata._quota) metadata._quota = {};
+    if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
+    const today = new Date().toISOString().split('T')[0];
+    metadata._quota[namespace][today] = (metadata._quota[namespace][today] || 0) + 1;
+    savePoolMetadata(metadata);
+
     res.json({ success: true });
 });
 
@@ -726,6 +759,30 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     
     const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${name}.json`);
     if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
+
+    const studio = loadStudioConfig();
+    if (studio.activeProfiles && studio.activeProfiles[provider] === name) {
+        delete studio.activeProfiles[provider];
+        saveStudioConfig(studio);
+
+        const authCfg = loadAuthConfig() || {};
+        delete authCfg[provider];
+        if (provider === 'google') {
+            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            delete authCfg.google;
+            delete authCfg[key];
+        }
+        const cp = getConfigPath();
+        const ap = path.join(path.dirname(cp), 'auth.json');
+        atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+    }
+
+    const metadata = loadPoolMetadata();
+    if (metadata[namespace]?.[name]) {
+        delete metadata[namespace][name];
+        savePoolMetadata(metadata);
+    }
+
     res.json({ success: true });
 });
 
@@ -770,10 +827,13 @@ app.post('/api/auth/login', (req, res) => {
     let cmd = 'opencode auth login';
     if (provider) cmd += ` ${provider}`;
     
+    const cp = getConfigPath();
+    const configDir = cp ? path.dirname(cp) : process.cwd();
+    const safeDir = configDir.replace(/"/g, '\\"');
     const platform = process.platform;
     
     if (platform === 'win32') {
-        const terminalCmd = `start "" cmd /c "call ${cmd} || pause"`;
+        const terminalCmd = `start "" /d "${safeDir}" cmd /c "call ${cmd} || pause"`;
         console.log('Executing terminal command:', terminalCmd);
         exec(terminalCmd, (err) => {
             if (err) {
@@ -783,7 +843,7 @@ app.post('/api/auth/login', (req, res) => {
             res.json({ success: true, message: 'Terminal opened', note: 'Complete login in the terminal window' });
         });
     } else if (platform === 'darwin') {
-        const terminalCmd = `osascript -e 'tell application "Terminal" to do script "${cmd}"'`;
+        const terminalCmd = `osascript -e 'tell application "Terminal" to do script "cd ${safeDir} && ${cmd}"'`;
         console.log('Executing terminal command:', terminalCmd);
         exec(terminalCmd, (err) => {
             if (err) {
@@ -794,11 +854,11 @@ app.post('/api/auth/login', (req, res) => {
         });
     } else {
         const linuxTerminals = [
-            { name: 'x-terminal-emulator', cmd: `x-terminal-emulator -e "${cmd}"` },
-            { name: 'gnome-terminal', cmd: `gnome-terminal -- bash -c "${cmd}; read -p 'Press Enter to close...'"` },
-            { name: 'konsole', cmd: `konsole -e bash -c "${cmd}; read -p 'Press Enter to close...'"` },
-            { name: 'xfce4-terminal', cmd: `xfce4-terminal -e "bash -c \\"${cmd}; read -p 'Press Enter to close...'\\"" ` },
-            { name: 'xterm', cmd: `xterm -e "bash -c '${cmd}; read -p Press_Enter_to_close...'"` }
+            { name: 'x-terminal-emulator', cmd: `x-terminal-emulator -e "bash -c 'cd ${safeDir} && ${cmd}'"` },
+            { name: 'gnome-terminal', cmd: `gnome-terminal -- bash -c "cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'"` },
+            { name: 'konsole', cmd: `konsole -e bash -c "cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'"` },
+            { name: 'xfce4-terminal', cmd: `xfce4-terminal -e "bash -c \"cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'\"" ` },
+            { name: 'xterm', cmd: `xterm -e "bash -c 'cd ${safeDir} && ${cmd}; read -p Press_Enter_to_close...'"` }
         ];
         
         const tryTerminal = (index) => {
@@ -828,18 +888,53 @@ app.post('/api/auth/login', (req, res) => {
     }
 });
 
+
 app.delete('/api/auth/:provider', (req, res) => {
     const { provider } = req.params;
     const authCfg = loadAuthConfig() || {};
-    delete authCfg[provider];
+    const studio = loadStudioConfig();
+    const activePlugin = studio.activeGooglePlugin;
+
+    if (provider === 'google') {
+        delete authCfg.google;
+        delete authCfg['google.gemini'];
+        delete authCfg['google.antigravity'];
+
+        if (studio.activeProfiles) delete studio.activeProfiles.google;
+        saveStudioConfig(studio);
+
+        const geminiDir = path.join(AUTH_PROFILES_DIR, 'google.gemini');
+        const antiDir = path.join(AUTH_PROFILES_DIR, 'google.antigravity');
+        [geminiDir, antiDir].forEach(dir => {
+            if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+        });
+
+        const metadata = loadPoolMetadata();
+        delete metadata['google.gemini'];
+        delete metadata['google.antigravity'];
+        savePoolMetadata(metadata);
+    } else {
+        delete authCfg[provider];
+        if (studio.activeProfiles) delete studio.activeProfiles[provider];
+        saveStudioConfig(studio);
+
+        const providerDir = path.join(AUTH_PROFILES_DIR, provider);
+        if (fs.existsSync(providerDir)) fs.rmSync(providerDir, { recursive: true, force: true });
+
+        const metadata = loadPoolMetadata();
+        delete metadata[provider];
+        savePoolMetadata(metadata);
+    }
+
+    if (provider === 'google' && activePlugin) {
+        const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        delete authCfg[key];
+    }
+
     const cp = getConfigPath();
     const ap = path.join(path.dirname(cp), 'auth.json');
     atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
-    
-    const studio = loadStudioConfig();
-    if (studio.activeProfiles) delete studio.activeProfiles[provider];
-    saveStudioConfig(studio);
-    
+
     res.json({ success: true });
 });
 
@@ -892,11 +987,18 @@ function buildAccountPool(provider) {
         files.forEach(file => {
             const name = file.replace('.json', '');
             const meta = providerMeta[name] || {};
-            const status = name === activeProfile ? 'active' : getAccountStatus(meta, now);
+            let profileEmail = null;
+            try {
+                const raw = fs.readFileSync(path.join(profileDir, file), 'utf8');
+                const parsed = JSON.parse(raw);
+                profileEmail = parsed?.email || null;
+            } catch {}
+            let status = getAccountStatus(meta, now);
+            if (name === activeProfile && status === 'ready') status = 'active';
             
             profiles.push({
                 name,
-                email: meta.email || null,
+                email: meta.email || profileEmail || null,
                 status,
                 lastUsed: meta.lastUsed || 0,
                 usageCount: meta.usageCount || 0,
@@ -1022,8 +1124,15 @@ app.post('/api/auth/pool/rotate', (req, res) => {
     if (!metadata[namespace]) metadata[namespace] = {};
     metadata[namespace][next.name] = {
         ...metadata[namespace][next.name],
-        lastUsed: now
+        lastUsed: now,
+        usageCount: (metadata[namespace][next.name]?.usageCount || 0) + 1
     };
+
+    if (!metadata._quota) metadata._quota = {};
+    if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
+    const today = new Date().toISOString().split('T')[0];
+    metadata._quota[namespace][today] = (metadata._quota[namespace][today] || 0) + 1;
+
     savePoolMetadata(metadata);
     
     res.json({
@@ -1471,8 +1580,8 @@ app.post('/api/auth/google/start', async (req, res) => {
             const ap = path.join(path.dirname(cp), 'auth.json');
             const authCfg = fs.existsSync(ap) ? JSON.parse(fs.readFileSync(ap, 'utf8')) : {};
             
-            const studio = loadStudioConfig();
-            const activePlugin = studio.activeGooglePlugin || 'gemini';
+            const studioConfig = loadStudioConfig();
+            const activePlugin = studioConfig.activeGooglePlugin || 'gemini';
             const namespace = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
             
             const credentials = {
@@ -1486,6 +1595,27 @@ app.post('/api/auth/google/start', async (req, res) => {
             authCfg[namespace] = credentials;
             
             atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+
+            const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
+            if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+            const profileName = email || `google-${Date.now()}`;
+            const profilePath = path.join(profileDir, `${profileName}.json`);
+            atomicWriteFileSync(profilePath, JSON.stringify(credentials, null, 2));
+
+            const metadata = loadPoolMetadata();
+            if (!metadata[namespace]) metadata[namespace] = {};
+            metadata[namespace][profileName] = {
+                ...(metadata[namespace][profileName] || {}),
+                email: email || null,
+                createdAt: metadata[namespace][profileName]?.createdAt || Date.now(),
+                lastUsed: Date.now(),
+                usageCount: metadata[namespace][profileName]?.usageCount || 0
+            };
+            savePoolMetadata(metadata);
+
+            if (!studioConfig.activeProfiles) studioConfig.activeProfiles = {};
+            studioConfig.activeProfiles.google = profileName;
+            saveStudioConfig(studioConfig);
             
             pendingOAuthState = { ...pendingOAuthState, status: 'success', email };
             

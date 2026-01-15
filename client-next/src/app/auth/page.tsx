@@ -198,7 +198,7 @@ export default function AuthPage() {
       setGoogleOAuthLoading(true);
       await startGoogleOAuth();
       toast.info("Browser opened for Google login...", { duration: 5000 });
-      
+
       const pollInterval = setInterval(async () => {
         try {
           const status = await getGoogleOAuthStatus();
@@ -215,17 +215,16 @@ export default function AuthPage() {
         } catch {
           clearInterval(pollInterval);
           setGoogleOAuthLoading(false);
+          toast.error('Login check failed');
         }
       }, 2000);
-      
+
       setTimeout(() => {
         clearInterval(pollInterval);
-        if (googleOAuthLoading) {
-          setGoogleOAuthLoading(false);
-          toast.error("Login timed out");
-        }
+        setGoogleOAuthLoading(false);
+        toast.error("Login timed out");
       }, 120000);
-      
+
     } catch {
       setGoogleOAuthLoading(false);
       toast.error("Failed to start Google login");
@@ -375,6 +374,17 @@ export default function AuthPage() {
     }
   };
 
+  const handlePoolRemove = async (name: string) => {
+    try {
+      await deleteAuthProfile('google', name);
+      toast.success(`Removed ${name}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to remove: ${msg}`);
+    }
+  };
+
   const handlePoolCooldown = async (name: string) => {
     try {
       await markAccountCooldown(name, 'google', 3600000);
@@ -419,6 +429,17 @@ export default function AuthPage() {
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to activate: ${msg}`);
+    }
+  };
+
+  const handleOpenaiPoolRemove = async (name: string) => {
+    try {
+      await deleteAuthProfile('openai', name);
+      toast.success(`Removed ${name}`);
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to remove: ${msg}`);
     }
   };
   
@@ -547,6 +568,7 @@ export default function AuthPage() {
               onActivate={handlePoolActivate}
               onCooldown={handlePoolCooldown}
               onClearCooldown={handlePoolClearCooldown}
+              onRemove={handlePoolRemove}
               rotating={rotating}
               providerName="Google"
             />
@@ -576,13 +598,14 @@ export default function AuthPage() {
                 quota={openaiQuota}
                 onAddAccount={() => handleLogin('openai')}
                 isAdding={loginLoading}
-                onRotate={handleOpenaiPoolRotate}
-                onActivate={handleOpenaiPoolActivate}
-                onCooldown={handleOpenaiPoolCooldown}
-                onClearCooldown={handleOpenaiPoolClearCooldown}
-                rotating={openaiRotating}
-                providerName="OpenAI"
-              />
+              onRotate={handleOpenaiPoolRotate}
+              onActivate={handleOpenaiPoolActivate}
+              onCooldown={handleOpenaiPoolCooldown}
+              onClearCooldown={handleOpenaiPoolClearCooldown}
+              onRemove={handleOpenaiPoolRemove}
+              rotating={openaiRotating}
+              providerName="OpenAI"
+            />
             </div>
           )}
 
