@@ -1470,7 +1470,8 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
         ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
         : provider;
     
-    const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${name}.json`);
+    const dir = getProfileDir(provider, activePlugin);
+    const profilePath = path.join(dir, `${name}.json`);
     if (!fs.existsSync(profilePath)) return res.status(404).json({ error: 'Profile not found' });
     
     const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
@@ -1517,7 +1518,8 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
         ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
         : provider;
     
-    const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${name}.json`);
+    const dir = getProfileDir(provider, activePlugin);
+    const profilePath = path.join(dir, `${name}.json`);
     if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
 
     const studio = loadStudioConfig();
@@ -1554,8 +1556,9 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
         ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
         : provider;
     
-    const oldPath = path.join(AUTH_PROFILES_DIR, namespace, `${name}.json`);
-    const newPath = path.join(AUTH_PROFILES_DIR, namespace, `${newName}.json`);
+    const dir = getProfileDir(provider, activePlugin);
+    const oldPath = path.join(dir, `${name}.json`);
+    const newPath = path.join(dir, `${newName}.json`);
     if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
 
     const metadata = loadPoolMetadata();
