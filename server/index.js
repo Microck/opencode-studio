@@ -519,6 +519,215 @@ app.post('/api/config', (req, res) => {
     }
 });
 
+app.get('/api/backup', (req, res) => {
+    try {
+        const studioConfig = loadStudioConfig();
+        const opencodeConfig = loadConfig();
+        const skills = [];
+        const plugins = [];
+        
+        const sd = getSkillDir();
+        if (sd && fs.existsSync(sd)) {
+            fs.readdirSync(sd, { withFileTypes: true })
+                .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
+                .forEach(e => {
+                    const content = fs.readFileSync(path.join(sd, e.name, 'SKILL.md'), 'utf8');
+                    skills.push({ name: e.name, content });
+                });
+        }
+        
+        const pd = getPluginDir();
+        if (pd && fs.existsSync(pd)) {
+            fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
+                const fp = path.join(pd, e.name);
+                if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
+                    plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(fp, 'utf8') });
+                }
+            });
+        }
+        
+        res.json({
+            version: 1,
+            timestamp: new Date().toISOString(),
+            studioConfig,
+            opencodeConfig,
+            skills,
+            plugins
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/restore', (req, res) => {
+    try {
+        const { studioConfig, opencodeConfig, skills, plugins } = req.body;
+        
+        if (studioConfig) saveStudioConfig(studioConfig);
+        if (opencodeConfig) saveConfig(opencodeConfig);
+        
+        const sd = getSkillDir();
+        if (sd && skills && Array.isArray(skills)) {
+            if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
+            skills.forEach(s => {
+                const skillDir = path.join(sd, s.name);
+                if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+                atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
+            });
+        }
+        
+        const pd = getPluginDir();
+        if (pd && plugins && Array.isArray(plugins)) {
+            if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
+            plugins.forEach(p => {
+                atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+            });
+        }
+        
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/sync/push', (req, res) => {
+    try {
+        const studio = loadStudioConfig();
+        const syncFolder = studio.syncFolder;
+        if (!syncFolder) return res.status(400).json({ error: 'Sync folder not configured' });
+        if (!fs.existsSync(syncFolder)) return res.status(400).json({ error: 'Sync folder does not exist' });
+        
+        const opencodeConfig = loadConfig();
+        const skills = [];
+        const plugins = [];
+        
+        const sd = getSkillDir();
+        if (sd && fs.existsSync(sd)) {
+            fs.readdirSync(sd, { withFileTypes: true })
+                .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
+                .forEach(e => {
+                    skills.push({ name: e.name, content: fs.readFileSync(path.join(sd, e.name, 'SKILL.md'), 'utf8') });
+                });
+        }
+        
+        const pd = getPluginDir();
+        if (pd && fs.existsSync(pd)) {
+            fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
+                if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
+                    plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(path.join(pd, e.name), 'utf8') });
+                }
+            });
+        }
+        
+        const backup = {
+            version: 1,
+            timestamp: new Date().toISOString(),
+            studioConfig: { ...studio, syncFolder: undefined },
+            opencodeConfig,
+            skills,
+            plugins
+        };
+        
+        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
+        atomicWriteFileSync(backupPath, JSON.stringify(backup, null, 2));
+        
+        studio.lastSyncAt = backup.timestamp;
+        saveStudioConfig(studio);
+        
+        res.json({ success: true, path: backupPath, timestamp: backup.timestamp });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/sync/pull', (req, res) => {
+    try {
+        const studio = loadStudioConfig();
+        const syncFolder = studio.syncFolder;
+        if (!syncFolder) return res.status(400).json({ error: 'Sync folder not configured' });
+        
+        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
+        if (!fs.existsSync(backupPath)) return res.status(404).json({ error: 'No sync file found in folder' });
+        
+        const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        
+        if (backup.studioConfig) {
+            const merged = { ...backup.studioConfig, syncFolder: studio.syncFolder };
+            saveStudioConfig(merged);
+        }
+        if (backup.opencodeConfig) saveConfig(backup.opencodeConfig);
+        
+        const sd = getSkillDir();
+        if (sd && backup.skills && Array.isArray(backup.skills)) {
+            if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
+            backup.skills.forEach(s => {
+                const skillDir = path.join(sd, s.name);
+                if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+                atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
+            });
+        }
+        
+        const pd = getPluginDir();
+        if (pd && backup.plugins && Array.isArray(backup.plugins)) {
+            if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
+            backup.plugins.forEach(p => {
+                atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+            });
+        }
+        
+        const updated = loadStudioConfig();
+        updated.lastSyncAt = new Date().toISOString();
+        saveStudioConfig(updated);
+        
+        res.json({ success: true, timestamp: backup.timestamp, skills: (backup.skills || []).length, plugins: (backup.plugins || []).length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/sync/status', (req, res) => {
+    const studio = loadStudioConfig();
+    const syncFolder = studio.syncFolder;
+    let fileExists = false;
+    let fileTimestamp = null;
+    
+    if (syncFolder) {
+        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
+        if (fs.existsSync(backupPath)) {
+            fileExists = true;
+            try {
+                const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+                fileTimestamp = backup.timestamp;
+            } catch {}
+        }
+    }
+    
+    res.json({
+        configured: !!syncFolder,
+        folder: syncFolder || null,
+        lastSync: studio.lastSyncAt || null,
+        fileExists,
+        fileTimestamp
+    });
+});
+
+app.post('/api/sync/config', (req, res) => {
+    const { folder } = req.body;
+    const studio = loadStudioConfig();
+    
+    if (folder) {
+        if (!fs.existsSync(folder)) {
+            return res.status(400).json({ error: 'Folder does not exist' });
+        }
+        studio.syncFolder = folder;
+    } else {
+        delete studio.syncFolder;
+    }
+    
+    saveStudioConfig(studio);
+    res.json({ success: true, folder: studio.syncFolder || null });
+});
+
 const getSkillDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'skill') : null;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, type PathsInfo, type BackupData, type AuthDebugInfo } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncFolder, syncPush, syncPull, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -33,6 +33,10 @@ import {
   Upload,
   Save,
   ChevronDown,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  FolderSync,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { PermissionValue, OpencodeConfig } from "@/types";
@@ -71,8 +75,13 @@ export default function SettingsPage() {
     tui: false,
     path: false,
     auth: false,
+    sync: false,
     backup: false,
   });
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncFolder, setSyncFolderInput] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -81,6 +90,10 @@ export default function SettingsPage() {
   useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
     getAuthDebug().then(setAuthDebug).catch(console.error);
+    getSyncStatus().then(s => {
+      setSyncStatus(s);
+      if (s.folder) setSyncFolderInput(s.folder);
+    }).catch(console.error);
   }, []);
 
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
@@ -163,6 +176,46 @@ export default function SettingsPage() {
     
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSetSyncFolder = async () => {
+    try {
+      const result = await setSyncFolder(syncFolder || null);
+      const status = await getSyncStatus();
+      setSyncStatus(status);
+      toast.success(result.folder ? "Sync folder configured" : "Sync folder cleared");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    }
+  };
+
+  const handleSyncPush = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncPush();
+      const status = await getSyncStatus();
+      setSyncStatus(status);
+      toast.success(`Config pushed to sync folder`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSyncPull = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncPull();
+      const status = await getSyncStatus();
+      setSyncStatus(status);
+      await refreshData();
+      toast.success(`Config pulled: ${result.skills} skills, ${result.plugins} plugins`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -401,6 +454,91 @@ export default function SettingsPage() {
               ) : (
                 <p className="text-muted-foreground text-sm">Loading...</p>
               )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.sync} onOpenChange={() => toggleSection("sync")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Cloud className="h-5 w-5" />
+                  <CardTitle>Cloud Sync</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.sync ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Sync config across devices via Dropbox, Google Drive, OneDrive, etc.</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-6 pt-0">
+              <div className="p-4 bg-background rounded-lg space-y-4">
+                <div className="space-y-2">
+                  <Label>Sync Folder Path</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Point to a folder synced by your cloud service (Dropbox, Google Drive, OneDrive, iCloud, etc.)
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={syncFolder}
+                      onChange={(e) => setSyncFolderInput(e.target.value)}
+                      placeholder="C:\Users\...\Dropbox\OpenCode"
+                      className="flex-1"
+                    />
+                    <Button onClick={handleSetSyncFolder}>
+                      <FolderSync className="h-4 w-4 mr-2" />
+                      Set
+                    </Button>
+                  </div>
+                </div>
+
+                {syncStatus?.configured && (
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Folder:</span>
+                      <span className="font-mono text-xs truncate max-w-[250px]">{syncStatus.folder}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sync file exists:</span>
+                      <span className={syncStatus.fileExists ? "text-green-500" : "text-muted-foreground"}>
+                        {syncStatus.fileExists ? "Yes" : "No"}
+                      </span>
+                    </div>
+                    {syncStatus.fileTimestamp && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">File timestamp:</span>
+                        <span className="text-xs">{new Date(syncStatus.fileTimestamp).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {syncStatus.lastSync && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Last sync:</span>
+                        <span className="text-xs">{new Date(syncStatus.lastSync).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {syncStatus?.configured && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Button onClick={handleSyncPush} disabled={syncing} className="w-full">
+                    <CloudUpload className="h-4 w-4 mr-2" />
+                    {syncing ? "Syncing..." : "Push to Cloud"}
+                  </Button>
+                  <Button onClick={handleSyncPull} disabled={syncing || !syncStatus.fileExists} variant="outline" className="w-full">
+                    <CloudDownload className="h-4 w-4 mr-2" />
+                    {syncing ? "Syncing..." : "Pull from Cloud"}
+                  </Button>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Push saves your config to the sync folder. Pull restores from it. Your cloud service syncs the file automatically.
+              </p>
             </CardContent>
           </CollapsibleContent>
         </Card>

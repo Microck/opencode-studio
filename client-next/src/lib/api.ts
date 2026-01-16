@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.5.0';
+export const MIN_SERVER_VERSION = '1.6.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -234,6 +234,34 @@ export async function getBackup(): Promise<BackupData> {
 
 export async function restoreBackup(backup: BackupData): Promise<void> {
   await api.post('/restore', backup);
+}
+
+export interface SyncStatus {
+  configured: boolean;
+  folder: string | null;
+  lastSync: string | null;
+  fileExists: boolean;
+  fileTimestamp: string | null;
+}
+
+export async function getSyncStatus(): Promise<SyncStatus> {
+  const { data } = await api.get<SyncStatus>('/sync/status');
+  return data;
+}
+
+export async function setSyncFolder(folder: string | null): Promise<{ success: boolean; folder: string | null }> {
+  const { data } = await api.post('/sync/config', { folder });
+  return data;
+}
+
+export async function syncPush(): Promise<{ success: boolean; path: string; timestamp: string }> {
+  const { data } = await api.post('/sync/push', {});
+  return data;
+}
+
+export async function syncPull(): Promise<{ success: boolean; timestamp: string; skills: number; plugins: number }> {
+  const { data } = await api.post('/sync/pull', {});
+  return data;
 }
 
 export interface FetchUrlResult {
