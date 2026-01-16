@@ -12,6 +12,52 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
+export const MIN_SERVER_VERSION = '1.4.0';
+
+function compareVersions(current: string, minimum: string): boolean {
+  const c = current.split('.').map(Number);
+  const m = minimum.split('.').map(Number);
+  for (let i = 0; i < Math.max(c.length, m.length); i++) {
+    const cv = c[i] || 0;
+    const mv = m[i] || 0;
+    if (cv > mv) return true;
+    if (cv < mv) return false;
+  }
+  return true;
+}
+
+export interface HealthResponse {
+  status: string;
+  version?: string;
+}
+
+export interface VersionCheck {
+  connected: boolean;
+  version: string | null;
+  isCompatible: boolean;
+  minRequired: string;
+}
+
+export async function checkHealth(): Promise<boolean> {
+  try {
+    await api.get('/health', { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkVersion(): Promise<VersionCheck> {
+  try {
+    const { data } = await api.get<HealthResponse>('/health', { timeout: 3000 });
+    const version = data.version || null;
+    const isCompatible = version ? compareVersions(version, MIN_SERVER_VERSION) : false;
+    return { connected: true, version, isCompatible, minRequired: MIN_SERVER_VERSION };
+  } catch {
+    return { connected: false, version: null, isCompatible: false, minRequired: MIN_SERVER_VERSION };
+  }
+}
+
 export function buildProtocolUrl(action: string, params?: Record<string, string>): string {
   let url = `opencodestudio://${action}`;
   if (params && Object.keys(params).length > 0) {
@@ -48,15 +94,6 @@ export async function clearPendingAction(): Promise<void> {
   } catch {}
 }
 
-export async function checkHealth(): Promise<boolean> {
-  try {
-    await api.get('/health', { timeout: 3000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function shutdownBackend(): Promise<void> {
   try {
     await api.post('/shutdown');
@@ -77,6 +114,20 @@ export async function getPaths(): Promise<PathsInfo> {
 
 export async function getDebugPaths(): Promise<any> {
   const { data } = await api.get('/paths');
+  return data;
+}
+
+export interface AuthDebugInfo {
+  configPath: string | null;
+  activeGooglePlugin: string | null;
+  activeProfiles: Record<string, string>;
+  authLocations: { path: string; exists: boolean; keys: string[] }[];
+  profileDirs: Record<string, { path: string; exists: boolean; profiles: string[] }>;
+  authProfilesDir: string;
+}
+
+export async function getAuthDebug(): Promise<AuthDebugInfo> {
+  const { data } = await api.get<AuthDebugInfo>('/debug/auth');
   return data;
 }
 

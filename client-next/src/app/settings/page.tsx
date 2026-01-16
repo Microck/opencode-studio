@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, type PathsInfo, type BackupData } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, type PathsInfo, type BackupData, type AuthDebugInfo } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -60,6 +60,7 @@ const ESSENTIAL_KEYBINDS = [
 export default function SettingsPage() {
   const { config, loading, saveConfig, refreshData } = useApp();
   const [pathsInfo, setPathsInfo] = useState<PathsInfo | null>(null);
+  const [authDebug, setAuthDebug] = useState<AuthDebugInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -69,6 +70,7 @@ export default function SettingsPage() {
     keybinds: false,
     tui: false,
     path: false,
+    auth: false,
     backup: false,
   });
 
@@ -78,6 +80,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
+    getAuthDebug().then(setAuthDebug).catch(console.error);
   }, []);
 
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
@@ -345,261 +348,58 @@ export default function SettingsPage() {
         </Card>
       </Collapsible>
 
-      <Collapsible open={openSections.agent} onOpenChange={() => toggleSection("agent")}>
+      <Collapsible open={openSections.auth} onOpenChange={() => toggleSection("auth")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Bot className="h-5 w-5" />
-                  <CardTitle>Agents</CardTitle>
+                  <Shield className="h-5 w-5" />
+                  <CardTitle>Auth Debug</CardTitle>
                 </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.agent ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.auth ? "rotate-180" : ""}`} />
               </div>
-              <CardDescription>Configure individual agent behavior</CardDescription>
+              <CardDescription>Debug authentication paths and profile locations</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-4 pt-0">
-              {AGENT_NAMES.map((agent) => (
-                <div key={agent} className="p-4 bg-background rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-medium capitalize">{agent}</Label>
-                    <Switch
-                      checked={!config?.agent?.[agent]?.disable}
-                      onCheckedChange={(v) => updateConfig({
-                        agent: {
-                          ...config?.agent,
-                          [agent]: { ...config?.agent?.[agent], disable: !v },
-                        },
-                      })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Model</Label>
-                      <Input
-                        value={config?.agent?.[agent]?.model || ""}
-                        onChange={(e) => updateConfig({
-                          agent: {
-                            ...config?.agent,
-                            [agent]: { ...config?.agent?.[agent], model: e.target.value || undefined },
-                          },
-                        })}
-                        placeholder="Default"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Temperature</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="2"
-                        value={config?.agent?.[agent]?.temperature ?? ""}
-                        onChange={(e) => updateConfig({
-                          agent: {
-                            ...config?.agent,
-                            [agent]: { ...config?.agent?.[agent], temperature: e.target.value ? parseFloat(e.target.value) : undefined },
-                          },
-                        })}
-                        placeholder="0.7"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Color</Label>
-                      <Input
-                        type="color"
-                        value={config?.agent?.[agent]?.color || "#888888"}
-                        onChange={(e) => updateConfig({
-                          agent: {
-                            ...config?.agent,
-                            [agent]: { ...config?.agent?.[agent], color: e.target.value },
-                          },
-                        })}
-                        className="h-9 p-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Collapsible open={openSections.keybinds} onOpenChange={() => toggleSection("keybinds")}>
-        <Card className="hover-lift">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Keyboard className="h-5 w-5" />
-                  <CardTitle>Keybinds</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.keybinds ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Customize keyboard shortcuts</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="animate-scale-in">
-            <CardContent className="space-y-4 pt-0">
-              <div className="grid grid-cols-2 gap-4">
-                {ESSENTIAL_KEYBINDS.map(([key, label]) => (
-                  <div key={key} className="flex items-center justify-between p-3 bg-background rounded-lg">
-                    <Label className="text-sm">{label}</Label>
-                    <Input
-                      value={config?.keybinds?.[key] || ""}
-                      onChange={(e) => updateConfig({
-                        keybinds: { ...config?.keybinds, [key]: e.target.value || undefined },
-                      })}
-                      placeholder="ctrl+x"
-                      className="w-32 text-center font-mono text-sm"
-                    />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Collapsible open={openSections.tui} onOpenChange={() => toggleSection("tui")}>
-        <Card className="hover-lift">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Monitor className="h-5 w-5" />
-                  <CardTitle>TUI Settings</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.tui ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Terminal user interface options</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="animate-scale-in">
-            <CardContent className="space-y-6 pt-0">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Scroll Speed</Label>
-                  <Input
-                    type="number"
-                    value={config?.tui?.scroll_speed ?? ""}
-                    onChange={(e) => updateConfig({
-                      tui: { ...config?.tui, scroll_speed: e.target.value ? parseInt(e.target.value) : undefined },
-                    })}
-                    placeholder="3"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Diff Style</Label>
-                  <Select
-                    value={config?.tui?.diff_style || "auto"}
-                    onValueChange={(v) => updateConfig({
-                      tui: { ...config?.tui, diff_style: v as "auto" | "stacked" },
-                    })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">auto</SelectItem>
-                      <SelectItem value="stacked">stacked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                <div>
-                  <Label>Scroll Acceleration</Label>
-                  <p className="text-sm text-muted-foreground">Enable smooth scroll acceleration</p>
-                </div>
-                <Switch
-                  checked={config?.tui?.scroll_acceleration?.enabled ?? false}
-                  onCheckedChange={(v) => updateConfig({
-                    tui: {
-                      ...config?.tui,
-                      scroll_acceleration: { ...config?.tui?.scroll_acceleration, enabled: v },
-                    },
-                  })}
-                />
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Collapsible open={openSections.path} onOpenChange={() => toggleSection("path")}>
-        <Card className="hover-lift">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FolderCog className="h-5 w-5" />
-                  <CardTitle>Config Path</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.path ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Manage OpenCode configuration location</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="animate-scale-in">
-            <CardContent className="space-y-6 pt-0">
-              <div className="space-y-4">
-                <div className="p-4 bg-background rounded-lg space-y-2">
-                  <Label className="text-xs text-muted-foreground">Current Path</Label>
-                  <p className="font-mono text-sm break-all">{pathsInfo?.current || "Not found"}</p>
-                </div>
-
-                {pathsInfo?.manual && (
+              {authDebug ? (
+                <>
                   <div className="p-4 bg-background rounded-lg space-y-2">
-                    <Label className="text-xs text-muted-foreground">Manual Override</Label>
-                    <div className="flex items-center justify-between">
-                      <p className="font-mono text-sm break-all">{pathsInfo.manual}</p>
-                      <Button variant="ghost" size="sm" onClick={handleResetPath}>
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Reset
-                      </Button>
-                    </div>
+                    <Label className="text-xs text-muted-foreground">Active Google Plugin</Label>
+                    <p className="font-mono text-sm">{authDebug.activeGooglePlugin || "none"}</p>
                   </div>
-                )}
-
-                {pathsInfo?.detected && pathsInfo.detected !== pathsInfo.current && (
                   <div className="p-4 bg-background rounded-lg space-y-2">
-                    <Label className="text-xs text-muted-foreground">Auto-Detected</Label>
-                    <p className="font-mono text-sm break-all">{pathsInfo.detected}</p>
+                    <Label className="text-xs text-muted-foreground">Active Profiles</Label>
+                    <pre className="font-mono text-xs overflow-x-auto">{JSON.stringify(authDebug.activeProfiles, null, 2)}</pre>
                   </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Set Custom Path</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={manualPath}
-                    onChange={(e) => setManualPath(e.target.value)}
-                    placeholder="C:\Users\...\.config\opencode"
-                    className="flex-1"
-                  />
-                  <Button onClick={handleSetPath} disabled={!manualPath}>
-                    Set Path
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Directory must contain opencode.json
-                </p>
-              </div>
-
-              {pathsInfo?.candidates && pathsInfo.candidates.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Search Locations</Label>
-                  <div className="space-y-1">
-                    {pathsInfo.candidates.map((p, i) => (
-                      <p key={i} className="font-mono text-xs text-muted-foreground break-all">{p}</p>
+                  <div className="p-4 bg-background rounded-lg space-y-2">
+                    <Label className="text-xs text-muted-foreground">Auth Locations</Label>
+                    {authDebug.authLocations.map((loc, i) => (
+                      <div key={i} className="text-xs font-mono">
+                        <span className={loc.exists ? "text-green-500" : "text-red-500"}>{loc.exists ? "✓" : "✗"}</span>{" "}
+                        <span className="break-all">{loc.path}</span>
+                        {loc.exists && <span className="text-muted-foreground ml-2">[{loc.keys.join(", ")}]</span>}
+                      </div>
                     ))}
                   </div>
-                </div>
+                  <div className="p-4 bg-background rounded-lg space-y-2">
+                    <Label className="text-xs text-muted-foreground">Profile Directories</Label>
+                    <p className="font-mono text-xs text-muted-foreground break-all mb-2">{authDebug.authProfilesDir}</p>
+                    {Object.entries(authDebug.profileDirs).map(([ns, info]) => (
+                      <div key={ns} className="text-xs font-mono">
+                        <span className={info.exists ? "text-green-500" : "text-muted-foreground"}>{info.exists ? "✓" : "○"}</span>{" "}
+                        <span>{ns}</span>
+                        {info.exists && info.profiles.length > 0 && (
+                          <span className="text-muted-foreground ml-2">[{info.profiles.join(", ")}]</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground text-sm">Loading...</p>
               )}
             </CardContent>
           </CollapsibleContent>

@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, getPendingAction, clearPendingAction, type PendingAction } from '@/lib/api';
+import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, type PendingAction, type VersionCheck } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
+import { UpdateRequiredModal } from '@/components/update-required-modal';
 
 interface AppContextType {
   config: OpencodeConfig | null;
@@ -12,6 +13,7 @@ interface AppContextType {
   error: string | null;
   connected: boolean;
   pendingAction: PendingAction | null;
+  serverVersion: string | null;
   refreshData: () => Promise<void>;
   saveConfig: (config: OpencodeConfig) => Promise<void>;
   toggleMCP: (key: string) => Promise<void>;
@@ -54,9 +56,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionCheck | null>(null);
   const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
   const loadingRef = useRef(false);
   const checkedPendingRef = useRef(false);
+  const versionCheckedRef = useRef(false);
 
   const refreshData = useCallback(async () => {
     // Prevent multiple simultaneous refreshes
@@ -124,12 +128,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const checkServerVersion = async () => {
+      if (versionCheckedRef.current) return;
+      const result = await checkVersion();
+      setVersionInfo(result);
+      if (result.connected) {
+        versionCheckedRef.current = true;
+      }
+    };
+
     const pollHealth = async () => {
       try {
         const isHealthy = await checkHealth();
         if (isHealthy) {
           if (!connected) {
             setConnected(true);
+            checkServerVersion();
             refreshData();
             checkForPendingAction();
           }
@@ -148,7 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Initial load
+    checkServerVersion();
     refreshData();
 
     const interval = setInterval(pollHealth, 3000);
@@ -224,6 +238,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlugins(prev => prev.map(p => p.name === name ? { ...p, enabled: result.enabled } : p));
   }, []);
 
+  const showUpdateModal = versionInfo?.connected && !versionInfo?.isCompatible;
+
   return (
     <AppContext.Provider
       value={{
@@ -234,6 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         error,
         connected,
         pendingAction,
+        serverVersion: versionInfo?.version || null,
         refreshData,
         saveConfig: saveConfigHandler,
         toggleMCP,
@@ -245,6 +262,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dismissPendingAction,
       }}
     >
+      {showUpdateModal && (
+        <UpdateRequiredModal
+          currentVersion={versionInfo?.version || null}
+          minVersion={versionInfo?.minRequired || ''}
+        />
+      )}
       {children}
     </AppContext.Provider>
   );

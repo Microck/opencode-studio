@@ -450,10 +450,11 @@ export default function UsagePage() {
               Usage Timeline
             </CardTitle>
           </CardHeader>
-<CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
-            <div 
-              className="h-full w-full relative"
-              onMouseMove={(e) => {
+            <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4">
+              <div 
+                className="h-full w-full relative"
+                style={{ minHeight: '300px' }}
+                onMouseMove={(e) => {
                 if (barTooltipRef.current) {
                   barTooltipRef.current.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 12}px)`;
                 }
@@ -576,10 +577,11 @@ export default function UsagePage() {
               </Button>
             )}
           </CardHeader>
-          <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
-            <div 
-              className="h-full w-full relative"
-              onMouseMove={(e) => {
+            <CardContent className="h-[300px] w-full min-h-0 px-6 pt-4 pb-12">
+              <div 
+                className="h-full w-full relative"
+                style={{ minHeight: '300px' }}
+                onMouseMove={(e) => {
                 if (pieTooltipRef.current) {
                   pieTooltipRef.current.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 12}px)`;
                 }

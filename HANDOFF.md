@@ -1,19 +1,43 @@
-# Session Handoff
+# handoff
 
-## Completed Tasks
-- **Refined Pricing Logic**: Updated `client-next/src/lib/data/pricing.ts` to export `calculateDetailedCost`, allowing split reporting of input vs. output costs.
-- **Enhanced Usage Chart Interaction**:
-  - **Hover State**: Added `hoveredModel` state to track which stacked bar segment is being hovered.
-  - **Dynamic Tooltip**: The tooltip now intelligently switches context:
-    - If hovering a specific model segment: Shows Name, Input Cost, Output Cost, and Total Cost for *that* model only.
-    - If hovering the general axis/background: Shows a daily Total summary.
-  - **Visual Feedback**: Added an outline effect (white stroke) to the hovered bar segment to clearly indicate selection.
-  - **Cursor Follow**: Removed explicit cursor positioning to ensure the tooltip follows the mouse pointer naturally.
+summary of changes and current state of the opencode-studio overhaul.
 
-## Verification
-- Code changes applied successfully.
-- Playwright verified page load stability.
-- Visual behavior (outline + specific data) requires manual interaction to appreciate fully.
+---
 
-## Next Steps
-- Verify the "Input Tokens cost" label matches user expectation (currently showing "Input Cost" with currency formatting).
+## progress
+
+- **auth pool & multi-auth**: overhauled `server/index.js` to support account rotation.
+- **auto-import**: added logic to scrape `~/.config/opencode/auth.json` on startup.
+- **log watcher**: backend now tails local logs to track real-time gemini/openai usage.
+- **adaptive limits**: system detects `429` errors and marks pools as exhausted.
+- **preset layout**: forced horizontal `grid-cols-3` in the create dialog to prevent layout crushing.
+- **toggle logic**: removed master switch block; individual skills/plugins can now be toggled freely.
+
+---
+
+## what worked
+
+- log watcher accurately tracks token usage/request counts.
+- `opencode auth login` terminal flow integration for google/antigravity.
+- dynamic cooldown indicators in the auth list.
+
+---
+
+## what failed / needs fix
+
+- **skills/plugins toggles**: reports indicate toggles on `/skills` and `/plugins` pages don't persist to `opencode.json`.
+- **auth detection**: UI sometimes misses imported credentials despite server-side detection.
+- **debug console**: `app/settings/page.tsx` needs more detail on path mapping for better troubleshooting.
+
+---
+
+## next steps
+
+1. audit `toggleSkill` and `togglePlugin` handlers in `client-next/src/app`.
+2. check `importExistingAuth` logs for path resolution errors.
+3. update debug view to show detected vs expected config paths.
+4. verify `Create Preset` dialog breakpoints on smaller viewports.
+
+---
+
+session ended. please start a new session to continue.

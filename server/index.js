@@ -7,6 +7,9 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn, exec } = require('child_process');
 
+const pkg = require('./package.json');
+const SERVER_VERSION = pkg.version;
+
 // Atomic file write: write to temp file then rename to prevent corruption
 const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
     const dir = path.dirname(filePath);
@@ -219,9 +222,7 @@ function processLogLine(line) {
     }
 }
 
-// Start watcher on server start
-setupLogWatcher();
-importExistingAuth();
+
 
 let pendingActionMemory = null;
 
@@ -436,7 +437,7 @@ const saveConfig = (config) => {
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
 };
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: SERVER_VERSION }));
 
 app.post('/api/shutdown', (req, res) => {
     res.json({ success: true });
@@ -444,6 +445,56 @@ app.post('/api/shutdown', (req, res) => {
 });
 
 app.get('/api/paths', (req, res) => res.json(getPaths()));
+
+app.get('/api/debug/auth', (req, res) => {
+    const paths = getPaths();
+    const studio = loadStudioConfig();
+    const activePlugin = studio.activeGooglePlugin;
+    
+    // Check auth.json in all candidate locations
+    const authLocations = [];
+    paths.candidates.forEach(p => {
+        const ap = path.join(path.dirname(p), 'auth.json');
+        authLocations.push({
+            path: ap,
+            exists: fs.existsSync(ap),
+            keys: fs.existsSync(ap) ? Object.keys(JSON.parse(fs.readFileSync(ap, 'utf8'))) : []
+        });
+    });
+    
+    // Check current auth.json
+    if (paths.current) {
+        const ap = path.join(path.dirname(paths.current), 'auth.json');
+        if (!authLocations.some(l => l.path === ap)) {
+            authLocations.push({
+                path: ap,
+                exists: fs.existsSync(ap),
+                keys: fs.existsSync(ap) ? Object.keys(JSON.parse(fs.readFileSync(ap, 'utf8'))) : []
+            });
+        }
+    }
+    
+    // Check profile directories
+    const namespaces = ['google', 'google.gemini', 'google.antigravity', 'openai', 'anthropic'];
+    const profileDirs = {};
+    namespaces.forEach(ns => {
+        const dir = path.join(AUTH_PROFILES_DIR, ns);
+        profileDirs[ns] = {
+            path: dir,
+            exists: fs.existsSync(dir),
+            profiles: fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.json')) : []
+        };
+    });
+    
+    res.json({
+        configPath: paths.current,
+        activeGooglePlugin: activePlugin,
+        activeProfiles: studio.activeProfiles || {},
+        authLocations,
+        profileDirs,
+        authProfilesDir: AUTH_PROFILES_DIR
+    });
+});
 
 app.post('/api/paths', (req, res) => {
     const { configPath } = req.body;
@@ -476,9 +527,11 @@ const getSkillDir = () => {
 app.get('/api/skills', (req, res) => {
     const sd = getSkillDir();
     if (!sd || !fs.existsSync(sd)) return res.json([]);
+    const studio = loadStudioConfig();
+    const disabledSkills = studio.disabledSkills || [];
     const skills = fs.readdirSync(sd, { withFileTypes: true })
         .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
-        .map(e => ({ name: e.name, path: path.join(sd, e.name, 'SKILL.md'), enabled: !e.name.endsWith('.disabled') }));
+        .map(e => ({ name: e.name, path: path.join(sd, e.name, 'SKILL.md'), enabled: !disabledSkills.includes(e.name) }));
     res.json(skills);
 });
 
@@ -538,9 +591,13 @@ app.get('/api/plugins', (req, res) => {
     const pd = getPluginDir();
     const cp = getConfigPath();
     const cr = cp ? path.dirname(cp) : null;
+    const studio = loadStudioConfig();
+    const disabledPlugins = studio.disabledPlugins || [];
     const plugins = [];
-    const add = (name, p, enabled = true) => {
-        if (!plugins.some(pl => pl.name === name)) plugins.push({ name, path: p, enabled });
+    const add = (name, p, type = 'file') => {
+        if (!plugins.some(pl => pl.name === name)) {
+            plugins.push({ name, path: p, type, enabled: !disabledPlugins.includes(name) });
+        }
     };
 
     if (pd && fs.existsSync(pd)) {
@@ -549,9 +606,9 @@ app.get('/api/plugins', (req, res) => {
             const st = fs.lstatSync(fp);
             if (st.isDirectory()) {
                 const j = path.join(fp, 'index.js'), t = path.join(fp, 'index.ts');
-                if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t);
+                if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file');
             } else if ((st.isFile() || st.isSymbolicLink()) && /\.(js|ts)$/.test(e.name)) {
-                add(e.name.replace(/\.(js|ts)$/, ''), fp);
+                add(e.name.replace(/\.(js|ts)$/, ''), fp, 'file');
             }
         });
     }
@@ -559,14 +616,14 @@ app.get('/api/plugins', (req, res) => {
     if (cr && fs.existsSync(cr)) {
         ['oh-my-opencode', 'superpowers', 'opencode-gemini-auth'].forEach(n => {
             const fp = path.join(cr, n);
-            if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) add(n, fp);
+            if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) add(n, fp, 'file');
         });
     }
 
     const cfg = loadConfig();
     if (cfg && Array.isArray(cfg.plugin)) {
         cfg.plugin.forEach(n => {
-            if (!n.includes('/') && !n.includes('\\') && !/\.(js|ts)$/.test(n)) add(n, 'npm');
+            if (!n.includes('/') && !n.includes('\\') && !/\.(js|ts)$/.test(n)) add(n, 'npm', 'npm');
         });
     }
     res.json(plugins);
@@ -2193,5 +2250,9 @@ app.post('/api/presets/:id/apply', (req, res) => {
     saveConfig(config);
     res.json({ success: true });
 });
+
+// Start watcher on server start
+setupLogWatcher();
+importExistingAuth();
 
 app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));

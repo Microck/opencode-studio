@@ -228,7 +228,7 @@ export function PresetsManager() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[400px]">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-full min-h-[400px]">
                 <div className="border rounded-md flex flex-col h-full overflow-hidden">
                   <div className="flex items-center justify-between p-3 border-b bg-muted/30">
                     <Label htmlFor="include-skills" className="cursor-pointer font-medium text-sm">Skills</Label>
