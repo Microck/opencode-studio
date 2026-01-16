@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -101,7 +102,7 @@ export default function AuthPage() {
   const [savingProfile, setSavingProfile] = useState<string | null>(null);
   const [activatingProfile, setActivatingProfile] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ provider: string; name: string } | null>(null);
-  const [renameTarget, setRenameTarget] = useState<{ provider: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ provider: string; name: string; current: string } | null>(null);
   const [newName, setNewName] = useState("");
 
   const [installedGooglePlugins, setInstalledGooglePlugins] = useState<('gemini' | 'antigravity')[]>([]);
@@ -296,6 +297,18 @@ export default function AuthPage() {
     }
   };
 
+  const handleRenameProfile = async (provider: string, name: string, newName: string) => {
+    try {
+      await renameAuthProfile(provider, name, newName);
+      toast.success(`Renamed to ${newName}`);
+      await loadData();
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to rename: ${msg}`);
+      throw err;
+    }
+  };
+
   const handleSaveProfile = async (provider: string) => {
     try {
       setSavingProfile(provider);
@@ -338,18 +351,14 @@ export default function AuthPage() {
     }
   };
 
-  const handleRenameProfile = async () => {
+  const handleRenameSubmit = async () => {
     if (!renameTarget || !newName.trim()) return;
     try {
-      const result = await renameAuthProfile(renameTarget.provider, renameTarget.name, newName.trim());
-      toast.success(`Renamed to ${result.name}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to rename profile: ${msg}`);
-    } finally {
+      await handleRenameProfile(renameTarget.provider, renameTarget.name, newName.trim());
       setRenameTarget(null);
       setNewName("");
+    } catch {
+      // Error already handled
     }
   };
 
@@ -577,6 +586,7 @@ export default function AuthPage() {
               onCooldown={handlePoolCooldown}
               onClearCooldown={handlePoolClearCooldown}
               onRemove={handlePoolRemove}
+              onRename={(name, newName) => handleRenameProfile('google', name, newName)}
               rotating={rotating}
               providerName="Google"
             />
@@ -611,6 +621,7 @@ export default function AuthPage() {
               onCooldown={handleOpenaiPoolCooldown}
               onClearCooldown={handleOpenaiPoolClearCooldown}
               onRemove={handleOpenaiPoolRemove}
+              onRename={(name, newName) => handleRenameProfile('openai', name, newName)}
               rotating={openaiRotating}
               providerName="OpenAI"
             />
@@ -744,6 +755,9 @@ export default function AuthPage() {
                               >
                                 <span className="truncate">{profileName}</span>
                                 <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); setRenameTarget({ provider: cred.id, name: profileName, current: profileName }); setNewName(profileName); }}>
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
                                   <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); handleLogoutProfile(cred.id, profileName); }}>
                                     <LogOut className="h-3 w-3" />
                                   </Button>
@@ -815,25 +829,32 @@ export default function AuthPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={!!renameTarget} onOpenChange={(o) => { if (!o) { setRenameTarget(null); setNewName(""); } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rename profile</AlertDialogTitle>
-          </AlertDialogHeader>
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="New profile name"
-            className="my-4"
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRenameProfile} disabled={!newName.trim() || newName === renameTarget?.name}>
+      <Dialog open={!!renameTarget} onOpenChange={(o) => { if (!o) { setRenameTarget(null); setNewName(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename profile</DialogTitle>
+            <DialogDescription>
+              Enter a new name for {renameTarget?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>New Name</Label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={renameTarget?.current || "New profile name"}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button onClick={handleRenameSubmit} disabled={!newName.trim() || newName === renameTarget?.name}>
               Rename
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showTutorial} onOpenChange={(o) => !o && dismissTutorial()}>
         <DialogContent className="max-w-lg">

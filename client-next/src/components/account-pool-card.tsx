@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
@@ -13,18 +13,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Users,
   RefreshCw,
-  Clock,
-  Check,
-  AlertCircle,
   MoreVertical,
   Snowflake,
   Play,
   Star,
   Plus,
   Trash2,
+  Edit2,
+  AlertCircle,
+  Clock,
+  Check,
 } from "lucide-react";
+
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
 
 interface AccountPoolCardProps {
@@ -35,6 +46,7 @@ interface AccountPoolCardProps {
   onCooldown: (name: string) => Promise<void>;
   onClearCooldown: (name: string) => Promise<void>;
   onRemove: (name: string) => Promise<void>;
+  onRename?: (name: string, newName: string) => Promise<void>;
   onAddAccount: () => void;
   rotating: boolean;
   isAdding: boolean;
@@ -89,12 +101,33 @@ export function AccountPoolCard({
   onCooldown,
   onClearCooldown,
   onRemove,
+  onRename,
   onAddAccount,
   rotating,
   isAdding,
   providerName = "Google",
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
+  const [newName, setNewName] = useState("");
+
+  const handleRenameClick = (name: string) => {
+    setRenameTarget({ name, current: name });
+    setNewName(name);
+    setRenameOpen(true);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameTarget || !newName.trim() || !onRename) return;
+    try {
+      await onRename(renameTarget.name, newName.trim());
+      setRenameOpen(false);
+      setRenameTarget(null);
+    } catch {
+      // Error handled by parent
+    }
+  };
 
   useEffect(() => {
     const updateTimers = () => {
@@ -134,7 +167,10 @@ export function AccountPoolCard({
     );
   }
 
+
+
   return (
+    <>
     <Card className="border-primary/20">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
@@ -248,6 +284,12 @@ export function AccountPoolCard({
                     <Trash2 className="h-3.5 w-3.5 mr-2" />
                     Remove Account
                   </DropdownMenuItem>
+                  {onRename && (
+                    <DropdownMenuItem onClick={() => handleRenameClick(account.name)}>
+                      <Edit2 className="h-3.5 w-3.5 mr-2" />
+                      Rename
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -255,5 +297,27 @@ export function AccountPoolCard({
         </div>
       </CardContent>
     </Card>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Profile</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>New Name</Label>
+            <Input 
+              value={newName} 
+              onChange={(e) => setNewName(e.target.value)} 
+              placeholder={renameTarget?.current}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
+            <Button onClick={handleRenameSubmit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

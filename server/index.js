@@ -801,6 +801,13 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
     const newPath = path.join(AUTH_PROFILES_DIR, namespace, `${newName}.json`);
     if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
 
+    const metadata = loadPoolMetadata();
+    if (metadata[namespace]?.[name]) {
+        metadata[namespace][newName] = metadata[namespace][name];
+        delete metadata[namespace][name];
+        savePoolMetadata(metadata);
+    }
+
     // Update active profile name if it was the one renamed
     const studio = loadStudioConfig();
     if (studio.activeProfiles && studio.activeProfiles[provider] === name) {

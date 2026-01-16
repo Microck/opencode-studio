@@ -211,13 +211,13 @@ export function PresetsManager() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-[98vw] w-[1800px] max-h-[95vh] flex flex-col">
+        <DialogContent className="max-w-[95vw] w-[1400px] h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create Preset</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto py-4">
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Name</Label>
                   <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Coding Mode" />
@@ -228,24 +228,33 @@ export function PresetsManager() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border rounded-md flex flex-col min-h-[200px]">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[400px]">
+                <div className="border rounded-md flex flex-col h-full overflow-hidden">
                   <div className="flex items-center justify-between p-3 border-b bg-muted/30">
                     <Label htmlFor="include-skills" className="cursor-pointer font-medium text-sm">Skills</Label>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{selectedSkills.length}/{skills.length}</span>
-                      <Switch id="include-skills" checked={includeSkills} onCheckedChange={setIncludeSkills} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => {
+                          if (selectedSkills.length === skills.length) setSelectedSkills([]);
+                          else setSelectedSkills(skills.map(s => s.name));
+                        }}
+                      >
+                        {selectedSkills.length === skills.length ? "None" : "All"}
+                      </Button>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
                     {skills.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No skills found</p>}
                     {skills.map(skill => (
-                      <div key={skill.name} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeSkills ? 'opacity-50' : ''}`}>
+                      <div key={skill.name} className="flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm">
                         <label htmlFor={`skill-${skill.name}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={skill.name}>{skill.name}</label>
                         <Switch 
                           id={`skill-${skill.name}`}
                           checked={selectedSkills.includes(skill.name)}
-                          disabled={!includeSkills}
                           className="shrink-0"
                           onCheckedChange={(c) => {
                             if (c) setSelectedSkills([...selectedSkills, skill.name]);
@@ -257,23 +266,32 @@ export function PresetsManager() {
                   </div>
                 </div>
 
-                <div className="border rounded-md flex flex-col min-h-[200px]">
+                <div className="border rounded-md flex flex-col h-full overflow-hidden">
                   <div className="flex items-center justify-between p-3 border-b bg-muted/30">
                     <Label htmlFor="include-plugins" className="cursor-pointer font-medium text-sm">Plugins</Label>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{selectedPlugins.length}/{plugins.length}</span>
-                      <Switch id="include-plugins" checked={includePlugins} onCheckedChange={setIncludePlugins} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => {
+                          if (selectedPlugins.length === plugins.length) setSelectedPlugins([]);
+                          else setSelectedPlugins(plugins.map(p => p.name));
+                        }}
+                      >
+                        {selectedPlugins.length === plugins.length ? "None" : "All"}
+                      </Button>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
                     {plugins.length === 0 && <p className="text-xs text-muted-foreground italic p-2">No plugins found</p>}
                     {plugins.map(plugin => (
-                      <div key={plugin.name} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includePlugins ? 'opacity-50' : ''}`}>
+                      <div key={plugin.name} className="flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm">
                         <label htmlFor={`plugin-${plugin.name}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={plugin.name}>{plugin.name}</label>
                         <Switch 
                           id={`plugin-${plugin.name}`}
                           checked={selectedPlugins.includes(plugin.name)}
-                          disabled={!includePlugins}
                           className="shrink-0"
                           onCheckedChange={(c) => {
                             if (c) setSelectedPlugins([...selectedPlugins, plugin.name]);
@@ -285,12 +303,23 @@ export function PresetsManager() {
                   </div>
                 </div>
 
-                <div className="border rounded-md flex flex-col min-h-[200px]">
+                <div className="border rounded-md flex flex-col h-full overflow-hidden">
                   <div className="flex items-center justify-between p-3 border-b bg-muted/30">
                     <Label htmlFor="include-mcps" className="cursor-pointer font-medium text-sm">MCPs</Label>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{selectedMcps.length}/{config?.mcp ? Object.keys(config.mcp).length : 0}</span>
-                      <Switch id="include-mcps" checked={includeMcps} onCheckedChange={setIncludeMcps} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => {
+                          const allKeys = config?.mcp ? Object.keys(config.mcp) : [];
+                          if (selectedMcps.length === allKeys.length) setSelectedMcps([]);
+                          else setSelectedMcps(allKeys);
+                        }}
+                      >
+                        {selectedMcps.length === (config?.mcp ? Object.keys(config.mcp).length : 0) ? "None" : "All"}
+                      </Button>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
@@ -298,12 +327,11 @@ export function PresetsManager() {
                       <p className="text-xs text-muted-foreground italic p-2">No MCP servers found</p>
                     ) : (
                       Object.keys(config.mcp).map(key => (
-                        <div key={key} className={`flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm ${!includeMcps ? 'opacity-50' : ''}`}>
+                        <div key={key} className="flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm">
                           <label htmlFor={`mcp-${key}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={key}>{key}</label>
                           <Switch 
                             id={`mcp-${key}`}
                             checked={selectedMcps.includes(key)}
-                            disabled={!includeMcps}
                             className="shrink-0"
                             onCheckedChange={(c) => {
                               if (c) setSelectedMcps([...selectedMcps, key]);
