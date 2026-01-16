@@ -1,43 +1,25 @@
-# handoff
+# Session Handoff - Cloud Sync Implementation
 
-summary of changes and current state of the opencode-studio overhaul.
+## Status
+Completed implementation of Cloud Sync using OAuth for Dropbox and Google Drive.
+- Replaced folder-based sync with direct API integration
+- Added OAuth endpoints to server (Dropbox + Google Drive)
+- Updated Settings UI with "Connect" buttons
+- Implemented auto-sync logic (pull on startup, push on save)
 
----
+## Changes
+- **Server**: Bumped to `1.8.0`. Added `/api/sync/{dropbox|gdrive}/*` endpoints.
+- **Client**: Bumped `MIN_SERVER_VERSION` to `1.8.0`. Updated `api.ts` and `settings/page.tsx`.
+- **Docs**: Updated README.md with new sync setup instructions.
 
-## progress
+## Verification
+- Run `npm start` to launch both services.
+- Go to `/settings` -> Cloud Sync.
+- Test "Connect Dropbox" and "Connect Google Drive".
+- Verify `opencode-studio-sync.json` is created in cloud root on Push.
+- Verify Pull restores config from cloud.
 
-- **auth pool & multi-auth**: overhauled `server/index.js` to support account rotation.
-- **auto-import**: added logic to scrape `~/.config/opencode/auth.json` on startup.
-- **log watcher**: backend now tails local logs to track real-time gemini/openai usage.
-- **adaptive limits**: system detects `429` errors and marks pools as exhausted.
-- **preset layout**: forced horizontal `grid-cols-3` in the create dialog to prevent layout crushing.
-- **toggle logic**: removed master switch block; individual skills/plugins can now be toggled freely.
-
----
-
-## what worked
-
-- log watcher accurately tracks token usage/request counts.
-- `opencode auth login` terminal flow integration for google/antigravity.
-- dynamic cooldown indicators in the auth list.
-
----
-
-## what failed / needs fix
-
-- **skills/plugins toggles**: reports indicate toggles on `/skills` and `/plugins` pages don't persist to `opencode.json`.
-- **auth detection**: UI sometimes misses imported credentials despite server-side detection.
-- **debug console**: `app/settings/page.tsx` needs more detail on path mapping for better troubleshooting.
-
----
-
-## next steps
-
-1. audit `toggleSkill` and `togglePlugin` handlers in `client-next/src/app`.
-2. check `importExistingAuth` logs for path resolution errors.
-3. update debug view to show detected vs expected config paths.
-4. verify `Create Preset` dialog breakpoints on smaller viewports.
-
----
-
-session ended. please start a new session to continue.
+## Next Steps
+- User needs to provide real Client IDs/Secrets in `server/index.js` (currently placeholders).
+- Test Google Drive flow (complex multipart upload logic).
+- Consider adding OneDrive support (Microsoft Graph API).

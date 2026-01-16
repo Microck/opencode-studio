@@ -590,90 +590,372 @@ app.post('/api/restore', (req, res) => {
     }
 });
 
-app.post('/api/sync/push', (req, res) => {
-    try {
-        const studio = loadStudioConfig();
-        const syncFolder = studio.syncFolder;
-        if (!syncFolder) return res.status(400).json({ error: 'Sync folder not configured' });
-        if (!fs.existsSync(syncFolder)) return res.status(400).json({ error: 'Sync folder does not exist' });
-        
-        const opencodeConfig = loadConfig();
-        const skills = [];
-        const plugins = [];
-        
-        const sd = getSkillDir();
-        if (sd && fs.existsSync(sd)) {
-            fs.readdirSync(sd, { withFileTypes: true })
-                .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
-                .forEach(e => {
-                    skills.push({ name: e.name, content: fs.readFileSync(path.join(sd, e.name, 'SKILL.md'), 'utf8') });
-                });
-        }
-        
-        const pd = getPluginDir();
-        if (pd && fs.existsSync(pd)) {
-            fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
-                if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
-                    plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(path.join(pd, e.name), 'utf8') });
-                }
+const DROPBOX_CLIENT_ID = 'your-dropbox-app-key';
+const GDRIVE_CLIENT_ID = 'your-google-client-id';
+
+function buildBackupData() {
+    const studio = loadStudioConfig();
+    const opencodeConfig = loadConfig();
+    const skills = [];
+    const plugins = [];
+    
+    const sd = getSkillDir();
+    if (sd && fs.existsSync(sd)) {
+        fs.readdirSync(sd, { withFileTypes: true })
+            .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
+            .forEach(e => {
+                skills.push({ name: e.name, content: fs.readFileSync(path.join(sd, e.name, 'SKILL.md'), 'utf8') });
             });
+    }
+    
+    const pd = getPluginDir();
+    if (pd && fs.existsSync(pd)) {
+        fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
+            if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
+                plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(path.join(pd, e.name), 'utf8') });
+            }
+        });
+    }
+    
+    const cloudSettings = studio.cloudProvider ? { provider: studio.cloudProvider } : {};
+    
+    return {
+        version: 1,
+        timestamp: new Date().toISOString(),
+        studioConfig: { ...studio, cloudToken: undefined, cloudProvider: undefined },
+        opencodeConfig,
+        skills,
+        plugins
+    };
+}
+
+function restoreFromBackup(backup, studio) {
+    if (backup.studioConfig) {
+        const merged = { 
+            ...backup.studioConfig, 
+            cloudProvider: studio.cloudProvider,
+            cloudToken: studio.cloudToken,
+            autoSync: studio.autoSync,
+            lastSyncAt: studio.lastSyncAt 
+        };
+        saveStudioConfig(merged);
+    }
+    if (backup.opencodeConfig) saveConfig(backup.opencodeConfig);
+    
+    const sd = getSkillDir();
+    if (sd && backup.skills && Array.isArray(backup.skills)) {
+        if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
+        backup.skills.forEach(s => {
+            const skillDir = path.join(sd, s.name);
+            if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+            atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
+        });
+    }
+    
+    const pd = getPluginDir();
+    if (pd && backup.plugins && Array.isArray(backup.plugins)) {
+        if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
+        backup.plugins.forEach(p => {
+            atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+        });
+    }
+}
+
+app.get('/api/sync/status', (req, res) => {
+    const studio = loadStudioConfig();
+    res.json({
+        provider: studio.cloudProvider || null,
+        connected: !!(studio.cloudProvider && studio.cloudToken),
+        lastSync: studio.lastSyncAt || null,
+        autoSync: !!studio.autoSync
+    });
+});
+
+app.post('/api/sync/config', (req, res) => {
+    const { autoSync } = req.body;
+    const studio = loadStudioConfig();
+    if (autoSync !== undefined) studio.autoSync = !!autoSync;
+    saveStudioConfig(studio);
+    res.json({ success: true, autoSync: !!studio.autoSync });
+});
+
+app.post('/api/sync/disconnect', (req, res) => {
+    const studio = loadStudioConfig();
+    delete studio.cloudProvider;
+    delete studio.cloudToken;
+    delete studio.cloudRefreshToken;
+    saveStudioConfig(studio);
+    res.json({ success: true });
+});
+
+app.get('/api/sync/dropbox/auth-url', (req, res) => {
+    const state = crypto.randomBytes(16).toString('hex');
+    const studio = loadStudioConfig();
+    studio.oauthState = state;
+    saveStudioConfig(studio);
+    
+    const redirectUri = req.query.redirect_uri || 'http://localhost:3000/settings';
+    studio.oauthRedirectUri = redirectUri;
+    saveStudioConfig(studio);
+    
+    const params = new URLSearchParams({
+        client_id: DROPBOX_CLIENT_ID,
+        response_type: 'code',
+        token_access_type: 'offline',
+        redirect_uri: redirectUri,
+        state: state
+    });
+    res.json({ url: `https://www.dropbox.com/oauth2/authorize?${params}` });
+});
+
+app.post('/api/sync/dropbox/callback', async (req, res) => {
+    try {
+        const { code, state } = req.body;
+        const studio = loadStudioConfig();
+        
+        if (state !== studio.oauthState) {
+            return res.status(400).json({ error: 'Invalid state' });
+        }
+        const redirectUri = studio.oauthRedirectUri || 'http://localhost:3000/settings';
+        delete studio.oauthState;
+        delete studio.oauthRedirectUri;
+        
+        const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                grant_type: 'authorization_code',
+                client_id: DROPBOX_CLIENT_ID,
+                redirect_uri: redirectUri
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.text();
+            return res.status(400).json({ error: `Dropbox auth failed: ${err}` });
         }
         
-        const backup = {
-            version: 1,
-            timestamp: new Date().toISOString(),
-            studioConfig: { ...studio, syncFolder: undefined },
-            opencodeConfig,
-            skills,
-            plugins
-        };
-        
-        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
-        atomicWriteFileSync(backupPath, JSON.stringify(backup, null, 2));
-        
-        studio.lastSyncAt = backup.timestamp;
+        const tokens = await response.json();
+        studio.cloudProvider = 'dropbox';
+        studio.cloudToken = tokens.access_token;
+        if (tokens.refresh_token) studio.cloudRefreshToken = tokens.refresh_token;
         saveStudioConfig(studio);
         
-        res.json({ success: true, path: backupPath, timestamp: backup.timestamp });
+        res.json({ success: true, provider: 'dropbox' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/sync/pull', (req, res) => {
+app.get('/api/sync/gdrive/auth-url', (req, res) => {
+    const state = crypto.randomBytes(16).toString('hex');
+    const studio = loadStudioConfig();
+    studio.oauthState = state;
+    
+    const redirectUri = req.query.redirect_uri || 'http://localhost:3000/settings';
+    studio.oauthRedirectUri = redirectUri;
+    saveStudioConfig(studio);
+    
+    const params = new URLSearchParams({
+        client_id: GDRIVE_CLIENT_ID,
+        response_type: 'code',
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        access_type: 'offline',
+        prompt: 'consent',
+        redirect_uri: redirectUri,
+        state: state
+    });
+    res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+app.post('/api/sync/gdrive/callback', async (req, res) => {
+    try {
+        const { code, state } = req.body;
+        const studio = loadStudioConfig();
+        
+        if (state !== studio.oauthState) {
+            return res.status(400).json({ error: 'Invalid state' });
+        }
+        const redirectUri = studio.oauthRedirectUri || 'http://localhost:3000/settings';
+        delete studio.oauthState;
+        delete studio.oauthRedirectUri;
+        
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: GDRIVE_CLIENT_ID,
+                // client_secret: 'GDRIVE_CLIENT_SECRET', // NOTE: OAuth flow for installed apps usually requires client secret.
+                // For simplicity in this demo, we assume PKCE or a public client flow if supported, 
+                // OR the user will need to provide the secret in environment variables.
+                // Since this is a local server, we might need the secret.
+                // Let's assume for now we'll put a placeholder or rely on env vars.
+                // Google "Installed App" flow doesn't always need secret if type is "Desktop".
+                // However, for web flow it does. 
+                // Let's assume we need a client secret env var for now.
+                client_secret: process.env.GDRIVE_CLIENT_SECRET || 'your-google-client-secret',
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code'
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.text();
+            return res.status(400).json({ error: `Google auth failed: ${err}` });
+        }
+        
+        const tokens = await response.json();
+        studio.cloudProvider = 'gdrive';
+        studio.cloudToken = tokens.access_token;
+        if (tokens.refresh_token) studio.cloudRefreshToken = tokens.refresh_token;
+        saveStudioConfig(studio);
+        
+        res.json({ success: true, provider: 'gdrive' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/sync/push', async (req, res) => {
     try {
         const studio = loadStudioConfig();
-        const syncFolder = studio.syncFolder;
-        if (!syncFolder) return res.status(400).json({ error: 'Sync folder not configured' });
-        
-        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
-        if (!fs.existsSync(backupPath)) return res.status(404).json({ error: 'No sync file found in folder' });
-        
-        const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-        
-        if (backup.studioConfig) {
-            const merged = { ...backup.studioConfig, syncFolder: studio.syncFolder };
-            saveStudioConfig(merged);
+        if (!studio.cloudProvider || !studio.cloudToken) {
+            return res.status(400).json({ error: 'No cloud provider connected' });
         }
-        if (backup.opencodeConfig) saveConfig(backup.opencodeConfig);
         
-        const sd = getSkillDir();
-        if (sd && backup.skills && Array.isArray(backup.skills)) {
-            if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
-            backup.skills.forEach(s => {
-                const skillDir = path.join(sd, s.name);
-                if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
-                atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
+        const backup = buildBackupData();
+        const content = JSON.stringify(backup, null, 2);
+        
+        if (studio.cloudProvider === 'dropbox') {
+            const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${studio.cloudToken}`,
+                    'Content-Type': 'application/octet-stream',
+                    'Dropbox-API-Arg': JSON.stringify({
+                        path: '/opencode-studio-sync.json',
+                        mode: 'overwrite',
+                        autorename: false
+                    })
+                },
+                body: content
             });
+            
+            if (!response.ok) {
+                const err = await response.text();
+                return res.status(400).json({ error: `Dropbox upload failed: ${err}` });
+            }
+        } else if (studio.cloudProvider === 'gdrive') {
+            // Find existing file
+            const listRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name=\'opencode-studio-sync.json\' and trashed=false', {
+                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
+            });
+            const listData = await listRes.json();
+            const existingFile = listData.files?.[0];
+
+            if (existingFile) {
+                // Update content
+                const updateRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${studio.cloudToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: content
+                });
+                if (!updateRes.ok) {
+                    const err = await updateRes.text();
+                    return res.status(400).json({ error: `Google Drive update failed: ${err}` });
+                }
+            } else {
+                // Create new file (multipart)
+                const metadata = { name: 'opencode-studio-sync.json', mimeType: 'application/json' };
+                const boundary = '-------314159265358979323846';
+                const delimiter = "\r\n--" + boundary + "\r\n";
+                const close_delim = "\r\n--" + boundary + "--";
+                
+                const multipartBody = 
+                    delimiter + 
+                    'Content-Type: application/json\r\n\r\n' + 
+                    JSON.stringify(metadata) + 
+                    delimiter + 
+                    'Content-Type: application/json\r\n\r\n' + 
+                    content + 
+                    close_delim;
+
+                const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${studio.cloudToken}`,
+                        'Content-Type': `multipart/related; boundary="${boundary}"`
+                    },
+                    body: multipartBody
+                });
+                if (!createRes.ok) {
+                    const err = await createRes.text();
+                    return res.status(400).json({ error: `Google Drive create failed: ${err}` });
+                }
+            }
         }
         
-        const pd = getPluginDir();
-        if (pd && backup.plugins && Array.isArray(backup.plugins)) {
-            if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
-            backup.plugins.forEach(p => {
-                atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
-            });
+        studio.lastSyncAt = backup.timestamp;
+        saveStudioConfig(studio);
+        res.json({ success: true, timestamp: backup.timestamp });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/sync/pull', async (req, res) => {
+    try {
+        const studio = loadStudioConfig();
+        if (!studio.cloudProvider || !studio.cloudToken) {
+            return res.status(400).json({ error: 'No cloud provider connected' });
         }
+        
+        let content;
+        
+        if (studio.cloudProvider === 'dropbox') {
+            const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${studio.cloudToken}`,
+                    'Dropbox-API-Arg': JSON.stringify({ path: '/opencode-studio-sync.json' })
+                }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 409) {
+                    return res.status(404).json({ error: 'No sync file found in cloud' });
+                }
+                const err = await response.text();
+                return res.status(400).json({ error: `Dropbox download failed: ${err}` });
+            }
+            
+            content = await response.text();
+        } else if (studio.cloudProvider === 'gdrive') {
+            const listRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name=\'opencode-studio-sync.json\' and trashed=false', {
+                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
+            });
+            const listData = await listRes.json();
+            const existingFile = listData.files?.[0];
+            
+            if (!existingFile) return res.status(404).json({ error: 'No sync file found in cloud' });
+            
+            const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
+                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
+            });
+            if (!downloadRes.ok) {
+                const err = await downloadRes.text();
+                return res.status(400).json({ error: `Google Drive download failed: ${err}` });
+            }
+            content = await downloadRes.text();
+        }
+        
+        const backup = JSON.parse(content);
+        restoreFromBackup(backup, studio);
         
         const updated = loadStudioConfig();
         updated.lastSyncAt = new Date().toISOString();
@@ -685,98 +967,41 @@ app.post('/api/sync/pull', (req, res) => {
     }
 });
 
-app.get('/api/sync/status', (req, res) => {
+app.post('/api/sync/auto', async (req, res) => {
     const studio = loadStudioConfig();
-    const syncFolder = studio.syncFolder;
-    let fileExists = false;
-    let fileTimestamp = null;
-    
-    if (syncFolder) {
-        const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
-        if (fs.existsSync(backupPath)) {
-            fileExists = true;
-            try {
-                const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-                fileTimestamp = backup.timestamp;
-            } catch {}
-        }
-    }
-    
-    res.json({
-        configured: !!syncFolder,
-        folder: syncFolder || null,
-        lastSync: studio.lastSyncAt || null,
-        autoSync: !!studio.autoSync,
-        fileExists,
-        fileTimestamp
-    });
-});
-
-app.post('/api/sync/config', (req, res) => {
-    const { folder, autoSync } = req.body;
-    const studio = loadStudioConfig();
-    
-    if (folder !== undefined) {
-        if (folder) {
-            if (!fs.existsSync(folder)) {
-                return res.status(400).json({ error: 'Folder does not exist' });
-            }
-            studio.syncFolder = folder;
-        } else {
-            delete studio.syncFolder;
-        }
-    }
-    
-    if (autoSync !== undefined) {
-        studio.autoSync = !!autoSync;
-    }
-    
-    saveStudioConfig(studio);
-    res.json({ success: true, folder: studio.syncFolder || null, autoSync: !!studio.autoSync });
-});
-
-app.post('/api/sync/auto', (req, res) => {
-    const studio = loadStudioConfig();
-    if (!studio.syncFolder || !studio.autoSync) {
+    if (!studio.cloudProvider || !studio.cloudToken || !studio.autoSync) {
         return res.json({ action: 'none', reason: 'auto-sync not configured' });
     }
     
-    const syncFolder = studio.syncFolder;
-    const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
-    
-    if (!fs.existsSync(backupPath)) {
-        return res.json({ action: 'none', reason: 'no remote file' });
-    }
-    
     try {
-        const remote = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        let content;
+        
+        if (studio.cloudProvider === 'dropbox') {
+            const response = await fetch('https://content.dropboxapi.com/2/files/download', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${studio.cloudToken}`,
+                    'Dropbox-API-Arg': JSON.stringify({ path: '/opencode-studio-sync.json' })
+                }
+            });
+            
+            if (!response.ok) {
+                return res.json({ action: 'none', reason: 'no remote file' });
+            }
+            
+            content = await response.text();
+        }
+        
+        if (!content) {
+            return res.json({ action: 'none', reason: 'no content' });
+        }
+        
+        const remote = JSON.parse(content);
         const remoteTime = new Date(remote.timestamp).getTime();
         const localTime = studio.lastSyncAt ? new Date(studio.lastSyncAt).getTime() : 0;
         
         if (remoteTime > localTime) {
-            if (remote.studioConfig) {
-                const merged = { ...remote.studioConfig, syncFolder: studio.syncFolder, autoSync: studio.autoSync, lastSyncAt: studio.lastSyncAt };
-                saveStudioConfig(merged);
-            }
-            if (remote.opencodeConfig) saveConfig(remote.opencodeConfig);
-            
-            const sd = getSkillDir();
-            if (sd && remote.skills && Array.isArray(remote.skills)) {
-                if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
-                remote.skills.forEach(s => {
-                    const skillDir = path.join(sd, s.name);
-                    if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
-                    atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
-                });
-            }
-            
-            const pd = getPluginDir();
-            if (pd && remote.plugins && Array.isArray(remote.plugins)) {
-                if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
-                remote.plugins.forEach(p => {
-                    atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
-                });
-            }
+            restoreFromBackup(remote, studio);
             
             const updated = loadStudioConfig();
             updated.lastSyncAt = new Date().toISOString();

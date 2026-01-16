@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -36,7 +36,6 @@ import {
   Cloud,
   CloudUpload,
   CloudDownload,
-  FolderSync,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { PermissionValue, OpencodeConfig } from "@/types";
@@ -80,8 +79,8 @@ export default function SettingsPage() {
   });
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [syncFolder, setSyncFolderInput] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -90,10 +89,36 @@ export default function SettingsPage() {
   useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
     getAuthDebug().then(setAuthDebug).catch(console.error);
-    getSyncStatus().then(s => {
-      setSyncStatus(s);
-      if (s.folder) setSyncFolderInput(s.folder);
-    }).catch(console.error);
+    getSyncStatus().then(setSyncStatus).catch(console.error);
+    
+    // Check for OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (code && state) {
+      // Try both providers since we don't know which one it is just from params
+      // But we can check if it looks like google (often long) vs dropbox
+      // Actually, we can just try one then the other, or look at session storage if we persisted it
+      // For now, let's try dropbox first, if fails try google
+      
+      dropboxCallback(code, state).then(async () => {
+        const status = await getSyncStatus();
+        setSyncStatus(status);
+        toast.success('Dropbox connected successfully');
+        window.history.replaceState({}, '', window.location.pathname);
+      }).catch(err => {
+        // If dropbox fails, try google
+        googleDriveCallback(code, state).then(async () => {
+          const status = await getSyncStatus();
+          setSyncStatus(status);
+          toast.success('Google Drive connected successfully');
+          window.history.replaceState({}, '', window.location.pathname);
+        }).catch(err2 => {
+          toast.error('Failed to connect cloud provider');
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+      });
+    }
   }, []);
 
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
@@ -179,12 +204,36 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSetSyncFolder = async () => {
+  const handleConnectDropbox = async () => {
+    setConnectingProvider('dropbox');
     try {
-      const result = await setSyncConfig({ folder: syncFolder || null });
+      const redirectUri = window.location.origin + window.location.pathname;
+      const { url } = await getDropboxAuthUrl(redirectUri);
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+      setConnectingProvider(null);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    setConnectingProvider('gdrive');
+    try {
+      const redirectUri = window.location.origin + window.location.pathname;
+      const { url } = await getGoogleDriveAuthUrl(redirectUri);
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+      setConnectingProvider(null);
+    }
+  };
+
+  const handleDisconnectSync = async () => {
+    try {
+      await disconnectSync();
       const status = await getSyncStatus();
       setSyncStatus(status);
-      toast.success(result.folder ? "Sync folder configured" : "Sync folder cleared");
+      toast.success('Cloud sync disconnected');
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
     }
@@ -481,90 +530,88 @@ export default function SettingsPage() {
                 </div>
                 <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.sync ? "rotate-180" : ""}`} />
               </div>
-              <CardDescription>Sync config across devices via Dropbox, Google Drive, OneDrive, etc.</CardDescription>
+              <CardDescription>Sync config across devices via Dropbox or Google Drive</CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
-              <div className="p-4 bg-background rounded-lg space-y-4">
-                <div className="space-y-2">
-                  <Label>Sync Folder Path</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Point to a folder synced by your cloud service (Dropbox, Google Drive, OneDrive, iCloud, etc.)
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={syncFolder}
-                      onChange={(e) => setSyncFolderInput(e.target.value)}
-                      placeholder="C:\Users\...\Dropbox\OpenCode"
-                      className="flex-1"
+              {syncStatus?.connected ? (
+                <>
+                  <div className="p-4 bg-background rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-green-500" />
+                        <span className="font-medium capitalize">{syncStatus.provider}</span>
+                        <span className="text-muted-foreground text-sm">connected</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={handleDisconnectSync}>
+                        Disconnect
+                      </Button>
+                    </div>
+                    {syncStatus.lastSync && (
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {new Date(syncStatus.lastSync).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button onClick={handleSyncPush} disabled={syncing} className="w-full">
+                      <CloudUpload className="h-4 w-4 mr-2" />
+                      {syncing ? "Syncing..." : "Push to Cloud"}
+                    </Button>
+                    <Button onClick={handleSyncPull} disabled={syncing} variant="outline" className="w-full">
+                      <CloudDownload className="h-4 w-4 mr-2" />
+                      {syncing ? "Syncing..." : "Pull from Cloud"}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-background rounded-lg">
+                    <div>
+                      <Label className="text-base">Auto-Sync</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Automatically sync on startup and after config changes
+                      </p>
+                    </div>
+                    <Switch
+                      checked={syncStatus.autoSync}
+                      onCheckedChange={handleToggleAutoSync}
                     />
-                    <Button onClick={handleSetSyncFolder}>
-                      <FolderSync className="h-4 w-4 mr-2" />
-                      Set
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 bg-background rounded-lg space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Connect a cloud service to sync your config across devices.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={handleConnectDropbox} 
+                      disabled={connectingProvider === 'dropbox'}
+                      className="flex-1"
+                    >
+                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 2L0 6l6 4-6 4 6 4 6-4-6-4 6-4zm12 0l-6 4 6 4-6 4 6 4 6-4-6-4 6-4zM6 14l6 4 6-4-6-4z"/>
+                      </svg>
+                      {connectingProvider === 'dropbox' ? 'Connecting...' : 'Connect Dropbox'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleConnectGoogle}
+                      disabled={connectingProvider === 'gdrive'}
+                      className="flex-1"
+                    >
+                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      {connectingProvider === 'gdrive' ? 'Connecting...' : 'Connect Google Drive'}
                     </Button>
                   </div>
                 </div>
-
-                {syncStatus?.configured && (
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Folder:</span>
-                      <span className="font-mono text-xs truncate max-w-[250px]">{syncStatus.folder}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Sync file exists:</span>
-                      <span className={syncStatus.fileExists ? "text-green-500" : "text-muted-foreground"}>
-                        {syncStatus.fileExists ? "Yes" : "No"}
-                      </span>
-                    </div>
-                    {syncStatus.fileTimestamp && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">File timestamp:</span>
-                        <span className="text-xs">{new Date(syncStatus.fileTimestamp).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {syncStatus.lastSync && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Last sync:</span>
-                        <span className="text-xs">{new Date(syncStatus.lastSync).toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {syncStatus?.configured && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Button onClick={handleSyncPush} disabled={syncing} className="w-full">
-                    <CloudUpload className="h-4 w-4 mr-2" />
-                    {syncing ? "Syncing..." : "Push to Cloud"}
-                  </Button>
-                  <Button onClick={handleSyncPull} disabled={syncing || !syncStatus.fileExists} variant="outline" className="w-full">
-                    <CloudDownload className="h-4 w-4 mr-2" />
-                    {syncing ? "Syncing..." : "Pull from Cloud"}
-                  </Button>
-                </div>
               )}
-
-              {syncStatus?.configured && (
-                <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                  <div>
-                    <Label className="text-base">Auto-Sync</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Automatically sync on startup and after config changes
-                    </p>
-                  </div>
-                  <Switch
-                    checked={syncStatus.autoSync}
-                    onCheckedChange={handleToggleAutoSync}
-                  />
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Push saves your config to the sync folder. Pull restores from it. Your cloud service syncs the file automatically.
-              </p>
             </CardContent>
           </CollapsibleContent>
         </Card>

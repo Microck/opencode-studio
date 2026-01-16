@@ -192,9 +192,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const triggerAutoSync = useCallback(async () => {
     try {
       const status = await getSyncStatus();
-      if (status.configured && status.autoSync) {
+      if (status.connected && status.autoSync) {
         await syncPush();
-        console.log('[AutoSync] Pushed config to cloud');
       }
     } catch {}
   }, []);

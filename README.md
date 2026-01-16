@@ -67,18 +67,15 @@ open http://localhost:3000
 
 ### cloud sync
 
-sync your config across multiple devices using your existing cloud service.
+sync your config across multiple devices using cloud services.
 
 #### setup
 
 1. go to **settings → cloud sync**
-2. set a folder path synced by your cloud service:
-   - dropbox: `~/Dropbox/OpenCode`
-   - google drive: `~/Google Drive/OpenCode`
-   - onedrive: `~/OneDrive/OpenCode`
-   - icloud: `~/Library/Mobile Documents/com~apple~CloudDocs/OpenCode`
-3. click **push to cloud** to create the sync file
-4. enable **auto-sync** for automatic syncing
+2. click **Connect Dropbox** or **Connect Google Drive**
+3. follow the oauth authorization prompt
+4. click **push to cloud** to create the initial sync file
+5. enable **auto-sync** for automatic syncing
 
 #### what syncs
 
@@ -91,7 +88,7 @@ sync your config across multiple devices using your existing cloud service.
 
 - **on startup:** pulls if remote file is newer than local
 - **after saves:** pushes config changes automatically
-- your cloud service handles file sync between devices
+- syncs to a single `opencode-studio-sync.json` file in your cloud root
 
 ---
 

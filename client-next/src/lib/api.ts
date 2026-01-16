@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.7.0';
+export const MIN_SERVER_VERSION = '1.8.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -236,13 +236,13 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
   await api.post('/restore', backup);
 }
 
+export type SyncProvider = 'dropbox' | 'gdrive' | null;
+
 export interface SyncStatus {
-  configured: boolean;
-  folder: string | null;
+  provider: SyncProvider;
+  connected: boolean;
   lastSync: string | null;
   autoSync: boolean;
-  fileExists: boolean;
-  fileTimestamp: string | null;
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {
@@ -250,12 +250,39 @@ export async function getSyncStatus(): Promise<SyncStatus> {
   return data;
 }
 
-export async function setSyncConfig(config: { folder?: string | null; autoSync?: boolean }): Promise<{ success: boolean; folder: string | null; autoSync: boolean }> {
+export async function setSyncConfig(config: { autoSync?: boolean }): Promise<{ success: boolean; autoSync: boolean }> {
   const { data } = await api.post('/sync/config', config);
   return data;
 }
 
-export async function syncPush(): Promise<{ success: boolean; path: string; timestamp: string }> {
+export async function getDropboxAuthUrl(redirectUri?: string): Promise<{ url: string }> {
+  const params = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
+  const { data } = await api.get<{ url: string }>(`/sync/dropbox/auth-url${params}`);
+  return data;
+}
+
+export async function dropboxCallback(code: string, state: string): Promise<{ success: boolean; provider: string }> {
+  const { data } = await api.post('/sync/dropbox/callback', { code, state });
+  return data;
+}
+
+export async function getGoogleDriveAuthUrl(redirectUri?: string): Promise<{ url: string }> {
+  const params = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
+  const { data } = await api.get<{ url: string }>(`/sync/gdrive/auth-url${params}`);
+  return data;
+}
+
+export async function googleDriveCallback(code: string, state: string): Promise<{ success: boolean; provider: string }> {
+  const { data } = await api.post('/sync/gdrive/callback', { code, state });
+  return data;
+}
+
+export async function disconnectSync(): Promise<{ success: boolean }> {
+  const { data } = await api.post('/sync/disconnect', {});
+  return data;
+}
+
+export async function syncPush(): Promise<{ success: boolean; timestamp: string }> {
   const { data } = await api.post('/sync/push', {});
   return data;
 }
