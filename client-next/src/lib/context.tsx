@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, type PendingAction, type VersionCheck } from '@/lib/api';
+import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, syncAuto, syncPush, getSyncStatus, type PendingAction, type VersionCheck } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
 import { UpdateRequiredModal } from '@/components/update-required-modal';
 
@@ -61,6 +61,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadingRef = useRef(false);
   const checkedPendingRef = useRef(false);
   const versionCheckedRef = useRef(false);
+  const autoSyncCheckedRef = useRef(false);
 
   const refreshData = useCallback(async () => {
     // Prevent multiple simultaneous refreshes
@@ -137,6 +138,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const checkAutoSync = async () => {
+      if (autoSyncCheckedRef.current) return;
+      autoSyncCheckedRef.current = true;
+      try {
+        const result = await syncAuto();
+        if (result.action === 'pulled') {
+          console.log('[AutoSync] Pulled newer config from cloud');
+          await refreshData();
+        }
+      } catch {}
+    };
+
     const pollHealth = async () => {
       try {
         const isHealthy = await checkHealth();
@@ -144,6 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!connected) {
             setConnected(true);
             checkServerVersion();
+            checkAutoSync();
             refreshData();
             checkForPendingAction();
           }
@@ -163,6 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     checkServerVersion();
+    checkAutoSync();
     refreshData();
 
     const interval = setInterval(pollHealth, 3000);
@@ -174,10 +189,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingAction(null);
   }, []);
 
+  const triggerAutoSync = useCallback(async () => {
+    try {
+      const status = await getSyncStatus();
+      if (status.configured && status.autoSync) {
+        await syncPush();
+        console.log('[AutoSync] Pushed config to cloud');
+      }
+    } catch {}
+  }, []);
+
   const saveConfigHandler = useCallback(async (newConfig: OpencodeConfig) => {
     await apiSaveConfig(newConfig);
     setConfig(newConfig);
-  }, []);
+    triggerAutoSync();
+  }, [triggerAutoSync]);
 
   const toggleMCP = useCallback(async (key: string) => {
     if (!config?.mcp?.[key]) return;

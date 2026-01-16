@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.6.0';
+export const MIN_SERVER_VERSION = '1.7.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -240,6 +240,7 @@ export interface SyncStatus {
   configured: boolean;
   folder: string | null;
   lastSync: string | null;
+  autoSync: boolean;
   fileExists: boolean;
   fileTimestamp: string | null;
 }
@@ -249,8 +250,8 @@ export async function getSyncStatus(): Promise<SyncStatus> {
   return data;
 }
 
-export async function setSyncFolder(folder: string | null): Promise<{ success: boolean; folder: string | null }> {
-  const { data } = await api.post('/sync/config', { folder });
+export async function setSyncConfig(config: { folder?: string | null; autoSync?: boolean }): Promise<{ success: boolean; folder: string | null; autoSync: boolean }> {
+  const { data } = await api.post('/sync/config', config);
   return data;
 }
 
@@ -261,6 +262,11 @@ export async function syncPush(): Promise<{ success: boolean; path: string; time
 
 export async function syncPull(): Promise<{ success: boolean; timestamp: string; skills: number; plugins: number }> {
   const { data } = await api.post('/sync/pull', {});
+  return data;
+}
+
+export async function syncAuto(): Promise<{ action: string; timestamp?: string; reason?: string }> {
+  const { data } = await api.post('/sync/auto', {});
   return data;
 }
 

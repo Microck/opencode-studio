@@ -706,26 +706,89 @@ app.get('/api/sync/status', (req, res) => {
         configured: !!syncFolder,
         folder: syncFolder || null,
         lastSync: studio.lastSyncAt || null,
+        autoSync: !!studio.autoSync,
         fileExists,
         fileTimestamp
     });
 });
 
 app.post('/api/sync/config', (req, res) => {
-    const { folder } = req.body;
+    const { folder, autoSync } = req.body;
     const studio = loadStudioConfig();
     
-    if (folder) {
-        if (!fs.existsSync(folder)) {
-            return res.status(400).json({ error: 'Folder does not exist' });
+    if (folder !== undefined) {
+        if (folder) {
+            if (!fs.existsSync(folder)) {
+                return res.status(400).json({ error: 'Folder does not exist' });
+            }
+            studio.syncFolder = folder;
+        } else {
+            delete studio.syncFolder;
         }
-        studio.syncFolder = folder;
-    } else {
-        delete studio.syncFolder;
+    }
+    
+    if (autoSync !== undefined) {
+        studio.autoSync = !!autoSync;
     }
     
     saveStudioConfig(studio);
-    res.json({ success: true, folder: studio.syncFolder || null });
+    res.json({ success: true, folder: studio.syncFolder || null, autoSync: !!studio.autoSync });
+});
+
+app.post('/api/sync/auto', (req, res) => {
+    const studio = loadStudioConfig();
+    if (!studio.syncFolder || !studio.autoSync) {
+        return res.json({ action: 'none', reason: 'auto-sync not configured' });
+    }
+    
+    const syncFolder = studio.syncFolder;
+    const backupPath = path.join(syncFolder, 'opencode-studio-sync.json');
+    
+    if (!fs.existsSync(backupPath)) {
+        return res.json({ action: 'none', reason: 'no remote file' });
+    }
+    
+    try {
+        const remote = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        const remoteTime = new Date(remote.timestamp).getTime();
+        const localTime = studio.lastSyncAt ? new Date(studio.lastSyncAt).getTime() : 0;
+        
+        if (remoteTime > localTime) {
+            if (remote.studioConfig) {
+                const merged = { ...remote.studioConfig, syncFolder: studio.syncFolder, autoSync: studio.autoSync, lastSyncAt: studio.lastSyncAt };
+                saveStudioConfig(merged);
+            }
+            if (remote.opencodeConfig) saveConfig(remote.opencodeConfig);
+            
+            const sd = getSkillDir();
+            if (sd && remote.skills && Array.isArray(remote.skills)) {
+                if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
+                remote.skills.forEach(s => {
+                    const skillDir = path.join(sd, s.name);
+                    if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+                    atomicWriteFileSync(path.join(skillDir, 'SKILL.md'), s.content);
+                });
+            }
+            
+            const pd = getPluginDir();
+            if (pd && remote.plugins && Array.isArray(remote.plugins)) {
+                if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
+                remote.plugins.forEach(p => {
+                    atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+                });
+            }
+            
+            const updated = loadStudioConfig();
+            updated.lastSyncAt = new Date().toISOString();
+            saveStudioConfig(updated);
+            
+            return res.json({ action: 'pulled', timestamp: remote.timestamp });
+        }
+        
+        res.json({ action: 'none', reason: 'local is current' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 const getSkillDir = () => {

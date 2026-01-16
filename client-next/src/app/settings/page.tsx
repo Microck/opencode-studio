@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncFolder, syncPush, syncPull, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -181,10 +181,21 @@ export default function SettingsPage() {
 
   const handleSetSyncFolder = async () => {
     try {
-      const result = await setSyncFolder(syncFolder || null);
+      const result = await setSyncConfig({ folder: syncFolder || null });
       const status = await getSyncStatus();
       setSyncStatus(status);
       toast.success(result.folder ? "Sync folder configured" : "Sync folder cleared");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    }
+  };
+
+  const handleToggleAutoSync = async (enabled: boolean) => {
+    try {
+      await setSyncConfig({ autoSync: enabled });
+      const status = await getSyncStatus();
+      setSyncStatus(status);
+      toast.success(enabled ? "Auto-sync enabled" : "Auto-sync disabled");
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
     }
@@ -533,6 +544,21 @@ export default function SettingsPage() {
                     <CloudDownload className="h-4 w-4 mr-2" />
                     {syncing ? "Syncing..." : "Pull from Cloud"}
                   </Button>
+                </div>
+              )}
+
+              {syncStatus?.configured && (
+                <div className="flex items-center justify-between p-4 bg-background rounded-lg">
+                  <div>
+                    <Label className="text-base">Auto-Sync</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically sync on startup and after config changes
+                    </p>
+                  </div>
+                  <Switch
+                    checked={syncStatus.autoSync}
+                    onCheckedChange={handleToggleAutoSync}
+                  />
                 </div>
               )}
 
