@@ -204,17 +204,59 @@ function processLogLine(line) {
                                
             if (isQuotaError) {
                 console.log(`[LogWatcher] Detected quota exhaustion for ${namespace}`);
-                // Mark exhausted for today
-                metadata._quota[namespace].exhausted = true;
-                metadata._quota[namespace].exhaustedDate = today;
                 
-                // Adaptive limit learning: if we hit a limit, maybe that's the ceiling?
-                // Only update if we have meaningful usage (>5) to avoid false positives on glitches
-                const currentUsage = metadata._quota[namespace][today] || 0;
-                if (currentUsage > 5) {
-                    // Update daily limit to current usage (maybe round up)
-                    metadata._quota[namespace].dailyLimit = currentUsage;
+                // Reload metadata to ensure freshness
+                const currentMeta = loadPoolMetadata();
+                if (!currentMeta._quota) currentMeta._quota = {};
+                if (!currentMeta._quota[namespace]) currentMeta._quota[namespace] = {};
+
+                // Debounce check
+                const lastRotation = currentMeta._quota[namespace].lastRotation || 0;
+                if (Date.now() - lastRotation < 10000) { 
+                    console.log(`[LogWatcher] Ignoring 429 (rotation debounce active)`);
+                    return;
                 }
+
+                const studio = loadStudioConfig();
+                const activeAccount = studio.activeProfiles?.[provider];
+                
+                let rotated = false;
+
+                if (activeAccount) {
+                    console.log(`[LogWatcher] Auto-rotating due to rate limit on ${activeAccount}`);
+                    
+                    if (!currentMeta[namespace]) currentMeta[namespace] = {};
+                    if (!currentMeta[namespace][activeAccount]) currentMeta[namespace][activeAccount] = {};
+                    
+                    // Mark cooldown (1 hour)
+                    currentMeta[namespace][activeAccount].cooldownUntil = Date.now() + 3600000;
+                    currentMeta[namespace][activeAccount].lastCooldownReason = 'auto_429';
+                    
+                    savePoolMetadata(currentMeta); 
+                    
+                    // Attempt rotation
+                    const result = rotateAccount(provider, 'auto_rotation_429');
+                    if (result.success) {
+                        console.log(`[LogWatcher] Successfully rotated to ${result.newAccount}`);
+                        rotated = true;
+                    } else {
+                        console.log(`[LogWatcher] Auto-rotation failed: ${result.error}`);
+                    }
+                }
+
+                if (rotated) return;
+
+                // Fallback: Mark namespace exhausted
+                currentMeta._quota[namespace].exhausted = true;
+                currentMeta._quota[namespace].exhaustedDate = today;
+                
+                const currentUsage = currentMeta._quota[namespace][today] || 0;
+                if (currentUsage > 5) {
+                    currentMeta._quota[namespace].dailyLimit = currentUsage;
+                }
+                
+                savePoolMetadata(currentMeta);
+                return;
             }
         }
 
@@ -1922,6 +1964,86 @@ function getPoolQuota(provider, pool) {
     };
 }
 
+function rotateAccount(provider, reason = 'manual_rotation') {
+    const pool = buildAccountPool(provider);
+
+    if (pool.accounts.length === 0) {
+        return { success: false, error: 'No accounts in pool' };
+    }
+
+    const now = Date.now();
+    const available = pool.accounts.filter(acc => 
+        acc.status === 'ready' || (acc.status === 'cooldown' && acc.cooldownUntil && acc.cooldownUntil < now)
+    );
+
+    if (available.length === 0) {
+        return { success: false, error: 'No available accounts (all in cooldown or expired)' };
+    }
+
+    // Pick least recently used
+    const next = available.sort((a, b) => a.lastUsed - b.lastUsed)[0];
+    const previousActive = pool.activeAccount;
+
+    // Activate the new account
+    const activePlugin = getActiveGooglePlugin();
+    const namespace = provider === 'google'
+        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        : provider;
+
+    const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${next.name}.json`);
+    if (!fs.existsSync(profilePath)) {
+        return { success: false, error: 'Profile file not found' };
+    }
+
+    const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+
+    // Update auth.json
+    const authCfg = loadAuthConfig() || {};
+    authCfg[provider] = profileData;
+    if (provider === 'google') {
+        authCfg[namespace] = profileData;
+    }
+
+    const cp = getConfigPath();
+    const ap = path.join(path.dirname(cp), 'auth.json');
+    atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+
+    // Update studio config
+    const studio = loadStudioConfig();
+    if (!studio.activeProfiles) studio.activeProfiles = {};
+    studio.activeProfiles[provider] = next.name;
+    saveStudioConfig(studio);
+
+    // Update metadata
+    const metadata = loadPoolMetadata();
+    if (!metadata[namespace]) metadata[namespace] = {};
+    metadata[namespace][next.name] = {
+        ...metadata[namespace][next.name],
+        lastUsed: now,
+        usageCount: (metadata[namespace][next.name]?.usageCount || 0) + 1
+    };
+
+    // Unmark exhaustion if we successfully rotated
+    if (metadata._quota?.[namespace]?.exhausted) {
+        delete metadata._quota[namespace].exhausted;
+    }
+
+    if (!metadata._quota) metadata._quota = {};
+    if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
+    const today = new Date().toISOString().split('T')[0];
+    metadata._quota[namespace][today] = (metadata._quota[namespace][today] || 0) + 1;
+    metadata._quota[namespace].lastRotation = now;
+
+    savePoolMetadata(metadata);
+
+    return {
+        success: true,
+        previousAccount: previousActive,
+        newAccount: next.name,
+        reason: reason
+    };
+}
+
 // GET /api/auth/pool - Get account pool for Google (or specified provider)
 app.get('/api/auth/pool', (req, res) => {
     const provider = req.query.provider || 'google';
@@ -1934,77 +2056,13 @@ app.get('/api/auth/pool', (req, res) => {
 // POST /api/auth/pool/rotate - Rotate to next available account
 app.post('/api/auth/pool/rotate', (req, res) => {
     const provider = req.body.provider || 'google';
-    const pool = buildAccountPool(provider);
+    const result = rotateAccount(provider, 'manual_rotation');
     
-    if (pool.accounts.length === 0) {
-        return res.status(400).json({ error: 'No accounts in pool' });
+    if (!result.success) {
+        return res.status(400).json(result);
     }
     
-    const now = Date.now();
-    const available = pool.accounts.filter(acc => 
-        acc.status === 'ready' || (acc.status === 'cooldown' && acc.cooldownUntil && acc.cooldownUntil < now)
-    );
-    
-    if (available.length === 0) {
-        return res.status(400).json({ error: 'No available accounts (all in cooldown or expired)' });
-    }
-    
-    // Pick least recently used
-    const next = available.sort((a, b) => a.lastUsed - b.lastUsed)[0];
-    const previousActive = pool.activeAccount;
-    
-    // Activate the new account
-    const activePlugin = getActiveGooglePlugin();
-    const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
-        : provider;
-    
-    const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${next.name}.json`);
-    if (!fs.existsSync(profilePath)) {
-        return res.status(404).json({ error: 'Profile file not found' });
-    }
-    
-    const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-    
-    // Update auth.json
-    const authCfg = loadAuthConfig() || {};
-    authCfg[provider] = profileData;
-    if (provider === 'google') {
-        authCfg[namespace] = profileData;
-    }
-    
-    const cp = getConfigPath();
-    const ap = path.join(path.dirname(cp), 'auth.json');
-    atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
-    
-    // Update studio config
-    const studio = loadStudioConfig();
-    if (!studio.activeProfiles) studio.activeProfiles = {};
-    studio.activeProfiles[provider] = next.name;
-    saveStudioConfig(studio);
-    
-    // Update metadata
-    const metadata = loadPoolMetadata();
-    if (!metadata[namespace]) metadata[namespace] = {};
-    metadata[namespace][next.name] = {
-        ...metadata[namespace][next.name],
-        lastUsed: now,
-        usageCount: (metadata[namespace][next.name]?.usageCount || 0) + 1
-    };
-
-    if (!metadata._quota) metadata._quota = {};
-    if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
-    const today = new Date().toISOString().split('T')[0];
-    metadata._quota[namespace][today] = (metadata._quota[namespace][today] || 0) + 1;
-
-    savePoolMetadata(metadata);
-    
-    res.json({
-        success: true,
-        previousAccount: previousActive,
-        newAccount: next.name,
-        reason: 'manual_rotation'
-    });
+    res.json(result);
 });
 
 // POST /api/auth/pool/limit - Set daily quota limit
@@ -2759,7 +2817,18 @@ app.post('/api/presets/:id/apply', (req, res) => {
 });
 
 // Start watcher on server start
-setupLogWatcher();
-importExistingAuth();
+if (require.main === module) {
+    setupLogWatcher();
+    importExistingAuth();
+    app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+}
 
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+module.exports = {
+    rotateAccount,
+    processLogLine,
+    loadPoolMetadata,
+    savePoolMetadata,
+    loadStudioConfig,
+    saveStudioConfig,
+    buildAccountPool
+};
