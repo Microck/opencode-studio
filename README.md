@@ -306,3 +306,23 @@ cd opencode-studio
 ### license
 
 mit
+
+---
+
+### configuration required
+
+to enable cloud sync:
+
+1. **register redirect uri:**
+   add `http://localhost:3000/settings` to your oauth app's authorized redirect uris.
+
+2. **set client credentials:**
+   edit `server/index.js` and replace the placeholder keys:
+   ```javascript
+   const DROPBOX_CLIENT_ID = 'your-dropbox-app-key';
+   const GDRIVE_CLIENT_ID = 'your-google-client-id';
+   // for google drive, also set GDRIVE_CLIENT_SECRET in env or code
+   ```
+
+3. **restart server:**
+   restart the backend for changes to take effect.
