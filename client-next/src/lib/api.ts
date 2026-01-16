@@ -394,6 +394,11 @@ export async function setQuotaLimit(limit: number, provider: string = 'google'):
   return data;
 }
 
+export async function savePoolLimit(provider: string, limit: number): Promise<{ success: boolean; limit: number }> {
+  const { data } = await api.post('/auth/pool/limit', { provider, limit });
+  return data;
+}
+
 export async function getPresets(): Promise<Preset[]> {
   const { data } = await api.get<Preset[]>('/presets');
   return data;

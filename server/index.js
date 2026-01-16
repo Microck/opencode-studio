@@ -70,6 +70,157 @@ const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
 const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
 const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
+const LOG_DIR = path.join(HOME_DIR, '.local', 'share', 'opencode', 'log');
+
+let logWatcher = null;
+let currentLogFile = null;
+let logReadStream = null;
+
+function setupLogWatcher() {
+    if (!fs.existsSync(LOG_DIR)) return;
+
+    // Find latest log file
+    const getLatestLog = () => {
+        try {
+            const files = fs.readdirSync(LOG_DIR)
+                .filter(f => f.endsWith('.log'))
+                .map(f => ({ name: f, time: fs.statSync(path.join(LOG_DIR, f)).mtime.getTime() }))
+                .sort((a, b) => b.time - a.time);
+            return files[0] ? path.join(LOG_DIR, files[0].name) : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const startTailing = (filePath) => {
+        if (currentLogFile === filePath) return;
+        if (logReadStream) logReadStream.destroy();
+        
+        currentLogFile = filePath;
+        console.log(`Watching log file: ${filePath}`);
+        
+        let fileSize = 0;
+        try {
+            fileSize = fs.statSync(filePath).size;
+        } catch {}
+
+        // Tail from end initially
+        let start = Math.max(0, fileSize - 10000); 
+        
+        const checkFile = () => {
+            try {
+                const stat = fs.statSync(filePath);
+                if (stat.size > fileSize) {
+                    const stream = fs.createReadStream(filePath, { 
+                        start: fileSize, 
+                        end: stat.size,
+                        encoding: 'utf8' 
+                    });
+                    
+                    stream.on('data', (chunk) => {
+                        const lines = chunk.split('\n');
+                        lines.forEach(processLogLine);
+                    });
+                    
+                    fileSize = stat.size;
+                }
+            } catch (e) {
+                // File might be rotated/deleted
+                if (e.code === 'ENOENT') {
+                    clearInterval(tailInterval);
+                    const newLog = getLatestLog();
+                    if (newLog && newLog !== currentLogFile) startTailing(newLog);
+                }
+            }
+        };
+
+        const tailInterval = setInterval(checkFile, 2000);
+        logWatcher = tailInterval;
+    };
+
+    const initialLog = getLatestLog();
+    if (initialLog) startTailing(initialLog);
+
+    // Watch dir for new logs
+    fs.watch(LOG_DIR, (eventType, filename) => {
+        if (filename && filename.endsWith('.log')) {
+            const latest = getLatestLog();
+            if (latest && latest !== currentLogFile) {
+                if (logWatcher) clearInterval(logWatcher);
+                startTailing(latest);
+            }
+        }
+    });
+}
+
+function processLogLine(line) {
+    // Detect LLM usage: service=llm providerID=... modelID=...
+    // Example: service=llm providerID=openai modelID=gpt-5.2-codex sessionID=...
+    const isUsage = line.includes('service=llm') && line.includes('stream');
+    const isError = line.includes('service=llm') && (line.includes('error=') || line.includes('status=429'));
+    
+    if (!isUsage && !isError) return;
+
+    const providerMatch = line.match(/providerID=([^\s]+)/);
+    const modelMatch = line.match(/modelID=([^\s]+)/);
+    
+    if (providerMatch) {
+        const provider = providerMatch[1];
+        const model = modelMatch ? modelMatch[1] : 'unknown';
+        
+        // Map provider to pool namespace
+        let namespace = provider;
+        if (provider === 'google') {
+            const activePlugin = getActiveGooglePlugin();
+            namespace = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        }
+
+        const metadata = loadPoolMetadata();
+        if (!metadata._quota) metadata._quota = {};
+        if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
+        
+        const today = new Date().toISOString().split('T')[0];
+
+        if (isUsage) {
+            // Increment usage
+            metadata._quota[namespace][today] = (metadata._quota[namespace][today] || 0) + 1;
+            
+            // Also update active account usage if possible
+            const studio = loadStudioConfig();
+            const activeProfile = studio.activeProfiles?.[provider];
+            if (activeProfile && metadata[namespace]?.[activeProfile]) {
+                metadata[namespace][activeProfile].usageCount = (metadata[namespace][activeProfile].usageCount || 0) + 1;
+                metadata[namespace][activeProfile].lastUsed = Date.now();
+            }
+        } else if (isError) {
+            // Check for quota exhaustion patterns
+            const errorMsg = line.match(/error=(.+)/)?.[1] || '';
+            const isQuotaError = line.includes('status=429') || 
+                               errorMsg.toLowerCase().includes('quota') || 
+                               errorMsg.toLowerCase().includes('rate limit');
+                               
+            if (isQuotaError) {
+                console.log(`[LogWatcher] Detected quota exhaustion for ${namespace}`);
+                // Mark exhausted for today
+                metadata._quota[namespace].exhausted = true;
+                metadata._quota[namespace].exhaustedDate = today;
+                
+                // Adaptive limit learning: if we hit a limit, maybe that's the ceiling?
+                // Only update if we have meaningful usage (>5) to avoid false positives on glitches
+                const currentUsage = metadata._quota[namespace][today] || 0;
+                if (currentUsage > 5) {
+                    // Update daily limit to current usage (maybe round up)
+                    metadata._quota[namespace].dailyLimit = currentUsage;
+                }
+            }
+        }
+
+        savePoolMetadata(metadata);
+    }
+}
+
+// Start watcher on server start
+setupLogWatcher();
 
 let pendingActionMemory = null;
 
@@ -1111,6 +1262,37 @@ function buildAccountPool(provider) {
     };
 }
 
+function getPoolQuota(provider, pool) {
+    const metadata = loadPoolMetadata();
+    const activePlugin = getActiveGooglePlugin();
+    const namespace = provider === 'google'
+        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        : provider;
+    
+    const quotaMeta = metadata._quota?.[namespace] || {};
+    const today = new Date().toISOString().split('T')[0];
+    const todayUsage = quotaMeta[today] || 0;
+    
+    // Estimate: 1000 requests/day limit (configurable)
+    const dailyLimit = quotaMeta.dailyLimit || 1000;
+    const remaining = Math.max(0, dailyLimit - todayUsage);
+    const percentage = Math.round((remaining / dailyLimit) * 100);
+    
+    return {
+        dailyLimit,
+        remaining,
+        used: todayUsage,
+        percentage,
+        resetAt: new Date(new Date().setHours(24, 0, 0, 0)).toISOString(),
+        byAccount: pool.accounts.map(acc => ({
+            name: acc.name,
+            email: acc.email,
+            used: acc.usageCount,
+            limit: Math.floor(dailyLimit / Math.max(1, pool.totalAccounts))
+        }))
+    };
+}
+
 // GET /api/auth/pool - Get account pool for Google (or specified provider)
 app.get('/api/auth/pool', (req, res) => {
     const provider = req.query.provider || 'google';
@@ -1194,6 +1376,31 @@ app.post('/api/auth/pool/rotate', (req, res) => {
         newAccount: next.name,
         reason: 'manual_rotation'
     });
+});
+
+// POST /api/auth/pool/limit - Set daily quota limit
+app.post('/api/auth/pool/limit', (req, res) => {
+    const { provider, limit } = req.body;
+    
+    if (!provider || typeof limit !== 'number' || limit < 0) {
+        return res.status(400).json({ error: 'Invalid provider or limit' });
+    }
+
+    const activePlugin = getActiveGooglePlugin();
+    const namespace = provider === 'google'
+        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        : provider;
+
+    const metadata = loadPoolMetadata();
+    if (!metadata._quota) metadata._quota = {};
+    if (!metadata._quota[namespace]) metadata._quota[namespace] = {};
+    
+    metadata._quota[namespace].dailyLimit = limit;
+    // Reset exhaustion if limit increased significantly? Maybe user wants to retry.
+    // For now, simple update.
+    
+    savePoolMetadata(metadata);
+    res.json({ success: true, limit });
 });
 
 // PUT /api/auth/pool/:name/cooldown - Mark account as in cooldown

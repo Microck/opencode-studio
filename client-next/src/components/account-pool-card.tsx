@@ -38,6 +38,8 @@ import {
 
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
 
+import { savePoolLimit } from "@/lib/api";
+
 interface AccountPoolCardProps {
   pool: AccountPool;
   quota: QuotaInfo;
@@ -109,8 +111,25 @@ export function AccountPoolCard({
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
   const [renameOpen, setRenameOpen] = useState(false);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [newLimit, setNewLimit] = useState("");
   const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
   const [newName, setNewName] = useState("");
+
+  const handleLimitSubmit = async () => {
+    const limit = parseInt(newLimit, 10);
+    if (isNaN(limit) || limit < 0) return;
+    try {
+      await savePoolLimit(providerName.toLowerCase(), limit);
+      // Trigger refresh somehow? The parent refreshes on actions.
+      // We might need an onRefresh prop or just wait for the next periodic refresh.
+      setLimitOpen(false);
+      // Hack: window reload or just let the user see it update next time
+      window.location.reload(); 
+    } catch {
+      // Error handled
+    }
+  };
 
   const handleRenameClick = (name: string) => {
     setRenameTarget({ name, current: name });
@@ -208,8 +227,13 @@ export function AccountPoolCard({
 
       <CardContent className="space-y-4">
         <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Daily Quota</span>
+          <div className="flex justify-between text-xs text-muted-foreground items-center">
+            <span className="flex items-center gap-1">
+              Daily Quota
+              <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => { setNewLimit(String(quota.dailyLimit)); setLimitOpen(true); }}>
+                <Edit2 className="h-3 w-3" />
+              </Button>
+            </span>
             <span>{quota.percentage}% remaining</span>
           </div>
           <Progress value={quota.percentage} className="h-2" />
@@ -315,6 +339,28 @@ export function AccountPoolCard({
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
             <Button onClick={handleRenameSubmit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Daily Limit</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>Limit (requests/day)</Label>
+            <Input 
+              type="number"
+              value={newLimit} 
+              onChange={(e) => setNewLimit(e.target.value)} 
+              placeholder="e.g. 1000"
+              onKeyDown={(e) => e.key === 'Enter' && handleLimitSubmit()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLimitOpen(false)}>Cancel</Button>
+            <Button onClick={handleLimitSubmit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
