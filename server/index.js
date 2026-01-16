@@ -762,13 +762,22 @@ function loadAuthConfig() {
 }
 
 const AUTH_PROFILES_DIR = path.join(HOME_DIR, '.config', 'opencode-studio', 'auth-profiles');
-const listAuthProfiles = (p, activePlugin) => {
-    let ns = p;
-    if (p === 'google') {
+
+const getProfileDir = (provider, activePlugin) => {
+    let ns = provider;
+    if (provider === 'google') {
         ns = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        const nsDir = path.join(AUTH_PROFILES_DIR, ns);
+        const plainDir = path.join(AUTH_PROFILES_DIR, 'google');
+        const nsHas = fs.existsSync(nsDir) && fs.readdirSync(nsDir).filter(f => f.endsWith('.json')).length > 0;
+        const plainHas = fs.existsSync(plainDir) && fs.readdirSync(plainDir).filter(f => f.endsWith('.json')).length > 0;
+        if (!nsHas && plainHas) return plainDir;
     }
-    
-    const d = path.join(AUTH_PROFILES_DIR, ns);
+    return path.join(AUTH_PROFILES_DIR, ns);
+};
+
+const listAuthProfiles = (p, activePlugin) => {
+    const d = getProfileDir(p, activePlugin);
     if (!fs.existsSync(d)) return [];
     try { return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')); } catch { return []; }
 };
@@ -1327,11 +1336,12 @@ function buildAccountPool(provider) {
         ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
         : provider;
     
-    const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
+    const profileDir = getProfileDir(provider, activePlugin);
+    
     const profiles = [];
     const now = Date.now();
     const metadata = loadPoolMetadata();
-    const providerMeta = metadata[namespace] || {};
+    const providerMeta = metadata[namespace] || metadata[provider] || {};
     
     // Get current active profile from studio config
     const studio = loadStudioConfig();
