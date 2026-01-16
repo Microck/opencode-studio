@@ -1310,6 +1310,10 @@ const getProfileDir = (provider, activePlugin) => {
         const plainDir = path.join(AUTH_PROFILES_DIR, 'google');
         const nsHas = fs.existsSync(nsDir) && fs.readdirSync(nsDir).filter(f => f.endsWith('.json')).length > 0;
         const plainHas = fs.existsSync(plainDir) && fs.readdirSync(plainDir).filter(f => f.endsWith('.json')).length > 0;
+        
+        // Debug
+        console.log(`[Auth] getProfileDir: ns=${ns}, nsHas=${nsHas}, plainHas=${plainHas}`);
+        
         if (!nsHas && plainHas) return plainDir;
     }
     return path.join(AUTH_PROFILES_DIR, ns);
@@ -1318,7 +1322,11 @@ const getProfileDir = (provider, activePlugin) => {
 const listAuthProfiles = (p, activePlugin) => {
     const d = getProfileDir(p, activePlugin);
     if (!fs.existsSync(d)) return [];
-    try { return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')); } catch { return []; }
+    try { 
+        const files = fs.readdirSync(d).filter(f => f.endsWith('.json'));
+        console.log(`[Auth] listAuthProfiles(${p}): dir=${d}, count=${files.length}`);
+        return files.map(f => f.replace('.json', '')); 
+    } catch { return []; }
 };
 
 app.get('/api/auth/providers', (req, res) => {
@@ -1700,12 +1708,14 @@ app.delete('/api/auth/:provider', (req, res) => {
         if (studio.activeProfiles) delete studio.activeProfiles[provider];
         saveStudioConfig(studio);
 
-        const providerDir = path.join(AUTH_PROFILES_DIR, provider);
-        if (fs.existsSync(providerDir)) fs.rmSync(providerDir, { recursive: true, force: true });
+        // Do NOT delete the profile directory on logout. Users want to keep saved profiles.
+        // const providerDir = path.join(AUTH_PROFILES_DIR, provider);
+        // if (fs.existsSync(providerDir)) fs.rmSync(providerDir, { recursive: true, force: true });
 
-        const metadata = loadPoolMetadata();
-        delete metadata[provider];
-        savePoolMetadata(metadata);
+        // Do NOT delete metadata either, as it tracks profile stats.
+        // const metadata = loadPoolMetadata();
+        // delete metadata[provider];
+        // savePoolMetadata(metadata);
     }
 
     if (provider === 'google' && activePlugin) {
@@ -2571,6 +2581,8 @@ app.post('/api/auth/google/start', async (req, res) => {
             if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
             const profileName = email || `google-${Date.now()}`;
             const profilePath = path.join(profileDir, `${profileName}.json`);
+            
+            console.log(`[Auth] Saving profile to: ${profilePath}`);
             atomicWriteFileSync(profilePath, JSON.stringify(credentials, null, 2));
 
             const metadata = loadPoolMetadata();
