@@ -221,6 +221,7 @@ function processLogLine(line) {
 
 // Start watcher on server start
 setupLogWatcher();
+importExistingAuth();
 
 let pendingActionMemory = null;
 
@@ -1190,6 +1191,70 @@ function syncAntigravityPool() {
     });
 
     savePoolMetadata(metadata);
+}
+
+function importExistingAuth() {
+    const authCfg = loadAuthConfig();
+    if (!authCfg) return;
+
+    const studio = loadStudioConfig();
+    const activeProfiles = studio.activeProfiles || {};
+    let changed = false;
+
+    // Standard providers to check
+    const providers = ['google', 'openai', 'anthropic', 'xai', 'openrouter', 'github-copilot', 'mistral', 'deepseek', 'amazon-bedrock', 'azure'];
+
+    providers.forEach(provider => {
+        if (!authCfg[provider]) return; // No creds for this provider
+
+        // Determine namespace
+        // For auto-import, we target the standard 'google' namespace unless antigravity plugin is active?
+        // Actually, auth.json 'google' key usually means Gemini/Vertex standard auth.
+        const namespace = provider === 'google' && studio.activeGooglePlugin === 'antigravity' 
+            ? 'google.antigravity' 
+            : (provider === 'google' ? 'google.gemini' : provider);
+
+        const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
+        
+        // If we already have an active profile for this provider, skip import
+        if (activeProfiles[provider]) return;
+
+        // If directory exists and has files, check if empty
+        if (fs.existsSync(profileDir) && fs.readdirSync(profileDir).filter(f => f.endsWith('.json')).length > 0) {
+            return;
+        }
+
+        // Import!
+        if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+        
+        const email = authCfg[provider].email || null;
+        const name = email || `imported-${Date.now()}`;
+        const profilePath = path.join(profileDir, `${name}.json`);
+        
+        console.log(`[AutoImport] Importing existing ${provider} credentials as ${name}`);
+        atomicWriteFileSync(profilePath, JSON.stringify(authCfg[provider], null, 2));
+        
+        // Set as active
+        if (!studio.activeProfiles) studio.activeProfiles = {};
+        studio.activeProfiles[provider] = name;
+        changed = true;
+
+        // Update metadata
+        const metadata = loadPoolMetadata();
+        if (!metadata[namespace]) metadata[namespace] = {};
+        metadata[namespace][name] = {
+            email: email,
+            createdAt: Date.now(),
+            lastUsed: Date.now(),
+            usageCount: 0,
+            imported: true
+        };
+        savePoolMetadata(metadata);
+    });
+
+    if (changed) {
+        saveStudioConfig(studio);
+    }
 }
 
 function getAccountStatus(meta, now) {
