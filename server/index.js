@@ -1513,6 +1513,7 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
 
 app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     const { provider, name } = req.params;
+    console.log(`[Auth] Deleting profile: ${provider}/${name}`);
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
         ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
@@ -1520,7 +1521,14 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     
     const dir = getProfileDir(provider, activePlugin);
     const profilePath = path.join(dir, `${name}.json`);
-    if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
+    console.log(`[Auth] Target path: ${profilePath}, Exists: ${fs.existsSync(profilePath)}`);
+
+    if (fs.existsSync(profilePath)) {
+        fs.unlinkSync(profilePath);
+        console.log(`[Auth] Deleted file`);
+    } else {
+        console.log(`[Auth] File not found`);
+    }
 
     const studio = loadStudioConfig();
     if (studio.activeProfiles && studio.activeProfiles[provider] === name) {

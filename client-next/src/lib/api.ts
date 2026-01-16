@@ -424,17 +424,17 @@ export async function saveAuthProfile(provider: string, name?: string): Promise<
 }
 
 export async function activateAuthProfile(provider: string, name: string): Promise<{ success: boolean }> {
-  const { data } = await api.post(`/auth/profiles/${provider}/${name}/activate`);
+  const { data } = await api.post(`/auth/profiles/${encodeURIComponent(provider)}/${encodeURIComponent(name)}/activate`);
   return data;
 }
 
 export async function deleteAuthProfile(provider: string, name: string): Promise<{ success: boolean }> {
-  const { data } = await api.delete(`/auth/profiles/${provider}/${name}`);
+  const { data } = await api.delete(`/auth/profiles/${encodeURIComponent(provider)}/${encodeURIComponent(name)}`);
   return data;
 }
 
 export async function renameAuthProfile(provider: string, name: string, newName: string): Promise<{ success: boolean; name: string }> {
-  const { data } = await api.put(`/auth/profiles/${provider}/${name}`, { newName });
+  const { data } = await api.put(`/auth/profiles/${encodeURIComponent(provider)}/${encodeURIComponent(name)}`, { newName });
   return data;
 }
 
