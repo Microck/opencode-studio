@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.9.4';
+export const MIN_SERVER_VERSION = '1.9.5';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -430,6 +430,11 @@ export async function activateAuthProfile(provider: string, name: string): Promi
 
 export async function deleteAuthProfile(provider: string, name: string): Promise<{ success: boolean }> {
   const { data } = await api.delete(`/auth/profiles/${encodeURIComponent(provider)}/${encodeURIComponent(name)}`);
+  return data;
+}
+
+export async function clearAllAuthProfiles(provider: string): Promise<{ success: boolean }> {
+  const { data } = await api.delete(`/auth/profiles/${encodeURIComponent(provider)}/all`);
   return data;
 }
 

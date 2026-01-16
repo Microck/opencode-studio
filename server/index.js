@@ -1519,6 +1519,51 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
     res.json({ success: true });
 });
 
+// IMPORTANT: This route must be BEFORE /:provider/:name to avoid 'all' being captured as :name
+app.delete('/api/auth/profiles/:provider/all', (req, res) => {
+    const { provider } = req.params;
+    console.log(`[Auth] Deleting ALL profiles for: ${provider}`);
+    const activePlugin = getActiveGooglePlugin();
+    const namespace = provider === 'google' 
+        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        : provider;
+    
+    const dir = getProfileDir(provider, activePlugin);
+    
+    if (fs.existsSync(dir)) {
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+        files.forEach(f => fs.unlinkSync(path.join(dir, f)));
+        console.log(`[Auth] Deleted ${files.length} profiles from ${dir}`);
+    }
+
+    const studio = loadStudioConfig();
+    if (studio.activeProfiles && studio.activeProfiles[provider]) {
+        delete studio.activeProfiles[provider];
+        saveStudioConfig(studio);
+    }
+    
+    const authCfg = loadAuthConfig() || {};
+    if (authCfg[provider]) {
+        delete authCfg[provider];
+        if (provider === 'google') {
+             const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+             delete authCfg.google;
+             delete authCfg[key];
+        }
+        const cp = getConfigPath();
+        const ap = path.join(path.dirname(cp), 'auth.json');
+        atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+    }
+    
+    const metadata = loadPoolMetadata();
+    if (metadata[namespace]) {
+        delete metadata[namespace];
+        savePoolMetadata(metadata);
+    }
+
+    res.json({ success: true });
+});
+
 app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     const { provider, name } = req.params;
     console.log(`[Auth] Deleting profile: ${provider}/${name}`);

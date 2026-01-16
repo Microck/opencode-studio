@@ -67,6 +67,7 @@ import {
   rotateAccount,
   markAccountCooldown,
   clearAccountCooldown,
+  clearAllAuthProfiles,
 } from "@/lib/api";
 import type { AuthCredential, AuthProfilesInfo, AccountPool, QuotaInfo } from "@/types";
 import { AccountPoolCard } from "@/components/account-pool-card";
@@ -272,6 +273,18 @@ export default function AuthPage() {
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to logout from profile: ${msg}`);
+    }
+  };
+
+  const handleClearAllProfiles = async (provider: string) => {
+    if (!confirm(`Are you sure you want to delete ALL profiles for ${provider}? This cannot be undone.`)) return;
+    try {
+      await clearAllAuthProfiles(provider);
+      toast.success(`Cleared all profiles for ${provider}`);
+      loadData();
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to clear profiles: ${msg}`);
     }
   };
 
@@ -783,6 +796,15 @@ export default function AuthPage() {
                             >
                               <Plus className="h-3 w-3 mr-1" />
                               Add Another
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full h-6 text-[10px] text-muted-foreground hover:text-destructive"
+                              onClick={() => handleClearAllProfiles(cred.id)}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Clear All
                             </Button>
                           </div>
                         )}
