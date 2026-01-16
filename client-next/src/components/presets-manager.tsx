@@ -211,7 +211,7 @@ export function PresetsManager() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-[95vw] w-[1400px] h-[90vh] flex flex-col">
+        <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-[1400px] h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create Preset</DialogTitle>
           </DialogHeader>

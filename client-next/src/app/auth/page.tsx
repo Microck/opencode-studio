@@ -178,9 +178,20 @@ export default function AuthPage() {
       if (result.command) {
         toast.info(`Command: ${result.command}`, { duration: 30000 });
       }
+
+      // Poll for login completion
+      const startTime = Date.now();
+      const pollInterval = setInterval(async () => {
+        if (Date.now() - startTime > 120000) {
+          clearInterval(pollInterval);
+          setLoginLoading(false);
+          return;
+        }
+        await loadData(true);
+      }, 3000);
+
     } catch {
       toast.error("Failed to open terminal");
-    } finally {
       setLoginLoading(false);
     }
   };
