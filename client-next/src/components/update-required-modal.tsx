@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, Terminal, Copy, Check } from "lucide-react";
+import { AlertTriangle, Terminal, Copy, Check, RefreshCw, Power } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { shutdownBackend } from "@/lib/api";
 
 interface UpdateRequiredModalProps {
   currentVersion: string | null;
@@ -11,12 +12,25 @@ interface UpdateRequiredModalProps {
 
 export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequiredModalProps) {
   const [copied, setCopied] = useState(false);
+  const [shuttingDown, setShuttingDown] = useState(false);
+  const [serverStopped, setServerStopped] = useState(false);
   const updateCommand = "npm update -g opencode-studio-server";
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(updateCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShutdown = async () => {
+    setShuttingDown(true);
+    await shutdownBackend();
+    setServerStopped(true);
+    setShuttingDown(false);
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   return (
@@ -55,8 +69,30 @@ export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequir
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground mt-6">
-            After updating, restart the server and refresh this page.
+          <div className="w-full flex gap-3 mt-6">
+            {!serverStopped ? (
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={handleShutdown}
+                disabled={shuttingDown}
+              >
+                <Power className="h-4 w-4 mr-2" />
+                {shuttingDown ? "Stopping..." : "Stop Server"}
+              </Button>
+            ) : (
+              <div className="flex-1 text-sm text-muted-foreground flex items-center justify-center">
+                Server stopped. Run update, then restart.
+              </div>
+            )}
+            <Button className="flex-1" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Check Again
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-4">
+            Stop server → run update → restart server → check again
           </p>
         </div>
       </div>
