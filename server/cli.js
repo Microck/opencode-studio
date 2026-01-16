@@ -127,4 +127,10 @@ if (shouldOpenBrowser) {
 }
 
 // Start the server
-require('./index.js');
+const server = require('./index.js');
+if (server.startServer) {
+    server.startServer();
+} else {
+    // Fallback if not exported (should not happen with new version)
+    console.error('Failed to start server: startServer not found');
+}

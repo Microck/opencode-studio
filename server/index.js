@@ -2817,13 +2817,18 @@ app.post('/api/presets/:id/apply', (req, res) => {
 });
 
 // Start watcher on server start
-if (require.main === module) {
+function startServer() {
     setupLogWatcher();
     importExistingAuth();
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }
 
+if (require.main === module) {
+    startServer();
+}
+
 module.exports = {
+    startServer,
     rotateAccount,
     processLogLine,
     loadPoolMetadata,
