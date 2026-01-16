@@ -56,8 +56,42 @@ open http://localhost:3000
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
 - **commands:** browse and manage custom slash commands
 - **auth:** view connected providers, login via oauth/api key, **multi-account pool**, **quota tracking**, and **Gemini plugin detection**
-- **settings:** permissions, agents config, keybinds, tui settings, backup/restore
+- **cloud sync:** sync config across devices via dropbox, google drive, onedrive, or any cloud folder
+- **auto-sync:** automatically pull on startup if remote is newer, push after config changes
+- **backup/restore:** export/import complete config including skills and plugins
+- **settings:** permissions, agents config, keybinds, tui settings, config path management
 - **bulk import:** paste multiple urls, preview with checkboxes, skip existing items
+- **version check:** blocks outdated server versions with update instructions
+
+---
+
+### cloud sync
+
+sync your config across multiple devices using your existing cloud service.
+
+#### setup
+
+1. go to **settings → cloud sync**
+2. set a folder path synced by your cloud service:
+   - dropbox: `~/Dropbox/OpenCode`
+   - google drive: `~/Google Drive/OpenCode`
+   - onedrive: `~/OneDrive/OpenCode`
+   - icloud: `~/Library/Mobile Documents/com~apple~CloudDocs/OpenCode`
+3. click **push to cloud** to create the sync file
+4. enable **auto-sync** for automatic syncing
+
+#### what syncs
+
+- studio config (disabled skills/plugins, active profiles, preferences)
+- opencode config (mcp servers, settings, permissions)
+- skills (SKILL.md files)
+- plugins (.js/.ts files)
+
+#### auto-sync behavior
+
+- **on startup:** pulls if remote file is newer than local
+- **after saves:** pushes config changes automatically
+- your cloud service handles file sync between devices
 
 ---
 
@@ -137,7 +171,9 @@ flowchart LR
           → agent config (model, temperature, color)
           → keybinds (12 essential shortcuts)
           → tui settings (scroll, diff style)
+          → cloud sync (folder, auto-sync toggle)
           → backup/restore config
+          → auth debug (paths, profiles)
 ```
 
 ---
@@ -229,23 +265,7 @@ opencode-studio/
 
 config locations:
 - opencode config: `~/.config/opencode/` (auto-detected)
-- studio data: `~/.config/opencode-studio/` (profiles, preferences)
-
----
-
-### screenshots
-
-| mcp | skills | plugins |
-|:---:|:---:|:---:|
-| ![mcp](client-next/public/screenshots/mcp.png) | ![skills](client-next/public/screenshots/skills.png) | ![plugins](client-next/public/screenshots/plugins.png) |
-
-| commands | auth | settings |
-|:---:|:---:|:---:|
-| ![commands](client-next/public/screenshots/commands.png) | ![auth](client-next/public/screenshots/auth.png) | ![settings](client-next/public/screenshots/settings.png) |
-
-| quickstart |
-|:---:|
-| ![quickstart](client-next/public/screenshots/quickstart.png) |
+- studio data: `~/.config/opencode-studio/` (profiles, preferences, sync settings)
 
 ---
 
@@ -281,6 +301,8 @@ cd opencode-studio
 | bulk import fails | ensure urls are raw github links (raw.githubusercontent.com) |
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
 | protocol handler not registered | run `opencode-studio-server --register` as admin |
+| "Update Required" modal | run `npm update -g opencode-studio-server` |
+| cloud sync not working | ensure sync folder exists and is accessible |
 
 ---
 
