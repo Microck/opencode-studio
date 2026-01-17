@@ -1643,21 +1643,29 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     }
 
     const studio = loadStudioConfig();
-    if (studio.activeProfiles && studio.activeProfiles[provider] === name) {
+    const wasActive = studio.activeProfiles && studio.activeProfiles[provider] === name;
+
+    if (wasActive) {
         delete studio.activeProfiles[provider];
         saveStudioConfig(studio);
     }
 
     const authCfg = loadAuthConfig() || {};
-    if (provider === 'google' && authCfg.google?.email === name) {
-        delete authCfg.google;
-        delete authCfg['google.antigravity'];
-        delete authCfg['google.gemini'];
-        const cp = getConfigPath();
-        const ap = path.join(path.dirname(cp), 'auth.json');
-        atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
-    } else if (authCfg[provider]) {
+    let changed = false;
+
+    if (provider === 'google') {
+        if (authCfg.google?.email === name || authCfg['google.antigravity']?.email === name || authCfg['google.gemini']?.email === name) {
+            delete authCfg.google;
+            delete authCfg['google.antigravity'];
+            delete authCfg['google.gemini'];
+            changed = true;
+        }
+    } else if (wasActive && authCfg[provider]) {
         delete authCfg[provider];
+        changed = true;
+    }
+
+    if (changed) {
         const cp = getConfigPath();
         const ap = path.join(path.dirname(cp), 'auth.json');
         atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
