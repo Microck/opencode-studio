@@ -692,7 +692,7 @@ export default function AuthPage() {
                   };
                   return !providerProfiles.hasCurrentAuth && providerProfiles.profiles?.length === 0;
                 }).length === 0 && (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="__none__" disabled>
                     All connected
                   </SelectItem>
                 )}
