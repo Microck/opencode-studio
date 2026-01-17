@@ -32,6 +32,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { 
   Key, 
@@ -540,12 +547,12 @@ export default function AuthPage() {
         <div className="lg:col-span-2 space-y-8">
           
           {mainProviders.map(cred => {
-             // Determine if we have a real pool or synthetic one
-             let currentPool: AccountPool | null = null;
-             
-             if (cred.id === 'google' && activeGooglePlugin === 'antigravity') {
-                currentPool = pool;
-             } else if (cred.id === 'openai' && openaiPool) {
+              // Determine if we have a real pool or synthetic one
+              let currentPool: AccountPool | null = null;
+              
+              if (cred.id === 'google' && pool) {
+                 currentPool = pool;
+              } else if (cred.id === 'openai' && openaiPool) {
                 currentPool = openaiPool;
              } else if (profiles[cred.id]?.profiles?.length > 0) {
                 currentPool = profilesToPool(cred.id, profiles[cred.id]);
@@ -649,14 +656,48 @@ export default function AuthPage() {
           )}
         </div>
 
-        {/* Sidebar: Simple Providers */}
+        {/* Sidebar: Other Providers */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold tracking-tight">Other Providers</h2>
-            <Button variant="ghost" size="sm" onClick={() => handleLogin()} className="h-8 text-xs text-muted-foreground" disabled={loginLoading}>
-              <Terminal className="h-3.5 w-3.5 mr-1.5" />
-              Terminal
-            </Button>
+            <Select
+              value=""
+              onValueChange={(value) => {
+                if (value) handleLogin(value);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[100px]">
+                <SelectValue placeholder="Connect..." />
+              </SelectTrigger>
+              <SelectContent>
+                {sidebarProviders
+                  .filter((cred) => {
+                    const providerProfiles = profiles[cred.id] || { 
+                      profiles: cred.profiles || [], 
+                      active: cred.active || null, 
+                      hasCurrentAuth: cred.hasCurrentAuth ?? true 
+                    };
+                    return !providerProfiles.hasCurrentAuth && providerProfiles.profiles?.length === 0;
+                  })
+                  .map((cred) => (
+                    <SelectItem key={cred.id} value={cred.id}>
+                      {cred.name}
+                    </SelectItem>
+                  ))}
+                {sidebarProviders.filter((cred) => {
+                  const providerProfiles = profiles[cred.id] || { 
+                    profiles: cred.profiles || [], 
+                    active: cred.active || null, 
+                    hasCurrentAuth: cred.hasCurrentAuth ?? true 
+                  };
+                  return !providerProfiles.hasCurrentAuth && providerProfiles.profiles?.length === 0;
+                }).length === 0 && (
+                  <SelectItem value="" disabled>
+                    All connected
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-3">

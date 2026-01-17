@@ -189,7 +189,7 @@ function processLogLine(line) {
         let namespace = provider;
         if (provider === 'google') {
             const activePlugin = getActiveGooglePlugin();
-            namespace = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            namespace = 'google.antigravity';
         }
 
         const metadata = loadPoolMetadata();
@@ -1353,7 +1353,7 @@ const AUTH_PROFILES_DIR = path.join(HOME_DIR, '.config', 'opencode-studio', 'aut
 const getProfileDir = (provider, activePlugin) => {
     let ns = provider;
     if (provider === 'google') {
-        ns = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        ns = 'google.antigravity';
         const nsDir = path.join(AUTH_PROFILES_DIR, ns);
         const plainDir = path.join(AUTH_PROFILES_DIR, 'google');
         const nsHas = fs.existsSync(nsDir) && fs.readdirSync(nsDir).filter(f => f.endsWith('.json')).length > 0;
@@ -1448,7 +1448,7 @@ app.get('/api/auth', (req, res) => {
         const saved = listAuthProfiles(p.id, activePlugin);
         let curr = !!authCfg[p.id];
         if (p.id === 'google') {
-            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            const key = 'google.antigravity';
             curr = !!authCfg[key] || !!authCfg.google;
         }
         credentials.push({ ...p, active: ac[p.id] || (curr ? 'current' : null), profiles: saved, hasCurrentAuth: curr });
@@ -1475,7 +1475,7 @@ app.get('/api/auth/profiles', (req, res) => {
         // Correct current auth check: handle google vs google.gemini/antigravity
         let curr = !!authCfg[p];
         if (p === 'google') {
-            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            const key = 'google.antigravity';
             curr = !!authCfg[key] || !!authCfg.google;
         }
         
@@ -1491,7 +1491,7 @@ app.post('/api/auth/profiles/:provider', (req, res) => {
     const { name } = req.body;
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const auth = loadAuthConfig() || {};
@@ -1524,7 +1524,7 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
     const { provider, name } = req.params;
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const dir = getProfileDir(provider, activePlugin);
@@ -1542,7 +1542,7 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
     
     // Save both to persistent namespaced key and the shared 'google' key
     if (provider === 'google') {
-        const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        const key = 'google.antigravity';
         authCfg[key] = profileData;
     }
     
@@ -1574,7 +1574,7 @@ app.delete('/api/auth/profiles/:provider/all', (req, res) => {
     console.log(`[Auth] Deleting ALL profiles for: ${provider}`);
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const dir = getProfileDir(provider, activePlugin);
@@ -1595,7 +1595,7 @@ app.delete('/api/auth/profiles/:provider/all', (req, res) => {
     if (authCfg[provider]) {
         delete authCfg[provider];
         if (provider === 'google') {
-             const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+             const key = 'google.antigravity';
              delete authCfg.google;
              delete authCfg[key];
         }
@@ -1618,7 +1618,7 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     console.log(`[Auth] Deleting profile: ${provider}/${name}`);
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const dir = getProfileDir(provider, activePlugin);
@@ -1640,7 +1640,7 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
         const authCfg = loadAuthConfig() || {};
         delete authCfg[provider];
         if (provider === 'google') {
-            const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            const key = 'google.antigravity';
             delete authCfg.google;
             delete authCfg[key];
         }
@@ -1663,7 +1663,7 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
     const { newName } = req.body;
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google' 
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const dir = getProfileDir(provider, activePlugin);
@@ -1813,7 +1813,7 @@ app.delete('/api/auth/:provider', (req, res) => {
     }
 
     if (provider === 'google' && activePlugin) {
-        const key = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+        const key = 'google.antigravity';
         delete authCfg[key];
     }
 
@@ -2036,7 +2036,7 @@ function getAccountStatus(meta, now) {
 function buildAccountPool(provider) {
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const profileDir = getProfileDir(provider, activePlugin);
@@ -2101,7 +2101,7 @@ function getPoolQuota(provider, pool) {
     const metadata = loadPoolMetadata();
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const quotaMeta = metadata._quota?.[namespace] || {};
@@ -2151,7 +2151,7 @@ function rotateAccount(provider, reason = 'manual_rotation') {
     // Activate the new account
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
 
     const profilePath = path.join(AUTH_PROFILES_DIR, namespace, `${next.name}.json`);
@@ -2239,7 +2239,7 @@ app.post('/api/auth/pool/limit', (req, res) => {
 
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
 
     const metadata = loadPoolMetadata();
@@ -2269,7 +2269,7 @@ app.put('/api/auth/pool/:name/cooldown', (req, res) => {
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2292,7 +2292,7 @@ app.delete('/api/auth/pool/:name/cooldown', (req, res) => {
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2311,7 +2311,7 @@ app.post('/api/auth/pool/:name/usage', (req, res) => {
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2338,7 +2338,7 @@ app.put('/api/auth/pool/:name/metadata', (req, res) => {
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2357,7 +2357,7 @@ app.get('/api/auth/pool/quota', (req, res) => {
     const provider = req.query.provider || 'google';
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2381,7 +2381,7 @@ app.post('/api/auth/pool/quota/limit', (req, res) => {
     const { provider = 'google', limit } = req.body;
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
-        ? (activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini')
+        ? ('google.antigravity')
         : provider;
     
     const metadata = loadPoolMetadata();
@@ -2714,7 +2714,7 @@ app.post('/api/auth/google/start', async (req, res) => {
             
             const studioConfig = loadStudioConfig();
             const activePlugin = studioConfig.activeGooglePlugin || 'gemini';
-            const namespace = activePlugin === 'antigravity' ? 'google.antigravity' : 'google.gemini';
+            const namespace = 'google.antigravity';
             
             const credentials = {
                 refresh_token: tokens.refresh_token,
