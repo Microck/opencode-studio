@@ -52,7 +52,6 @@ import { savePoolLimit, type CooldownRule } from "@/lib/api";
 
 interface AccountPoolCardProps {
   pool: AccountPool;
-  quota: QuotaInfo;
   cooldownRules?: CooldownRule[];
   onRotate: () => Promise<void>;
   onActivate: (name: string) => Promise<void>;
@@ -109,7 +108,6 @@ function getStatusIcon(status: AccountPoolEntry["status"]) {
 
 export function AccountPoolCard({
   pool,
-  quota,
   onRotate,
   onActivate,
   onCooldown,

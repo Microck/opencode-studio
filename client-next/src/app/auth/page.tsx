@@ -91,6 +91,28 @@ const AntigravityLogo = ({ className }: { className?: string }) => (
   </svg>
 );
 
+function profilesToPool(provider: string, profiles: AuthProfilesInfo[string]): AccountPool {
+  const profileList = profiles?.profiles || [];
+  const active = profiles?.active;
+  
+  return {
+    provider,
+    namespace: provider,
+    totalAccounts: profileList.length,
+    availableAccounts: profileList.length,
+    activeAccount: active || null,
+    accounts: profileList.map(name => ({
+      name,
+      email: name,
+      status: active === name ? 'active' : 'ready',
+      lastUsed: 0,
+      usageCount: 0,
+      cooldownUntil: null,
+      createdAt: 0
+    }))
+  };
+}
+
 export default function AuthPage() {
   const [credentials, setCredentials] = useState<AuthCredential[]>([]);
   const [authFile, setAuthFile] = useState<string | null>(null);
@@ -402,155 +424,403 @@ export default function AuthPage() {
     setExpandedProfiles(prev => ({ ...prev, [provider]: !prev[provider] }));
   };
 
-  const handlePoolRotate = async () => {
+  const handleRotate = async (provider: string) => {
     try {
-      setRotating(true);
-      const result = await rotateAccount('google');
+      if (provider === 'google') setRotating(true);
+      else if (provider === 'openai') setOpenaiRotating(true);
+      
+      const result = await rotateAccount(provider);
       toast.success(`Switched from ${result.previousAccount || 'none'} to ${result.newAccount}`);
       await loadData(true);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "No available accounts";
       toast.error(`Failed to rotate: ${msg}`);
     } finally {
-      setRotating(false);
+      if (provider === 'google') setRotating(false);
+      else if (provider === 'openai') setOpenaiRotating(false);
     }
   };
 
-  const handlePoolActivate = async (name: string) => {
+  const handleActivate = async (provider: string, name: string) => {
     try {
-      await activateAuthProfile('google', name);
+      await activateAuthProfile(provider, name);
       toast.success(`Activated ${name}`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to activate: ${msg}`);
+      toast.error(`Failed to activate: ${err.message}`);
     }
   };
 
-  const handlePoolRemove = async (name: string) => {
+  const handleRemove = async (provider: string, name: string) => {
     try {
-      await deleteAuthProfile('google', name);
+      await deleteAuthProfile(provider, name);
       toast.success(`Removed ${name}`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to remove: ${msg}`);
+      toast.error(`Failed to remove: ${err.message}`);
     }
   };
 
-  const handlePoolCooldown = async (name: string, rule?: string) => {
+  const handleCooldown = async (provider: string, name: string, rule?: string) => {
     try {
-      await markAccountCooldown(name, 'google', undefined, rule);
+      await markAccountCooldown(name, provider, undefined, rule);
       const ruleText = rule ? ` (${rule})` : ' for 1 hour';
       toast.success(`${name} marked as cooldown${ruleText}`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to set cooldown: ${msg}`);
+      toast.error(`Failed to set cooldown: ${err.message}`);
     }
   };
 
-  const handlePoolClearCooldown = async (name: string) => {
+  const handleClearCooldown = async (provider: string, name: string) => {
     try {
-      await clearAccountCooldown(name, 'google');
+      await clearAccountCooldown(name, provider);
       toast.success(`${name} cooldown cleared`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to clear cooldown: ${msg}`);
+      toast.error(`Failed to clear cooldown: ${err.message}`);
     }
   };
 
-  const handlePoolClearAll = async () => {
+  const handleClearAll = async (provider: string) => {
     try {
-      await clearAllAuthProfiles('google');
-      toast.success("All Google accounts removed");
+      await clearAllAuthProfiles(provider);
+      toast.success(`All ${provider} accounts removed`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to clear accounts: ${msg}`);
+      toast.error(`Failed to clear accounts: ${err.message}`);
     }
   };
 
-  const handleOpenaiPoolRotate = async () => {
-    try {
-      setOpenaiRotating(true);
-      const result = await rotateAccount('openai');
-      toast.success(`Switched from ${result.previousAccount || 'none'} to ${result.newAccount}`);
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "No available accounts";
-      toast.error(`Failed to rotate: ${msg}`);
-    } finally {
-      setOpenaiRotating(false);
-    }
-  };
+  const hasBothPlugins = installedGooglePlugins.includes('gemini') && installedGooglePlugins.includes('antigravity');
   
-  const handleOpenaiPoolActivate = async (name: string) => {
-    try {
-      await activateAuthProfile('openai', name);
-      toast.success(`Activated ${name}`);
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to activate: ${msg}`);
-    }
-  };
+  // Logic: Providers with pools or special handling go to main column
+  const mainProviders = credentials.filter(c => {
+     if (c.id === 'google') return true;
+     // OpenAI or others: if they have multiple profiles, treat as pool
+     return (profiles[c.id]?.profiles?.length || 0) > 0;
+  }).sort((a, b) => {
+     // Google first, then OpenAI, then A-Z
+     if (a.id === 'google') return -1;
+     if (b.id === 'google') return 1;
+     if (a.id === 'openai') return -1;
+     if (b.id === 'openai') return 1;
+     return a.name.localeCompare(b.name);
+  });
 
-  const handleOpenaiPoolRemove = async (name: string) => {
-    try {
-      await deleteAuthProfile('openai', name);
-      toast.success(`Removed ${name}`);
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to remove: ${msg}`);
-    }
-  };
+  const sidebarProviders = credentials.filter(c => !mainProviders.find(p => p.id === c.id));
 
-  const handleOpenaiPoolClearAll = async () => {
-    try {
-      await clearAllAuthProfiles('openai');
-      toast.success("All OpenAI accounts removed");
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to clear accounts: ${msg}`);
-    }
-  };
-  
-  const handleOpenaiPoolCooldown = async (name: string) => {
-    try {
-      await markAccountCooldown(name, 'openai', 3600000);
-      toast.success(`${name} marked as cooldown for 1 hour`);
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to set cooldown: ${msg}`);
-    }
-  };
-  
-  const handleOpenaiPoolClearCooldown = async (name: string) => {
-    try {
-      await clearAccountCooldown(name, 'openai');
-      toast.success(`${name} cooldown cleared`);
-      await loadData(true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to clear cooldown: ${msg}`);
-    }
-  };
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
+      <header className="flex justify-between items-end border-b pb-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">Authentication</h1>
+            {authFile && (
+              <Badge variant="outline" className="text-xs font-mono font-normal text-muted-foreground hidden sm:flex">
+                {authFile}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground mt-1">Manage AI provider connections and account pools.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowTutorial(true)} title="Show help">
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => loadData()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </header>
 
-  if (loading) {
-    return (
-      <div className="space-y-6 pb-12 animate-fade-in">
-        <h1 className="text-2xl font-bold">Authentication</h1>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="h-64 md:col-span-2" />
-          <Skeleton className="h-64" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Column: Pools */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {mainProviders.map(cred => {
+             // Determine if we have a real pool or synthetic one
+             let currentPool: AccountPool | null = null;
+             
+             if (cred.id === 'google' && activeGooglePlugin === 'antigravity') {
+                currentPool = pool;
+             } else if (cred.id === 'openai' && openaiPool) {
+                currentPool = openaiPool;
+             } else if (profiles[cred.id]?.profiles?.length > 0) {
+                currentPool = profilesToPool(cred.id, profiles[cred.id]);
+             }
+
+             // Special Google Header
+             const isGoogle = cred.id === 'google';
+             
+             return (
+               <section key={cred.id} className="space-y-4">
+                 <div className="flex items-center justify-between">
+                   <h2 className="text-lg font-semibold tracking-tight">{cred.name}</h2>
+                   {isGoogle && hasBothPlugins && (
+                    <div className="bg-muted p-1 rounded-lg inline-flex items-center">
+                      <button
+                        onClick={() => handleSetGooglePlugin('gemini')}
+                        disabled={switchingPlugin}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                          activeGooglePlugin === 'gemini' 
+                            ? "bg-background shadow-sm text-foreground" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <GeminiLogo className="h-3 w-3" />
+                        Gemini
+                      </button>
+                      <button
+                        onClick={() => handleSetGooglePlugin('antigravity')}
+                        disabled={switchingPlugin}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                          activeGooglePlugin === 'antigravity' 
+                            ? "bg-background shadow-sm text-foreground" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <AntigravityLogo className="h-3 w-3" />
+                        Antigravity
+                      </button>
+                    </div>
+                   )}
+                 </div>
+
+                 {currentPool ? (
+                    <AccountPoolCard
+                      pool={currentPool}
+                      cooldownRules={cooldownRules}
+                      onAddAccount={isGoogle ? handleGoogleLogin : () => handleLogin(cred.id)}
+                      isAdding={isGoogle ? googleOAuthLoading : loginLoading}
+                      onRotate={() => handleRotate(cred.id)}
+                      onActivate={(name) => handleActivate(cred.id, name)}
+                      onCooldown={(name, rule) => handleCooldown(cred.id, name, rule)}
+                      onClearCooldown={(name) => handleClearCooldown(cred.id, name)}
+                      onClearAll={() => handleClearAll(cred.id)}
+                      onRemove={(name) => handleRemove(cred.id, name)}
+                      onRename={(name, newName) => handleRenameProfile(cred.id, name, newName)}
+                      rotating={cred.id === 'openai' ? openaiRotating : (isGoogle ? rotating : false)}
+                      providerName={cred.name}
+                    />
+                 ) : (
+                    <div className="border border-dashed rounded-lg p-8 flex flex-col items-center text-center bg-muted/10">
+                      <div className="bg-primary/10 p-3 rounded-full mb-4">
+                        <Key className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="text-base font-medium mb-1">Connect {cred.name}</h3>
+                      <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                        {isGoogle 
+                          ? "Connect your Google account to access Gemini models. Install antigravity-auth to enable multi-account pooling." 
+                          : `Authenticate with ${cred.name} to access models.`}
+                      </p>
+                      <Button onClick={isGoogle ? handleGoogleLogin : () => handleLogin(cred.id)} disabled={isGoogle ? googleOAuthLoading : loginLoading} className="min-w-[140px]">
+                        {isGoogle && googleOAuthLoading ? "Connecting..." : `Connect ${cred.name}`}
+                      </Button>
+                    </div>
+                 )}
+               </section>
+             );
+          })}
+
+          {installedGooglePlugins.length < 2 && (
+            <div className="border rounded-lg p-4 bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Enhance Google Auth</p>
+                  <p className="text-xs text-muted-foreground">Install plugins for specific auth modes.</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {!installedGooglePlugins.includes('gemini') && (
+                  <Button onClick={() => handleAddPlugin(GEMINI_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
+                    Add Gemini
+                  </Button>
+                )}
+                {!installedGooglePlugins.includes('antigravity') && (
+                  <Button onClick={() => handleAddPlugin(ANTIGRAVITY_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
+                    Add Antigravity
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar: Simple Providers */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">Other Providers</h2>
+            <Button variant="ghost" size="sm" onClick={() => handleLogin()} className="h-8 text-xs text-muted-foreground" disabled={loginLoading}>
+              <Terminal className="h-3.5 w-3.5 mr-1.5" />
+              Terminal
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {sidebarProviders.map((cred) => {
+              const providerProfiles = profiles[cred.id] || { 
+                profiles: cred.profiles || [], 
+                active: cred.active || null, 
+                hasCurrentAuth: cred.hasCurrentAuth ?? true 
+              };
+              const isConnected = providerProfiles.hasCurrentAuth || providerProfiles.profiles?.length > 0;
+              
+              return (
+                <div key={cred.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="p-3 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-md ${isConnected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        <Key className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{cred.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className="text-[10px] text-muted-foreground">{isConnected ? 'Connected' : 'Disconnected'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {isConnected && (
+                      <Button variant="ghost" size="icon" onClick={() => setLogoutTarget(cred)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                        <LogOut className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {!isConnected && (
+                      <div className="px-3 pb-3">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-8 text-xs"
+                            onClick={() => handleLogin(cred.id)}
+                            disabled={loginLoading}
+                        >
+                            Connect
+                        </Button>
+                      </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
-    );
+      {/* Dialogs */}
+      <AlertDialog open={!!logoutTarget} onOpenChange={(o) => !o && setLogoutTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Logout from {logoutTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will logout your credentials for this provider.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Logout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete profile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{deleteTarget?.name}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteProfile} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!renameTarget} onOpenChange={(o) => { if (!o) { setRenameTarget(null); setNewName(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename profile</DialogTitle>
+            <DialogDescription>
+              Enter a new name for {renameTarget?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>New Name</Label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={renameTarget?.current || "New profile name"}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button onClick={handleRenameSubmit} disabled={!newName.trim() || newName === renameTarget?.name}>
+              Rename
+            </Button>
+
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTutorial} onOpenChange={(o) => !o && dismissTutorial()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Welcome to Authentication
+            </DialogTitle>
+            <DialogDescription>
+              Manage your AI provider connections in one place.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Account Pools</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Any provider with multiple accounts automatically becomes a pool. 
+                  Switch between accounts instantly or mark them for cooldown.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 items-start">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <Terminal className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Terminal Login</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Click "Connect" or "Add Account" to launch the login terminal. 
+                  If it fails to open, copy the command and run it manually.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={dismissTutorial} className="w-full sm:w-auto">
+              Got it
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
   }
 
   const hasBothPlugins = installedGooglePlugins.includes('gemini') && installedGooglePlugins.includes('antigravity');
