@@ -29,6 +29,7 @@ import {
 
 const navItems = [
   { href: "/mcp", label: "MCP Servers", icon: Terminal },
+  { href: "/profiles", label: "Profiles", icon: Layers },
   { href: "/skills", label: "Skills", icon: Puzzle },
   { href: "/plugins", label: "Plugins", icon: FileCode },
   { href: "/commands", label: "Commands", icon: Command },

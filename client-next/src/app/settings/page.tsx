@@ -158,7 +158,7 @@ export default function SettingsPage() {
   const loadSystemPrompt = async () => {
     try {
       setLoadingPrompt(true);
-      const res = await api.get('/api/prompts/global');
+      const res = await api.get('/prompts/global');
       setSystemPrompt(res.data.content);
     } catch (error) {
       console.error("Error loading prompt:", error);
@@ -170,7 +170,7 @@ export default function SettingsPage() {
   const handleSaveSystemPrompt = async () => {
     try {
       setSavingPrompt(true);
-      await api.post('/api/prompts/global', { content: systemPrompt });
+      await api.post('/prompts/global', { content: systemPrompt });
       toast.success("System prompt updated");
     } catch (error) {
       toast.error("Failed to save system prompt");

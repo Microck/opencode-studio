@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.13.1';
+export const MIN_SERVER_VERSION = '1.14.5';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -595,6 +595,31 @@ export async function getProxyConfig(): Promise<any> {
 
 export async function saveProxyConfig(config: any): Promise<{ success: boolean }> {
   const { data } = await api.post('/proxy/config', config);
+  return data;
+}
+
+export interface ProfileList {
+  profiles: string[];
+  active: string | null;
+}
+
+export async function getProfiles(): Promise<ProfileList> {
+  const { data } = await api.get<ProfileList>('/api/profiles');
+  return data;
+}
+
+export async function createProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.post('/api/profiles', { name });
+  return data;
+}
+
+export async function deleteProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.delete(`/api/profiles/${encodeURIComponent(name)}`);
+  return data;
+}
+
+export async function activateProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.post(`/api/profiles/${encodeURIComponent(name)}/activate`);
   return data;
 }
 

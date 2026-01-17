@@ -9,6 +9,7 @@ const { spawn, exec } = require('child_process');
 
 const pkg = require('./package.json');
 const proxyManager = require('./proxy-manager');
+const profileManager = require('./profile-manager');
 const SERVER_VERSION = pkg.version;
 
 // Atomic file write: write to temp file then rename to prevent corruption
@@ -2516,6 +2517,34 @@ app.get('/api/proxy/config', (req, res) => {
 app.post('/api/proxy/config', (req, res) => {
     proxyManager.saveProxyConfig(req.body);
     res.json({ success: true });
+});
+
+app.get('/api/profiles', (req, res) => {
+    res.json(profileManager.listProfiles());
+});
+
+app.post('/api/profiles', (req, res) => {
+    try {
+        res.json(profileManager.createProfile(req.body.name));
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+app.delete('/api/profiles/:name', (req, res) => {
+    try {
+        res.json(profileManager.deleteProfile(req.params.name));
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+app.post('/api/profiles/:name/activate', (req, res) => {
+    try {
+        res.json(profileManager.activateProfile(req.params.name));
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 // ============================================

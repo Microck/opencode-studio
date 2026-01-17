@@ -15,6 +15,9 @@ let isProxyRunning = false;
 // Helper to check if binary exists
 const checkBinary = (cmd) => {
     return new Promise((resolve) => {
+        if (path.isAbsolute(cmd)) {
+            return resolve(fs.existsSync(cmd));
+        }
         const checkCmd = process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`;
         exec(checkCmd, (err) => {
             resolve(!err);
@@ -23,7 +26,24 @@ const checkBinary = (cmd) => {
 };
 
 const getProxyCommand = async () => {
+    if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (localAppData) {
+            const aliases = ['CLIProxyAPI.exe', 'cli-proxy-api.exe', 'cliproxyapi.exe'];
+            for (const alias of aliases) {
+                const wingetPath = path.join(localAppData, 'Microsoft', 'WinGet', 'Links', alias);
+                if (fs.existsSync(wingetPath)) return wingetPath;
+            }
+            
+            const progPath = path.join(localAppData, 'Programs', 'CLIProxyAPI', 'CLIProxyAPI.exe');
+            if (fs.existsSync(progPath)) return progPath;
+        }
+    }
+
+    if (await checkBinary('cli-proxy-api')) return 'cli-proxy-api';
     if (await checkBinary('cliproxyapi')) return 'cliproxyapi';
+    if (await checkBinary('CLIProxyAPI')) return 'CLIProxyAPI';
+    if (await checkBinary('cliproxyapi.exe')) return 'cliproxyapi.exe';
     if (await checkBinary('cliproxy')) return 'cliproxy';
     return null;
 };
@@ -35,6 +55,7 @@ const loadProxyConfig = () => {
         const defaultConfig = {
             port: 8317,
             "auth-dir": PROXY_AUTH_DIR,
+            "management-key": "",
             routing: { strategy: "round-robin" },
             "quota-exceeded": {
                 "switch-project": true,
@@ -48,7 +69,12 @@ const loadProxyConfig = () => {
     
     try {
         const content = fs.readFileSync(PROXY_CONFIG_FILE, 'utf8');
-        return yaml.load(content);
+        const config = yaml.load(content);
+        if (config && config['management-key'] === undefined) {
+            config['management-key'] = "";
+            saveProxyConfig(config);
+        }
+        return config;
     } catch (e) {
         console.error("Failed to load proxy config:", e);
         return {};

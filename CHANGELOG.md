@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.14.5] - 2026-01-17
+
+### Fixed
+- **Proxy Config**: Version bump for npm publish.
+
+## [1.14.5] - 2026-01-17
+
+### Fixed
+- **Proxy Config**: Version bump for npm publish.
+
+## [1.14.5] - 2026-01-17
+
+### Fixed
+- **Proxy Config**: Version bump for npm publish.
+
+## [1.14.4] - 2026-01-17
+
+### Fixed
+- **Proxy Config**: Explicitly disabled `management-key` in default configuration to prevent dashboard lockouts.
+
+## [1.14.3] - 2026-01-17
+
+### Fixed
+- **System Prompt API**: Fixed 404 error caused by incorrect URL construction (`/api/api/...`).
+- **Proxy Detection**: Robust fix for Windows `winget` alias `cli-proxy-api`.
+
+## [1.14.2] - 2026-01-17
+
+### Fixed
+- **Proxy Detection**: Added explicit check for `cli-proxy-api` alias (used by WinGet) to fix detection issues on Windows.
+- **Proxy Download**: Updated Windows download link to point to Releases page (stable URL).
+- **System Prompt**: Fixed "Failed to save" error by ensuring the config directory exists before writing.
+
+## [1.14.0] - 2026-01-17
+
+### Added
+- **Profile Manager**: Native multi-profile support (CCS-style isolation).
+  - Create isolated environments (configs, history, sessions) in `~/.config/opencode-profiles/`.
+  - Switch profiles instantly via the new "Profiles" tab.
+  - Symlink-based architecture ensures compatibility with all OpenCode tools.
+
 ## [1.13.1] - 2026-01-17
 
 ### Fixed
