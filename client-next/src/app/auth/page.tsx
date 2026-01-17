@@ -365,6 +365,39 @@ export default function AuthPage() {
     }
   };
 
+  const handleRotate = async (provider: string) => {
+    try {
+      if (provider === 'openai') setOpenaiRotating(true);
+      else setRotating(true);
+      
+      const result = await rotateAccount(provider);
+      if (result.success) {
+        toast.success(`Rotated to ${result.newAccount}`);
+        await loadData(true);
+      } else {
+        toast.error(`Rotation failed: ${result.reason}`);
+      }
+    } catch (err: any) {
+      toast.error(`Rotation error: ${err.message}`);
+    } finally {
+      setRotating(false);
+      setOpenaiRotating(false);
+    }
+  };
+
+  const handleActivate = async (provider: string, name: string) => {
+    try {
+      setActivatingProfile(name);
+      await activateAuthProfile(provider, name);
+      toast.success(`Activated ${name}`);
+      await loadData(true);
+    } catch (err: any) {
+      toast.error(`Activation failed: ${err.message}`);
+    } finally {
+      setActivatingProfile(null);
+    }
+  };
+
   const handleRenameProfile = async (provider: string, name: string, newName: string) => {
     try {
       await renameAuthProfile(provider, name, newName);
@@ -372,6 +405,33 @@ export default function AuthPage() {
       await loadData(true);
     } catch (err: any) {
       toast.error(`Failed to rename: ${err.message}`);
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameTarget) return;
+    try {
+      await renameAuthProfile(renameTarget.provider, renameTarget.name, newName);
+      toast.success(`Renamed to ${newName}`);
+      await loadData(true);
+    } catch (err: any) {
+      toast.error(`Failed to rename: ${err.message}`);
+    } finally {
+      setRenameTarget(null);
+      setNewName("");
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteAuthProfile(deleteTarget.provider, deleteTarget.name);
+      toast.success(`Deleted ${deleteTarget.name}`);
+      await loadData(true);
+    } catch (err: any) {
+      toast.error(`Failed to delete: ${err.message}`);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
