@@ -17,10 +17,24 @@ const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
     const tempPath = path.join(dir, `.${path.basename(filePath)}.${crypto.randomBytes(6).toString('hex')}.tmp`);
     try {
         fs.writeFileSync(tempPath, data, options);
-        fs.renameSync(tempPath, filePath);
+        // Retry rename for Windows file locking issues
+        let retries = 5;
+        while (retries > 0) {
+            try {
+                fs.renameSync(tempPath, filePath);
+                break;
+            } catch (e) {
+                if (retries === 1) throw e;
+                retries--;
+                // Synchronous delay
+                const start = Date.now();
+                while (Date.now() - start < 50) {} 
+            }
+        }
     } catch (err) {
-        // Clean up temp file if rename fails
-        try { fs.unlinkSync(tempPath); } catch {}
+        if (fs.existsSync(tempPath)) {
+            try { fs.unlinkSync(tempPath); } catch (e) {}
+        }
         throw err;
     }
 };
@@ -1342,6 +1356,7 @@ app.get('/api/auth/providers', (req, res) => {
 });
 
 app.get('/api/auth', (req, res) => {
+    importCurrentGoogleAuthToPool();
     syncAntigravityPool();
     const authCfg = loadAuthConfig() || {};
     const studio = loadStudioConfig();
@@ -1812,6 +1827,55 @@ function listAntigravityAccounts() {
         email: a.email || null,
         refreshToken: a.refreshToken || null
     }));
+}
+
+function importCurrentGoogleAuthToPool() {
+    const studio = loadStudioConfig();
+    // Only applies if Antigravity is active
+    if (studio.activeGooglePlugin !== 'antigravity') return;
+
+    const authCfg = loadAuthConfig();
+    if (!authCfg || !authCfg.google || !authCfg.google.email) return;
+
+    const namespace = 'google.antigravity';
+    const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
+    if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
+    const email = authCfg.google.email;
+    const profilePath = path.join(profileDir, `${email}.json`);
+
+    // Check if we need to sync (new account or updated tokens)
+    let shouldSync = true;
+    if (fs.existsSync(profilePath)) {
+        try {
+            const current = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+            if (current.access_token === authCfg.google.access_token) {
+                shouldSync = false;
+            }
+        } catch {
+            // Corrupt file, overwrite
+        }
+    }
+
+    if (shouldSync) {
+        console.log(`[Auth] Syncing Google login for ${email} to Antigravity pool.`);
+        atomicWriteFileSync(profilePath, JSON.stringify(authCfg.google, null, 2));
+
+        const metadata = loadPoolMetadata();
+        if (!metadata[namespace]) metadata[namespace] = {};
+        
+        // Only update metadata if it doesn't exist
+        if (!metadata[namespace][email]) {
+            metadata[namespace][email] = {
+                email: email,
+                createdAt: Date.now(),
+                lastUsed: Date.now(),
+                usageCount: 0,
+                imported: true
+            };
+            savePoolMetadata(metadata);
+        }
+    }
 }
 
 function syncAntigravityPool() {
