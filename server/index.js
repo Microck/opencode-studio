@@ -1896,12 +1896,14 @@ function importCurrentGoogleAuthToPool() {
     const email = creds.email;
     const profilePath = path.join(profileDir, `${email}.json`);
 
-    // Check if we need to sync (new account or updated tokens)
+    // Check if we need to sync (new account or updated tokens/metadata)
     let shouldSync = true;
     if (fs.existsSync(profilePath)) {
         try {
             const current = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-            if (current.access_token === creds.access_token) {
+            if (current.access_token === creds.access_token && 
+                current.projectId === creds.projectId && 
+                current.tier === creds.tier) {
                 shouldSync = false;
             }
         } catch {
