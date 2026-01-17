@@ -207,6 +207,7 @@ export interface ModelConfig {
 }
 
 export interface OpencodeConfig {
+  base_url?: string;
   theme?: 'dark' | 'light' | 'auto';
   model?: string | ModelConfig;
   small_model?: string;

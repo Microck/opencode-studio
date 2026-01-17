@@ -55,7 +55,7 @@ open http://localhost:3000
 - **skill editor:** browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub:** manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
 - **commands:** browse and manage custom slash commands
-- **auth:** view connected providers, login via oauth/api key, **multi-account pool**, **quota tracking**, and **Gemini plugin detection**
+- **auth:** proxy management dashboard for **CLIProxyAPI** (multi-account rotation, rate-limit handling)
 - **cloud sync:** sync config across devices via dropbox, google drive, onedrive, or any cloud folder
 - **auto-sync:** automatically pull on startup if remote is newer, push after config changes
 - **backup/restore:** export/import complete config including skills and plugins
@@ -154,12 +154,10 @@ flowchart LR
 
 #### auth
 ```
-/auth → view connected providers
-      → [Open Terminal] launches `opencode auth login` for interactive auth
-      → **account pool:** manage multiple Google/OpenAI accounts with status tracking
-      → **quota:** view remaining daily quota and reset time
-      → **rotation:** manually rotate active accounts or mark cooldowns
-      → switch between accounts instantly by clicking the profile name
+/auth → view proxy status
+      → start/stop CLIProxyAPI process
+      → add accounts via login terminal (Antigravity, Codex, Anthropic)
+      → access management dashboard
 ```
 
 #### settings

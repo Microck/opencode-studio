@@ -1,6 +1,6 @@
 {
   "name": "opencode-studio-server",
-  "version": "1.12.11",
+  "version": "1.13.1",
   "description": "Backend server for OpenCode Studio - manages opencode configurations",
   "main": "index.js",
   "bin": {
@@ -27,6 +27,7 @@
   "dependencies": {
     "body-parser": "^2.2.1",
     "cors": "^2.8.5",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "js-yaml": "^4.1.1"
   }
 }

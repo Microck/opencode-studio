@@ -31,6 +31,7 @@ The server runs on port **3001** and provides an API for managing your local Ope
 - **Protocol Handler**: `opencodestudio://` support for one-click actions
 - **Config Management**: Reads/writes `~/.config/opencode/opencode.json`
 - **MCP Management**: Add/remove/toggle MCP servers
+- **Proxy Manager**: Manage CLIProxyAPI instance
 - **Auth**: Manage authentication profiles
 
 ## License

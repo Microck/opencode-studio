@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.13.1] - 2026-01-17
+
+### Fixed
+- **Proxy Download**: Updated Windows download link to point to Releases page (stable URL).
+- **System Prompt**: Fixed "Failed to save" error by ensuring the config directory exists before writing.
+
+## [1.13.0] - 2026-01-17
+
+### Added
+- **Proxy Manager**: Full integration with **CLIProxyAPI** for automatic multi-account rotation and rate-limit handling.
+  - **Dashboard**: Start/Stop the local proxy server directly from the Auth page.
+  - **Account Management**: Add accounts for Google Antigravity, OpenAI Codex, and Anthropic via the proxy.
+  - **One-Click Config**: Toggle "Enable Proxy" in Settings to automatically route OpenCode requests through the proxy.
+
+### Changed
+- **Auth UI**: Completely redesigned the Auth page to focus on Proxy management instead of manual account pools.
+- **Architecture**: Shifted from client-side rotation to server-side proxying for better reliability.
+
+## [1.12.14] - 2026-01-17
+
+### Added
+- **Auto-Sync Auth**: Automatic detection and pooling for all auth providers (including OpenAI).
+- **JWT Extraction**: Support for extracting email addresses from OpenAI OAuth tokens for cleaner profile names.
+- **Instant Activation**: Newly logged-in accounts are automatically set as active in the GUI.
+
+## [1.12.13] - 2026-01-17
+
+### Added
+- **Antigravity Cooldowns**: Specialized cooldown presets for Google Antigravity accounts.
+  - **Gemini 3 Pro**: 24-hour default cooldown.
+  - **Claude Opus (GCP)**: 4-hour default cooldown.
+- **UI Enhancements**: Antigravity-specific cooldowns are now highlighted and pinned to the top of the cooldown list.
+
+## [1.12.12] - 2026-01-17
+
+### Fixed
+- **Auth Login**: Switched to interactive terminal login for all providers to bypass CLI bugs (e.g., OpenAI "fetch URL invalid" error).
+- **Account Rotation**: Verified and stabilized multi-account rotation for Google and OpenAI pools.
+
 ## [1.3.1] - 2026-01-13
 
 ### Changed

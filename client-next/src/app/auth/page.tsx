@@ -1,892 +1,295 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { 
-  Key, 
-  LogOut, 
-  Plus, 
   RefreshCw, 
-  Sparkles, 
-  Check, 
-  ChevronDown,
-  Users,
-  Save,
-  Trash2,
-  Edit2,
-  MoreVertical,
-  Terminal,
-  HelpCircle,
-  ArrowRight,
+  Power, 
+  PowerOff, 
+  Terminal, 
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+  Copy
 } from "lucide-react";
 import { 
-  getAuthInfo, 
-  authLogin, 
-  authLogout, 
-  addPluginsToConfig,
-  getAuthProfiles,
-  saveAuthProfile,
-  activateAuthProfile,
-  deleteAuthProfile,
-  renameAuthProfile,
-  setActiveGooglePlugin,
-  startGoogleOAuth,
-  getGoogleOAuthStatus,
-  getAccountPool,
-  rotateAccount,
-  markAccountCooldown,
-  clearAccountCooldown,
-  clearAllAuthProfiles,
-  updateAccountMetadata,
-  getCooldownRules,
-  addCooldownRule,
-  deleteCooldownRule,
-  type CooldownRule,
+  getProxyStatus, 
+  startProxy, 
+  stopProxy, 
+  runProxyLogin, 
+  type ProxyStatus 
 } from "@/lib/api";
-import type { AuthCredential, AuthProfilesInfo, AccountPool, QuotaInfo } from "@/types";
-import { AccountPoolCard } from "@/components/account-pool-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const GEMINI_AUTH_PLUGIN = "opencode-gemini-auth@latest";
-const ANTIGRAVITY_AUTH_PLUGIN = "opencode-google-antigravity-auth";
-
-const GeminiLogo = ({ className }: { className?: string }) => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <path d="M12 2C12 2 12.5 7.5 15 9.5C17.5 11.5 22 12 22 12C22 12 17.5 12.5 15 14.5C12.5 16.5 12 22 12 22C12 22 11.5 16.5 9 14.5C6.5 12.5 2 12 2 12C2 12 6.5 11.5 9 9.5C11.5 7.5 12 2 12 2Z" fill="currentColor"/>
-  </svg>
-);
-
-const AntigravityLogo = ({ className }: { className?: string }) => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <path d="M12 3L2 21H22L12 3Z" fill="currentColor" fillOpacity="0.2"/>
-    <path d="M12 3L7 21H17L12 3Z" fill="currentColor"/>
-    <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.5"/>
-  </svg>
-);
-
-function profilesToPool(provider: string, profiles: AuthProfilesInfo[string]): AccountPool {
-  const profileList = profiles?.profiles || [];
-  const active = profiles?.active;
-  
-  return {
-    provider,
-    namespace: provider,
-    totalAccounts: profileList.length,
-    availableAccounts: profileList.length,
-    activeAccount: active || null,
-    accounts: profileList.map(name => ({
-      name,
-      email: name,
-      status: active === name ? 'active' : 'ready',
-      lastUsed: 0,
-      usageCount: 0,
-      cooldownUntil: null,
-      createdAt: 0
-    }))
-  };
+function Metric({ label, value, sub }: { label: string, value: string, sub?: string }) {
+  return (
+    <div className="bg-muted/30 p-3 rounded-lg border">
+      <div className="text-xs text-muted-foreground font-medium">{label}</div>
+      <div className="text-lg font-bold font-mono mt-1">{value}</div>
+      {sub && <div className="text-xs text-muted-foreground mt-1 truncate" title={sub}>{sub}</div>}
+    </div>
+  );
 }
 
 export default function AuthPage() {
-  const [credentials, setCredentials] = useState<AuthCredential[]>([]);
-  const [authFile, setAuthFile] = useState<string | null>(null);
+  const [status, setStatus] = useState<ProxyStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [logoutTarget, setLogoutTarget] = useState<AuthCredential | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [addingPlugin, setAddingPlugin] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  
-  const [profiles, setProfiles] = useState<AuthProfilesInfo>({});
-  const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
-  const [savingProfile, setSavingProfile] = useState<string | null>(null);
-  const [activatingProfile, setActivatingProfile] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ provider: string; name: string } | null>(null);
-  const [renameTarget, setRenameTarget] = useState<{ provider: string; name: string; current: string } | null>(null);
-  const [newName, setNewName] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const [installedGooglePlugins, setInstalledGooglePlugins] = useState<('gemini' | 'antigravity')[]>([]);
-  const [activeGooglePlugin, setActiveGooglePluginState] = useState<'gemini' | 'antigravity' | null>(null);
-  const [switchingPlugin, setSwitchingPlugin] = useState(false);
-  const [googleOAuthLoading, setGoogleOAuthLoading] = useState(false);
-
-  const [pool, setPool] = useState<AccountPool | null>(null);
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
-  const [rotating, setRotating] = useState(false);
-  
-  const [openaiPool, setOpenaiPool] = useState<AccountPool | null>(null);
-  const [openaiQuota, setOpenaiQuota] = useState<QuotaInfo | null>(null);
-  const [openaiRotating, setOpenaiRotating] = useState(false);
-  const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
-
-  const [showTutorial, setShowTutorial] = useState(false);
-
-  useEffect(() => {
-    const seen = localStorage.getItem('auth-tutorial-seen');
-    if (!seen) {
-      setShowTutorial(true);
-    }
-  }, []);
-
-  const dismissTutorial = () => {
-    localStorage.setItem('auth-tutorial-seen', 'true');
-    setShowTutorial(false);
-  };
-
-  const loadData = async (silent = false) => {
+  const loadStatus = async () => {
     try {
-      if (!silent) setLoading(true);
-      const [authInfo, profilesData, poolData, openaiPoolData, rules] = await Promise.all([
-        getAuthInfo(),
-        getAuthProfiles(),
-        getAccountPool('google').catch(() => null),
-        getAccountPool('openai').catch(() => null),
-        getCooldownRules().catch(() => []),
-      ]);
-      setCredentials(authInfo.credentials);
-      setAuthFile(authInfo.authFile);
-      setInstalledGooglePlugins(authInfo.installedGooglePlugins || []);
-      setActiveGooglePluginState(authInfo.activeGooglePlugin || null);
-      setProfiles(profilesData || {});
-      setCooldownRules(rules || []);
-      if (poolData) {
-        setPool(poolData.pool);
-        setQuota(poolData.quota);
-      }
-      if (openaiPoolData) {
-        setOpenaiPool(openaiPoolData.pool);
-        setOpenaiQuota(openaiPoolData.quota);
-      }
-    } catch {
-      if (!silent) toast.error("Failed to load auth info");
+      const s = await getProxyStatus();
+      setStatus(s);
+    } catch (e) {
+      toast.error("Failed to load proxy status");
     } finally {
-      if (!silent) setLoading(false);
-      if (activeGooglePlugin === 'antigravity') {
-        setTimeout(() => loadData(true), 120000);
-      }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadStatus();
+    const interval = setInterval(loadStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleLogin = async (providerId: string = "") => {
-    // Start polling immediately (in case user runs manual command or auto-launch fails)
-    const startTime = Date.now();
-    const pollInterval = setInterval(async () => {
-      if (Date.now() - startTime > 120000) {
-        clearInterval(pollInterval);
-        setLoginLoading(false);
-        return;
-      }
-      await loadData(true);
-    }, 3000);
-
+  const handleStart = async () => {
     try {
-      setLoginLoading(true);
-      const pid = providerId === 'google' ? "" : providerId;
-      const result = await authLogin(pid);
-      toast.success(result.message);
-      toast.info(result.note, { duration: 10000 });
-      if (result.command) {
-        toast.info(`Command: ${result.command}`, { duration: 30000 });
-      }
-    } catch {
-      const cmd = `opencode auth login ${providerId === 'google' ? '' : providerId}`.trim();
-      toast.error("Automatic terminal launch failed. Run manually:", {
-        description: cmd,
-        action: {
-          label: "Copy",
-          onClick: () => navigator.clipboard.writeText(cmd),
-        },
-        duration: 30000,
-      });
-      // Do not stop polling
-    }
-  };
-
-  const handleVerifyLogin = async () => {
-    try {
-      setVerifying(true);
-      await loadData(true);
-      toast.success("Auth status refreshed");
-    } catch {
-      toast.error("Failed to verify login");
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    if (activeGooglePlugin === 'antigravity') {
-      await handleLogin('google');
-      return;
-    }
-
-    try {
-      setGoogleOAuthLoading(true);
-      await startGoogleOAuth();
-      toast.info("Browser opened for Google login...", { duration: 5000 });
-
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await getGoogleOAuthStatus();
-          if (status.status === 'success') {
-            clearInterval(pollInterval);
-            setGoogleOAuthLoading(false);
-            toast.success(`Logged in as ${status.email || 'Google User'}`);
-            await loadData();
-          } else if (status.status === 'error') {
-            clearInterval(pollInterval);
-            setGoogleOAuthLoading(false);
-            toast.error(status.error || 'Login failed');
-          }
-        } catch {
-          clearInterval(pollInterval);
-          setGoogleOAuthLoading(false);
-          toast.error('Login check failed');
-        }
-      }, 2000);
-
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setGoogleOAuthLoading(false);
-        toast.error("Login timed out");
-      }, 120000);
-
-    } catch {
-      setGoogleOAuthLoading(false);
-      toast.error("Failed to start Google login");
-    }
-  };
-
-  const handleLogout = async () => {
-    if (!logoutTarget) return;
-    try {
-      await authLogout(logoutTarget.id);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to logout: ${msg}`);
-    } finally {
-      setLogoutTarget(null);
-    }
-  };
-
-  const handleLogoutProfile = async (providerId: string, profileName: string) => {
-    try {
-      await deleteAuthProfile(providerId, profileName);
-      toast.success(`Logged out from ${profileName}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to logout from profile: ${msg}`);
-    }
-  };
-
-  const handleClearAllProfiles = async (provider: string) => {
-    if (!confirm(`Are you sure you want to delete ALL profiles for ${provider}? This cannot be undone.`)) return;
-    try {
-      await clearAllAuthProfiles(provider);
-      toast.success(`Cleared all profiles for ${provider}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to clear profiles: ${msg}`);
-    }
-  };
-
-  const handleAddPlugin = async (name: string) => {
-    try {
-      setAddingPlugin(name);
-      const result = await addPluginsToConfig([name]);
-      if (result.added.length > 0) {
-        toast.success(`${name} added! Restart opencode to use it.`);
-        loadData();
+      setActionLoading(true);
+      const res = await startProxy();
+      if (res.success) {
+        toast.success("Proxy started");
+        loadStatus();
       } else {
-        toast.info("Plugin already in config");
+        toast.error(`Failed to start: ${res.error}`);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to add plugin: ${msg}`);
+    } catch (e) {
+      toast.error("Error starting proxy");
     } finally {
-      setAddingPlugin(null);
+      setActionLoading(false);
     }
   };
 
-  const handleSetGooglePlugin = async (plugin: 'gemini' | 'antigravity') => {
+  const handleStop = async () => {
     try {
-      setSwitchingPlugin(true);
-      await setActiveGooglePlugin(plugin);
-      setActiveGooglePluginState(plugin);
-      toast.success(`Switched to ${plugin === 'gemini' ? 'Gemini Auth' : 'Antigravity Auth'}`);
-      await loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to switch plugin: ${msg}`);
-    } finally {
-      setSwitchingPlugin(false);
-    }
-  };
-
-  const handleRotate = async (provider: string) => {
-    try {
-      if (provider === 'openai') setOpenaiRotating(true);
-      else setRotating(true);
-      
-      const result = await rotateAccount(provider);
-      if (result.success) {
-        toast.success(`Rotated to ${result.newAccount}`);
-        await loadData(true);
+      setActionLoading(true);
+      const res = await stopProxy();
+      if (res.success) {
+        toast.success("Proxy stopped");
+        loadStatus();
       } else {
-        toast.error(`Rotation failed: ${result.reason}`);
+        toast.error(`Failed to stop: ${res.error}`);
       }
-    } catch (err: any) {
-      toast.error(`Rotation error: ${err.message}`);
+    } catch (e) {
+      toast.error("Error stopping proxy");
     } finally {
-      setRotating(false);
-      setOpenaiRotating(false);
+      setActionLoading(false);
     }
   };
 
-  const handleActivate = async (provider: string, name: string) => {
+  const handleLogin = async (provider: string) => {
     try {
-      setActivatingProfile(name);
-      await activateAuthProfile(provider, name);
-      toast.success(`Activated ${name}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Activation failed: ${err.message}`);
-    } finally {
-      setActivatingProfile(null);
+      const res = await runProxyLogin(provider);
+      if (res.success) {
+        toast.success("Login terminal launched!");
+        toast.info(res.message);
+      } else {
+        toast.error(`Login failed: ${res.error || 'Unknown error'}`);
+      }
+    } catch (e) {
+      toast.error("Error launching login");
     }
   };
 
-  const handleRenameProfile = async (provider: string, name: string, newName: string) => {
-    try {
-      await renameAuthProfile(provider, name, newName);
-      toast.success(`Renamed to ${newName}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to rename: ${err.message}`);
-    }
-  };
-
-  const handleRenameSubmit = async () => {
-    if (!renameTarget) return;
-    try {
-      await renameAuthProfile(renameTarget.provider, renameTarget.name, newName);
-      toast.success(`Renamed to ${newName}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to rename: ${err.message}`);
-    } finally {
-      setRenameTarget(null);
-      setNewName("");
-    }
-  };
-
-  const handleDeleteProfile = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteAuthProfile(deleteTarget.provider, deleteTarget.name);
-      toast.success(`Deleted ${deleteTarget.name}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to delete: ${err.message}`);
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
-
-  const handleEditMetadata = async (provider: string, name: string, metadata: { projectId?: string; tier?: string }) => {
-    try {
-      await updateAccountMetadata(name, provider, undefined, metadata.projectId, metadata.tier);
-      toast.success(`Updated metadata for ${name}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to update metadata: ${err.message}`);
-    }
-  };
-
-  const handleRemove = async (provider: string, name: string) => {
-    try {
-      await deleteAuthProfile(provider, name);
-      toast.success(`Removed ${name}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to remove: ${err.message}`);
-    }
-  };
-
-  const handleCooldown = async (provider: string, name: string, rule?: string) => {
-    try {
-      await markAccountCooldown(name, provider, undefined, rule);
-      const ruleText = rule ? ` (${rule})` : ' for 1 hour';
-      toast.success(`${name} marked as cooldown${ruleText}`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to set cooldown: ${err.message}`);
-    }
-  };
-
-  const handleClearCooldown = async (provider: string, name: string) => {
-    try {
-      await clearAccountCooldown(name, provider);
-      toast.success(`${name} cooldown cleared`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to clear cooldown: ${err.message}`);
-    }
-  };
-
-  const handleClearAll = async (provider: string) => {
-    try {
-      await clearAllAuthProfiles(provider);
-      toast.success(`All ${provider} accounts removed`);
-      await loadData(true);
-    } catch (err: any) {
-      toast.error(`Failed to clear accounts: ${err.message}`);
-    }
-  };
-
-  const handleAddCooldownRule = async (name: string, duration: number) => {
-    try {
-      const updated = await addCooldownRule(name, duration);
-      setCooldownRules(updated);
-      toast.success(`Added preset: ${name}`);
-    } catch (err: any) {
-      toast.error(`Failed to add preset: ${err.message}`);
-    }
-  };
-
-  const handleDeleteCooldownRule = async (name: string) => {
-    try {
-      const updated = await deleteCooldownRule(name);
-      setCooldownRules(updated);
-      toast.success(`Deleted preset: ${name}`);
-    } catch (err: any) {
-      toast.error(`Failed to delete preset: ${err.message}`);
-    }
-  };
-
-  const hasBothPlugins = installedGooglePlugins.includes('gemini') && installedGooglePlugins.includes('antigravity');
-  
-  // Logic: Providers with pools or special handling go to main column
-  const mainProviders = credentials.filter(c => {
-     if (c.id === 'google') return true;
-     // OpenAI or others: if they have multiple profiles, treat as pool
-     return (profiles[c.id]?.profiles?.length || 0) > 0;
-  }).sort((a, b) => {
-     // Google first, then OpenAI, then A-Z
-     if (a.id === 'google') return -1;
-     if (b.id === 'google') return 1;
-     if (a.id === 'openai') return -1;
-     if (b.id === 'openai') return 1;
-     return a.name.localeCompare(b.name);
-  });
-
-  const sidebarProviders = credentials.filter(c => !mainProviders.find(p => p.id === c.id));
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto p-6 space-y-6">
+        <Skeleton className="h-12 w-1/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
       <header className="flex justify-between items-end border-b pb-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">Authentication</h1>
-            {authFile && (
-              <Badge variant="outline" className="text-xs font-mono font-normal text-muted-foreground hidden sm:flex">
-                {authFile}
-              </Badge>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+            Authentication Proxy
+            {status?.running ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-green-500/10 text-green-600 text-sm font-medium border border-green-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Active
+              </div>
+            ) : (
+              <Badge variant="secondary">Stopped</Badge>
             )}
-          </div>
-          <p className="text-muted-foreground mt-1">Manage AI provider connections and account pools.</p>
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your CLIProxyAPI instance for automatic account rotation and rate-limit handling.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowTutorial(true)} title="Show help">
-            <HelpCircle className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => loadData()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => loadStatus()}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column: Pools */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          {mainProviders.map(cred => {
-              // Determine if we have a real pool or synthetic one
-              let currentPool: AccountPool | null = null;
-              
-              if (cred.id === 'google' && pool) {
-                 currentPool = pool;
-              } else if (cred.id === 'openai' && openaiPool) {
-                currentPool = openaiPool;
-             } else if (profiles[cred.id]?.profiles?.length > 0) {
-                currentPool = profilesToPool(cred.id, profiles[cred.id]);
-             }
-
-             // Special Google Header
-             const isGoogle = cred.id === 'google';
-             
-             return (
-               <section key={cred.id} className="space-y-4">
-                 <div className="flex items-center justify-between">
-                   <h2 className="text-lg font-semibold tracking-tight">{cred.name}</h2>
-                   {isGoogle && hasBothPlugins && (
-                    <div className="bg-muted p-1 rounded-lg inline-flex items-center">
-                      <button
-                        onClick={() => handleSetGooglePlugin('gemini')}
-                        disabled={switchingPlugin}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-                          activeGooglePlugin === 'gemini' 
-                            ? "bg-background shadow-sm text-foreground" 
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <GeminiLogo className="h-3 w-3" />
-                        Gemini
-                      </button>
-                      <button
-                        onClick={() => handleSetGooglePlugin('antigravity')}
-                        disabled={switchingPlugin}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-                          activeGooglePlugin === 'antigravity' 
-                            ? "bg-background shadow-sm text-foreground" 
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <AntigravityLogo className="h-3 w-3" />
-                        Antigravity
-                      </button>
-                    </div>
-                   )}
-                 </div>
-
-                 {isGoogle && activeGooglePlugin === 'antigravity' && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md text-xs text-yellow-700 dark:text-yellow-400 flex gap-2">
-                      <HelpCircle className="h-4 w-4 shrink-0" />
-                      <div>
-                        <p className="font-medium">Google Cloud Project Required</p>
-                        <p className="mt-0.5 opacity-90">
-                          Antigravity requires a Google Cloud Project ID with "Gemini for Google Cloud API" enabled. 
-                          When adding an account, you must provide this ID when prompted in the terminal.
-                        </p>
-                      </div>
-                    </div>
-                 )}
-
-                 {currentPool ? (
-                    <AccountPoolCard
-                      pool={currentPool}
-                      cooldownRules={cooldownRules}
-                      onAddAccount={isGoogle ? handleGoogleLogin : () => handleLogin(cred.id)}
-                      isAdding={isGoogle ? googleOAuthLoading : loginLoading}
-                      onRotate={() => handleRotate(cred.id)}
-                      onActivate={(name) => handleActivate(cred.id, name)}
-                      onCooldown={(name, rule) => handleCooldown(cred.id, name, rule)}
-                      onClearCooldown={(name) => handleClearCooldown(cred.id, name)}
-                      onClearAll={() => handleClearAll(cred.id)}
-                      onRemove={(name) => handleRemove(cred.id, name)}
-                      onRename={(name, newName) => handleRenameProfile(cred.id, name, newName)}
-                      onEditMetadata={(name, meta) => handleEditMetadata(cred.id, name, meta)}
-                      onAddCooldownRule={handleAddCooldownRule}
-                      onDeleteCooldownRule={handleDeleteCooldownRule}
-                      rotating={cred.id === 'openai' ? openaiRotating : (isGoogle ? rotating : false)}
-                      providerName={cred.name}
-                    />
-                 ) : (
-                    <div className="border border-dashed rounded-lg p-8 flex flex-col items-center text-center bg-muted/10">
-                      <div className="bg-primary/10 p-3 rounded-full mb-4">
-                        <Key className="h-6 w-6 text-primary" />
-                      </div>
-                      <h3 className="text-base font-medium mb-1">Connect {cred.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                        {isGoogle 
-                          ? "Connect your Google account to access Gemini models. Install antigravity-auth to enable multi-account pooling." 
-                          : `Authenticate with ${cred.name} to access models.`}
-                      </p>
-                      <Button onClick={isGoogle ? handleGoogleLogin : () => handleLogin(cred.id)} disabled={isGoogle ? googleOAuthLoading : loginLoading} className="min-w-[140px]">
-                        {isGoogle && googleOAuthLoading ? "Connecting..." : `Connect ${cred.name}`}
-                      </Button>
-                    </div>
-                 )}
-               </section>
-             );
-          })}
-
-          {installedGooglePlugins.length < 2 && (
-            <div className="border rounded-lg p-4 bg-muted/20 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Enhance Google Auth</p>
-                  <p className="text-xs text-muted-foreground">Install plugins for specific auth modes.</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {!installedGooglePlugins.includes('gemini') && (
-                  <Button onClick={() => handleAddPlugin(GEMINI_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
-                    Add Gemini
-                  </Button>
-                )}
-                {!installedGooglePlugins.includes('antigravity') && (
-                  <Button onClick={() => handleAddPlugin(ANTIGRAVITY_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
-                    Add Antigravity
-                  </Button>
-                )}
-              </div>
+      {!status?.installed && (
+        <Card className="border-amber-500/20 bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-4">
+            <div className="p-2 bg-amber-500/10 rounded-lg shrink-0">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
             </div>
-          )}
-        </div>
-
-        {/* Sidebar: Other Providers */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Other Providers</h2>
-            <Select
-              value=""
-              onValueChange={(value) => {
-                if (value && value !== '__none__') handleLogin(value);
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs w-auto min-w-[100px]">
-                <SelectValue placeholder="Connect..." />
-              </SelectTrigger>
-              <SelectContent>
-                {credentials
-                  .filter((cred) => {
-                    const isInMain = mainProviders.some(p => p.id === cred.id);
-                    if (isInMain) return false;
-                    const providerProfiles = profiles[cred.id] || { 
-                      profiles: cred.profiles || [], 
-                      active: cred.active || null, 
-                      hasCurrentAuth: cred.hasCurrentAuth ?? true 
-                    };
-                    return !providerProfiles.hasCurrentAuth && providerProfiles.profiles?.length === 0;
-                  })
-                  .map((cred) => (
-                    <SelectItem key={cred.id} value={cred.id}>
-                      {cred.name}
-                    </SelectItem>
-                  ))}
-                {credentials.filter((cred) => {
-                  const isInMain = mainProviders.some(p => p.id === cred.id);
-                  if (isInMain) return false;
-                  const providerProfiles = profiles[cred.id] || { 
-                    profiles: cred.profiles || [], 
-                    active: cred.active || null, 
-                    hasCurrentAuth: cred.hasCurrentAuth ?? true 
-                  };
-                  return !providerProfiles.hasCurrentAuth && providerProfiles.profiles?.length === 0;
-                }).length === 0 && (
-                  <SelectItem value="__none__" disabled>
-                    All connected
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-3">
-            {sidebarProviders.map((cred) => {
-              const providerProfiles = profiles[cred.id] || { 
-                profiles: cred.profiles || [], 
-                active: cred.active || null, 
-                hasCurrentAuth: cred.hasCurrentAuth ?? true 
-              };
-              const isConnected = providerProfiles.hasCurrentAuth || providerProfiles.profiles?.length > 0;
-              
-              return (
-                <div key={cred.id} className="border rounded-lg bg-card overflow-hidden">
-                  <div className="p-3 flex items-center justify-between hover:bg-muted/20 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-1.5 rounded-md ${isConnected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                        <Key className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">{cred.name}</div>
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-                          <span className="text-[10px] text-muted-foreground">{isConnected ? 'Connected' : 'Disconnected'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    {isConnected && (
-                      <Button variant="ghost" size="icon" onClick={() => setLogoutTarget(cred)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                        <LogOut className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {!isConnected && (
-                      <div className="px-3 pb-3">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full h-8 text-xs"
-                            onClick={() => handleLogin(cred.id)}
-                            disabled={loginLoading}
-                        >
-                            Connect
-                        </Button>
-                      </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      {/* Dialogs */}
-      <AlertDialog open={!!logoutTarget} onOpenChange={(o) => !o && setLogoutTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Logout from {logoutTarget?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will logout your credentials for this provider.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLogout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Logout
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete profile?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete "{deleteTarget?.name}".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteProfile} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={!!renameTarget} onOpenChange={(o) => { if (!o) { setRenameTarget(null); setNewName(""); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename profile</DialogTitle>
-            <DialogDescription>
-              Enter a new name for {renameTarget?.name}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label>New Name</Label>
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={renameTarget?.current || "New profile name"}
-              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
-            <Button onClick={handleRenameSubmit} disabled={!newName.trim() || newName === renameTarget?.name}>
-              Rename
-            </Button>
-
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showTutorial} onOpenChange={(o) => !o && dismissTutorial()}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Welcome to Authentication
-            </DialogTitle>
-            <DialogDescription>
-              Manage your AI provider connections in one place.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="flex gap-3 items-start">
-              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
-                <Users className="h-4 w-4 text-primary" />
-              </div>
+            <div className="space-y-4 flex-1">
               <div>
-                <h4 className="font-medium text-sm">Account Pools</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Any provider with multiple accounts automatically becomes a pool. 
-                  Switch between accounts instantly or mark them for cooldown.
+                <h3 className="font-semibold text-lg text-amber-700 dark:text-amber-400">Setup Required</h3>
+                <p className="text-muted-foreground text-sm">
+                  CLIProxyAPI is required for this feature. Please install it using one of the commands below.
                 </p>
               </div>
+              
+              <Tabs defaultValue="windows" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+                  <TabsTrigger value="windows">Windows</TabsTrigger>
+                  <TabsTrigger value="unix">Mac / Linux</TabsTrigger>
+                </TabsList>
+                <TabsContent value="windows" className="mt-3 space-y-3">
+                   <div className="bg-background border rounded-md p-3 font-mono text-xs flex items-center justify-between gap-2">
+                     <code className="truncate">winget install -e --id LuisPater.CLIProxyAPI</code>
+                     <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => {
+                       navigator.clipboard.writeText("winget install -e --id LuisPater.CLIProxyAPI");
+                       toast.success("Command copied");
+                     }}>
+                       <Copy className="h-3 w-3" />
+                     </Button>
+                   </div>
+                   
+                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                     <span className="h-px bg-border flex-1" />
+                     <span>OR</span>
+                     <span className="h-px bg-border flex-1" />
+                   </div>
+
+                   <Button variant="secondary" className="w-full justify-between" onClick={() => window.open('https://github.com/router-for-me/CLIProxyAPI/releases/latest', '_blank')}>
+                     <span>Download from Releases</span>
+                     <ExternalLink className="h-4 w-4" />
+                   </Button>
+                   <p className="text-[10px] text-muted-foreground text-center">
+                     After downloading, ensure the binary is in your PATH.
+                   </p>
+                </TabsContent>
+                <TabsContent value="unix" className="mt-3">
+                   <div className="bg-background border rounded-md p-3 font-mono text-xs flex items-center justify-between gap-2">
+                     <code className="truncate" title="curl -fsSL https://raw.githubusercontent.com/brokechubb/cliproxyapi-installer/refs/heads/master/cliproxyapi-installer | bash">
+                       curl -fsSL .../cliproxyapi-installer | bash
+                     </code>
+                     <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => {
+                       navigator.clipboard.writeText("curl -fsSL https://raw.githubusercontent.com/brokechubb/cliproxyapi-installer/refs/heads/master/cliproxyapi-installer | bash");
+                       toast.success("Command copied");
+                     }}>
+                       <Copy className="h-3 w-3" />
+                     </Button>
+                   </div>
+                </TabsContent>
+              </Tabs>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Proxy Status
+            </CardTitle>
+            <CardDescription>Control the local proxy server process.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 flex-1">
+            <div className="grid grid-cols-2 gap-4">
+              <Metric label="Port" value={String(status?.port || 8317)} />
+              <Metric label="PID" value={String(status?.pid || '-')} />
+              <Metric label="Config File" value={status?.configFile ? "Loaded" : "Missing"} sub={status?.configFile} />
+              <Metric label="Status" value={status?.running ? "Online" : "Offline"} />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              {!status?.running ? (
+                <Button onClick={handleStart} disabled={!status?.installed || actionLoading} className="flex-1">
+                  <Power className="h-4 w-4 mr-2" />
+                  Start Proxy
+                </Button>
+              ) : (
+                <Button onClick={handleStop} disabled={actionLoading} variant="destructive" className="flex-1">
+                  <PowerOff className="h-4 w-4 mr-2" />
+                  Stop Proxy
+                </Button>
+              )}
+              {status?.running && (
+                 <Button variant="secondary" className="flex-1" onClick={() => window.open(`http://localhost:${status.port}/management.html`, '_blank')}>
+                   <ExternalLink className="h-4 w-4 mr-2" />
+                   Dashboard
+                 </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Terminal className="h-5 w-5 text-primary" />
+              Add Accounts
+            </CardTitle>
+            <CardDescription>Login to providers to add them to the proxy pool.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 flex-1">
+            <Button variant="outline" className="w-full justify-start h-12" onClick={() => handleLogin('antigravity')}>
+              <div className="bg-background border p-2 rounded mr-3 flex items-center justify-center w-9 h-9">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="font-medium">Antigravity (Google)</div>
+                <div className="text-[10px] text-muted-foreground">Login via Gemini OAuth</div>
+              </div>
+            </Button>
             
-            <div className="flex gap-3 items-start">
-              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
-                <Terminal className="h-4 w-4 text-primary" />
+            <Button variant="outline" className="w-full justify-start h-12" onClick={() => handleLogin('codex')}>
+              <div className="bg-background border p-2 rounded mr-3 flex items-center justify-center w-9 h-9">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-foreground">
+                  <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0843 7.6148-4.4156a.0315.0315 0 0 0 .0178-.0424L15.986 12.875l-3.0824 1.7771-5.7216 3.2985a.0245.0245 0 0 0-.0093.0309 4.4803 4.4803 0 0 1 1.8322 3.5573 4.4851 4.4851 0 0 1-1.3205 3.2186zm6.3912-2.3879a.024.024 0 0 0-.0228.0068 4.456 4.456 0 0 1-3.4726 1.0964l.1144-.165 3.0829-4.4446a.0356.0356 0 0 0-.0058-.0434l-2.1487-2.1487-2.1487 3.7317-3.989 6.9234a.0245.0245 0 0 0 .0127.0329 4.496 4.496 0 0 1 3.5606 1.8396 4.4851 4.4851 0 0 1 1.9482 2.9232zm-2.2023-11.2356a4.4755 4.4755 0 0 1 1.7717 2.684l-.165-.0273-8.7909-1.4651a.0356.0356 0 0 0-.0379.0182l-1.0833 3.0829 3.0829 1.0833 7.8227 1.3038a.0245.0245 0 0 0 .0343-.0127 4.4803 4.4803 0 0 1 2.9232-1.9482 4.4851 4.4851 0 0 1 3.2186 1.3205zm-11.8596 1.3205a4.4755 4.4755 0 0 1 .5366-3.1816l.0505.157 3.0829 9.6069a.0356.0356 0 0 0 .0434.0228l2.1487-.6909-2.1487-.6909-7.8227-2.5132a.0245.0245 0 0 0-.0329.0127 4.496 4.496 0 0 1-1.8396 3.5606 4.4851 4.4851 0 0 1-2.9232 1.9482zM6.9242 7.0242a.0356.0356 0 0 0-.0434-.0058l-2.1487 1.2405 2.1487 1.2405 6.9234 3.9977a.0245.0245 0 0 0 .0329-.0127 4.4803 4.4803 0 0 1 3.5606-1.8396 4.4851 4.4851 0 0 1 1.9482-2.9232z" fill="currentColor"/></svg>
               </div>
-              <div>
-                <h4 className="font-medium text-sm">Terminal Login</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Click "Connect" or "Add Account" to launch the login terminal. 
-                  If it fails to open, copy the command and run it manually.
-                </p>
+              <div className="text-left">
+                <div className="font-medium">OpenAI Codex</div>
+                <div className="text-[10px] text-muted-foreground">Login via OpenAI</div>
               </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={dismissTutorial} className="w-full sm:w-auto">
-              Got it
-              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+            <Button variant="outline" className="w-full justify-start h-12" onClick={() => handleLogin('anthropic')}>
+              <div className="bg-background border p-2 rounded mr-3 flex items-center justify-center w-9 h-9">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-foreground">
+                  <path d="M17.43 19.37H19L12 4.5 5 19.37h1.57l1.7-4h7.46l1.7 4zm-7-5.55L12 10.5l1.57 3.32h-3.14z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="font-medium">Anthropic</div>
+                <div className="text-[10px] text-muted-foreground">Login via Anthropic</div>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
-  }
+}

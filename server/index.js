@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { spawn, exec } = require('child_process');
 
 const pkg = require('./package.json');
+const proxyManager = require('./proxy-manager');
 const SERVER_VERSION = pkg.version;
 
 // Atomic file write: write to temp file then rename to prevent corruption
@@ -291,8 +292,8 @@ function loadStudioConfig() {
         availableGooglePlugins: [],
         presets: [],
         cooldownRules: [
-            { name: "Opus 4.5 (Antigravity)", duration: 4 * 60 * 60 * 1000 }, // 4 hours
-            { name: "Gemini 3 Pro (Antigravity)", duration: 24 * 60 * 60 * 1000 } // 24 hours
+            { name: "Antigravity Claude Opus (4h)", duration: 4 * 60 * 60 * 1000 },
+            { name: "Antigravity Gemini 3 Pro (24h)", duration: 24 * 60 * 60 * 1000 }
         ],
         pluginModels: {
             gemini: {
@@ -427,7 +428,18 @@ function loadStudioConfig() {
     if (!fs.existsSync(STUDIO_CONFIG_PATH)) return defaultConfig;
     try {
         const config = JSON.parse(fs.readFileSync(STUDIO_CONFIG_PATH, 'utf8'));
-        return { ...defaultConfig, ...config };
+        const merged = { ...defaultConfig, ...config };
+        
+        if (config.cooldownRules) {
+            defaultConfig.cooldownRules.forEach(defaultRule => {
+                const existing = config.cooldownRules.find(r => r.name === defaultRule.name);
+                if (!existing) {
+                    merged.cooldownRules.push(defaultRule);
+                }
+            });
+        }
+        
+        return merged;
     } catch {
         return defaultConfig;
     }
@@ -1395,22 +1407,6 @@ app.get('/api/auth/providers', (req, res) => {
 });
 
 app.get('/api/auth', (req, res) => {
-    importCurrentGoogleAuthToPool();
-    syncAntigravityPool();
-    const authCfg = loadAuthConfig() || {};
-    const studio = loadStudioConfig();
-    const ac = studio.activeProfiles || {};
-    const credentials = [];
-    const activePlugin = studio.activeGooglePlugin;
-    
-    // DEBUG LOGGING
-    console.log('--- Auth Debug ---');
-    console.log('Active Google Plugin:', activePlugin);
-    console.log('Found keys in authCfg:', Object.keys(authCfg));
-    if (authCfg.google) console.log('Google Auth found!');
-    if (authCfg['google.antigravity']) console.log('google.antigravity found!');
-    if (authCfg['google.gemini']) console.log('google.gemini found!');
-    
     const providers = [
         { id: 'google', name: 'Google', type: 'oauth' },
         { id: 'anthropic', name: 'Anthropic', type: 'api' },
@@ -1424,6 +1420,15 @@ app.get('/api/auth', (req, res) => {
         { id: 'amazon-bedrock', name: 'AWS Bedrock', type: 'api' },
         { id: 'azure', name: 'Azure OpenAI', type: 'api' }
     ];
+
+    providers.forEach(p => importCurrentAuthToPool(p.id));
+    syncAntigravityPool();
+
+    const authCfg = loadAuthConfig() || {};
+    const studio = loadStudioConfig();
+    const ac = studio.activeProfiles || {};
+    const credentials = [];
+    const activePlugin = studio.activeGooglePlugin;
 
     const opencodeCfg = loadConfig();
     const currentPlugins = opencodeCfg?.plugin || [];
@@ -1472,13 +1477,15 @@ app.get('/api/auth', (req, res) => {
 });
 
 app.get('/api/auth/profiles', (req, res) => {
+    const providers = ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'];
+    providers.forEach(p => importCurrentAuthToPool(p));
     syncAntigravityPool();
+    
     const authCfg = loadAuthConfig() || {};
     const studio = loadStudioConfig();
     const ac = studio.activeProfiles || {};
     const activePlugin = studio.activeGooglePlugin;
     const profiles = {};
-    const providers = ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'];
     
     providers.forEach(p => {
         const saved = listAuthProfiles(p, activePlugin);
@@ -1711,23 +1718,9 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-    let { provider } = req.body;
-    
-    // Security: Validate provider against allowlist to prevent command injection
-    const ALLOWED_PROVIDERS = [
-        "", "google", "anthropic", "openai", "xai", 
-        "openrouter", "github-copilot", "gemini",
-        "together", "mistral", "deepseek", "amazon-bedrock", "azure"
-    ];
-
-    if (provider && !ALLOWED_PROVIDERS.includes(provider)) {
-        return res.status(400).json({ error: 'Invalid provider' });
-    }
-
-    if (typeof provider !== 'string') provider = "";
-    
-    let cmd = 'opencode auth login';
-    if (provider) cmd += ` ${provider}`;
+    // Always run generic `opencode auth login` - let CLI handle provider selection
+    // This avoids bugs in CLI where specific providers (e.g. openai) fail with "fetch() URL is invalid"
+    const cmd = 'opencode auth login';
     
     const cp = getConfigPath();
     const configDir = cp ? path.dirname(cp) : process.cwd();
@@ -1885,6 +1878,78 @@ function listAntigravityAccounts() {
     }));
 }
 
+function decodeJWT(token) {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const payload = Buffer.from(parts[1], 'base64').toString('utf8');
+        return JSON.parse(payload);
+    } catch {
+        return null;
+    }
+}
+
+function importCurrentAuthToPool(provider) {
+    if (provider === 'google') {
+        return importCurrentGoogleAuthToPool();
+    }
+
+    const authCfg = loadAuthConfig();
+    if (!authCfg || !authCfg[provider]) return;
+
+    const creds = authCfg[provider];
+    let email = creds.email;
+
+    if (!email && provider === 'openai' && creds.access) {
+        const decoded = decodeJWT(creds.access);
+        if (decoded && decoded['https://api.openai.com/profile']?.email) {
+            email = decoded['https://api.openai.com/profile'].email;
+        }
+    }
+
+    const name = email || creds.accountId || creds.id || `profile-${Date.now()}`;
+    const profileDir = path.join(AUTH_PROFILES_DIR, provider);
+    if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
+    const profilePath = path.join(profileDir, `${name}.json`);
+
+    let shouldSync = true;
+    if (fs.existsSync(profilePath)) {
+        try {
+            const current = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+            if (JSON.stringify(current) === JSON.stringify(creds)) {
+                shouldSync = false;
+            }
+        } catch {
+        }
+    }
+
+    if (shouldSync) {
+        console.log(`[Auth] Syncing ${provider} login for ${name} to pool.`);
+        atomicWriteFileSync(profilePath, JSON.stringify(creds, null, 2));
+
+        const metadata = loadPoolMetadata();
+        if (!metadata[provider]) metadata[provider] = {};
+        
+        metadata[provider][name] = {
+            ...(metadata[provider][name] || {}),
+            email: email || null,
+            createdAt: metadata[provider][name]?.createdAt || Date.now(),
+            lastUsed: Date.now(),
+            usageCount: metadata[provider][name]?.usageCount || 0,
+            imported: true
+        };
+        savePoolMetadata(metadata);
+
+        const studio = loadStudioConfig();
+        if (!studio.activeProfiles) studio.activeProfiles = {};
+        if (studio.activeProfiles[provider] !== name) {
+            studio.activeProfiles[provider] = name;
+            saveStudioConfig(studio);
+        }
+    }
+}
+
 function importCurrentGoogleAuthToPool() {
     const studio = loadStudioConfig();
     // Only applies if Antigravity is active
@@ -1983,70 +2048,6 @@ function syncAntigravityPool() {
     });
 
     savePoolMetadata(metadata);
-}
-
-function importExistingAuth() {
-    const authCfg = loadAuthConfig();
-    if (!authCfg) return;
-
-    const studio = loadStudioConfig();
-    const activeProfiles = studio.activeProfiles || {};
-    let changed = false;
-
-    // Standard providers to check
-    const providers = ['google', 'openai', 'anthropic', 'xai', 'openrouter', 'github-copilot', 'mistral', 'deepseek', 'amazon-bedrock', 'azure'];
-
-    providers.forEach(provider => {
-        if (!authCfg[provider]) return; // No creds for this provider
-
-        // Determine namespace
-        // For auto-import, we target the standard 'google' namespace unless antigravity plugin is active?
-        // Actually, auth.json 'google' key usually means Gemini/Vertex standard auth.
-        const namespace = provider === 'google' && studio.activeGooglePlugin === 'antigravity' 
-            ? 'google.antigravity' 
-            : (provider === 'google' ? 'google.gemini' : provider);
-
-        const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
-        
-        // If we already have an active profile for this provider, skip import
-        if (activeProfiles[provider]) return;
-
-        // If directory exists and has files, check if empty
-        if (fs.existsSync(profileDir) && fs.readdirSync(profileDir).filter(f => f.endsWith('.json')).length > 0) {
-            return;
-        }
-
-        // Import!
-        if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
-        
-        const email = authCfg[provider].email || null;
-        const name = email || `imported-${Date.now()}`;
-        const profilePath = path.join(profileDir, `${name}.json`);
-        
-        console.log(`[AutoImport] Importing existing ${provider} credentials as ${name}`);
-        atomicWriteFileSync(profilePath, JSON.stringify(authCfg[provider], null, 2));
-        
-        // Set as active
-        if (!studio.activeProfiles) studio.activeProfiles = {};
-        studio.activeProfiles[provider] = name;
-        changed = true;
-
-        // Update metadata
-        const metadata = loadPoolMetadata();
-        if (!metadata[namespace]) metadata[namespace] = {};
-        metadata[namespace][name] = {
-            email: email,
-            createdAt: Date.now(),
-            lastUsed: Date.now(),
-            usageCount: 0,
-            imported: true
-        };
-        savePoolMetadata(metadata);
-    });
-
-    if (changed) {
-        saveStudioConfig(studio);
-    }
 }
 
 function getAccountStatus(meta, now) {
@@ -2437,6 +2438,84 @@ app.post('/api/auth/pool/quota/limit', (req, res) => {
     
     savePoolMetadata(metadata);
     res.json({ success: true, dailyLimit: limit });
+});
+
+app.get('/api/proxy/status', async (req, res) => {
+    const status = await proxyManager.getStatus();
+    res.json(status);
+});
+
+app.post('/api/proxy/start', async (req, res) => {
+    const result = await proxyManager.startProxy();
+    res.json(result);
+});
+
+app.post('/api/proxy/stop', async (req, res) => {
+    const result = proxyManager.stopProxy();
+    res.json(result);
+});
+
+app.post('/api/proxy/login', async (req, res) => {
+    const { provider } = req.body;
+    const result = await proxyManager.runLogin(provider);
+    if (!result.success) return res.status(400).json(result);
+    
+    const cmd = result.command;
+    const cp = getConfigPath();
+    const configDir = cp ? path.dirname(cp) : process.cwd();
+    const safeDir = configDir.replace(/"/g, '\\"');
+    const platform = process.platform;
+    
+    if (platform === 'win32') {
+        const terminalCmd = `start "" /d "${safeDir}" cmd /c "call ${cmd} || pause"`;
+        exec(terminalCmd, (err) => {
+            if (err) return res.status(500).json({ error: 'Failed to open terminal', details: err.message });
+            res.json({ success: true, message: 'Terminal opened' });
+        });
+    } else if (platform === 'darwin') {
+        const terminalCmd = `osascript -e 'tell application "Terminal" to do script "cd ${safeDir} && ${cmd}"'`;
+        exec(terminalCmd, (err) => {
+            if (err) return res.status(500).json({ error: 'Failed to open terminal', details: err.message });
+            res.json({ success: true, message: 'Terminal opened' });
+        });
+    } else {
+        const linuxTerminals = [
+            { name: 'x-terminal-emulator', cmd: `x-terminal-emulator -e "bash -c 'cd ${safeDir} && ${cmd}'"` },
+            { name: 'gnome-terminal', cmd: `gnome-terminal -- bash -c "cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'"` },
+            { name: 'konsole', cmd: `konsole -e bash -c "cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'"` },
+            { name: 'xfce4-terminal', cmd: `xfce4-terminal -e "bash -c \"cd ${safeDir} && ${cmd}; read -p 'Press Enter to close...'\"" ` },
+            { name: 'xterm', cmd: `xterm -e "bash -c 'cd ${safeDir} && ${cmd}; read -p Press_Enter_to_close...'"` }
+        ];
+        
+        const tryTerminal = (index) => {
+            if (index >= linuxTerminals.length) {
+                return res.json({ 
+                    success: false, 
+                    message: 'No terminal emulator found', 
+                    note: 'Run this command manually:',
+                    command: cmd
+                });
+            }
+            const terminal = linuxTerminals[index];
+            exec(terminal.cmd, (err) => {
+                if (err) {
+                    tryTerminal(index + 1);
+                } else {
+                    res.json({ success: true, message: 'Terminal opened' });
+                }
+            });
+        };
+        tryTerminal(0);
+    }
+});
+
+app.get('/api/proxy/config', (req, res) => {
+    res.json(proxyManager.loadProxyConfig());
+});
+
+app.post('/api/proxy/config', (req, res) => {
+    proxyManager.saveProxyConfig(req.body);
+    res.json({ success: true });
 });
 
 // ============================================
@@ -3038,8 +3117,7 @@ app.post('/api/presets/:id/apply', (req, res) => {
 
 // Start watcher on server start
 function startServer() {
-    // setupLogWatcher(); // Disabled as per user request (manual switching only)
-    importExistingAuth();
+    ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }
 
@@ -3057,3 +3135,34 @@ module.exports = {
     saveStudioConfig,
     buildAccountPool
 };
+app.get('/api/prompts/global', (req, res) => {
+    const cp = getConfigPath();
+    const dir = cp ? path.dirname(cp) : path.join(os.homedir(), '.config', 'opencode');
+    const globalPath = path.join(dir, 'OPENCODE.md');
+    
+    if (fs.existsSync(globalPath)) {
+        res.json({ content: fs.readFileSync(globalPath, 'utf8') });
+    } else {
+        res.json({ content: '' }); 
+    }
+});
+
+app.post('/api/prompts/global', (req, res) => {
+    const { content } = req.body;
+    const cp = getConfigPath();
+    const dir = cp ? path.dirname(cp) : path.join(os.homedir(), '.config', 'opencode');
+    const globalPath = path.join(dir, 'OPENCODE.md');
+    
+    console.log(`[Prompts] Saving to: ${globalPath}`);
+
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        atomicWriteFileSync(globalPath, content);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Prompts] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});

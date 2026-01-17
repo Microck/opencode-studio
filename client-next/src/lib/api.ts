@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.12.11';
+export const MIN_SERVER_VERSION = '1.13.1';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -557,6 +557,45 @@ export async function deletePreset(id: string): Promise<void> {
 
 export async function applyPreset(id: string, mode: 'exclusive' | 'additive'): Promise<void> {
   await api.post(`/presets/${id}/apply`, { mode });
+}
+
+export interface ProxyStatus {
+  running: boolean;
+  pid?: number;
+  configFile: string;
+  port: number;
+  installed: boolean;
+  binary: string | null;
+}
+
+export async function getProxyStatus(): Promise<ProxyStatus> {
+  const { data } = await api.get<ProxyStatus>('/proxy/status');
+  return data;
+}
+
+export async function startProxy(): Promise<{ success: boolean; pid?: number; error?: string }> {
+  const { data } = await api.post('/proxy/start');
+  return data;
+}
+
+export async function stopProxy(): Promise<{ success: boolean; error?: string }> {
+  const { data } = await api.post('/proxy/stop');
+  return data;
+}
+
+export async function runProxyLogin(provider: string): Promise<{ success: boolean; message: string; command: string; error?: string }> {
+  const { data } = await api.post('/proxy/login', { provider });
+  return data;
+}
+
+export async function getProxyConfig(): Promise<any> {
+  const { data } = await api.get('/proxy/config');
+  return data;
+}
+
+export async function saveProxyConfig(config: any): Promise<{ success: boolean }> {
+  const { data } = await api.post('/proxy/config', config);
+  return data;
 }
 
 export default api;

@@ -31,8 +31,8 @@ app/
 | Skill edit | `skills/page.tsx` → `editor/page.tsx` | Opens `/editor?type=skills&name=X` |
 | Plugin edit | `plugins/page.tsx` → `editor/page.tsx` | Opens `/editor?type=plugins&name=X` |
 | Bulk import | `skills/page.tsx`, `plugins/page.tsx` | `<BulkImportDialog>` component |
-| Multi-account auth | `auth/page.tsx` | `profiles` state, `handleSaveProfile()` |
-| Google plugin toggle | `auth/page.tsx` | `handleSetGooglePlugin()`, gemini vs antigravity |
+| Multi-account auth | `auth/page.tsx` | Proxy Manager Dashboard (CLIProxyAPI) |
+| Google plugin toggle | `auth/page.tsx` | Removed (Managed by Proxy) |
 | Backup/restore | `settings/page.tsx` | `handleBackup()`, `handleRestore()` |
 | Usage charts | `usage/page.tsx` | recharts `BarChart`, `PieChart` |
 | Editor routing | `editor/page.tsx` | `?type=skills|plugins|commands&name=X` |

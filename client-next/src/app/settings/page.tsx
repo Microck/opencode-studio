@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, getCooldownRules, addCooldownRule, deleteCooldownRule, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus, type CooldownRule } from "@/lib/api";
+import api, { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, getCooldownRules, addCooldownRule, deleteCooldownRule, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus, type CooldownRule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import {
   Settings,
   Shield,
+  ShieldCheck,
   Bot,
   Keyboard,
   Monitor,
@@ -36,8 +37,12 @@ import {
   Cloud,
   CloudUpload,
   CloudDownload,
+  Loader2,
+  FileCode,
 } from "lucide-react";
 import { toast } from "sonner";
+import Editor from "@monaco-editor/react";
+import { useTheme } from "next-themes";
 import type { PermissionValue, OpencodeConfig } from "@/types";
 
 const THEMES = ["dark", "light", "auto"] as const;
@@ -74,6 +79,8 @@ export default function SettingsPage() {
     tui: false,
     path: false,
     auth: false,
+    proxy: false,
+    prompts: false,
     cooldowns: false,
     sync: false,
     backup: false,
@@ -86,6 +93,26 @@ export default function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const { theme } = useTheme();
+
+  const PROXY_URL = "http://localhost:8317/v1";
+  const isProxyEnabled = config?.base_url === PROXY_URL;
+
+  const toggleProxy = async (enabled: boolean) => {
+    if (!config) return;
+    const newConfig = { ...config };
+    if (enabled) {
+      newConfig.base_url = PROXY_URL;
+    } else {
+      delete newConfig.base_url;
+    }
+    await saveConfig(newConfig);
+    refreshData();
+  };
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -96,6 +123,7 @@ export default function SettingsPage() {
     getAuthDebug().then(setAuthDebug).catch(console.error);
     getSyncStatus().then(setSyncStatus).catch(console.error);
     getCooldownRules().then(setCooldownRules).catch(console.error);
+    loadSystemPrompt();
     
     // Check for OAuth callback
     const params = new URLSearchParams(window.location.search);
@@ -126,6 +154,30 @@ export default function SettingsPage() {
       });
     }
   }, []);
+
+  const loadSystemPrompt = async () => {
+    try {
+      setLoadingPrompt(true);
+      const res = await api.get('/api/prompts/global');
+      setSystemPrompt(res.data.content);
+    } catch (error) {
+      console.error("Error loading prompt:", error);
+    } finally {
+      setLoadingPrompt(false);
+    }
+  };
+
+  const handleSaveSystemPrompt = async () => {
+    try {
+      setSavingPrompt(true);
+      await api.post('/api/prompts/global', { content: systemPrompt });
+      toast.success("System prompt updated");
+    } catch (error) {
+      toast.error("Failed to save system prompt");
+    } finally {
+      setSavingPrompt(false);
+    }
+  };
 
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
     if (!config) return;
@@ -434,6 +486,88 @@ export default function SettingsPage() {
                   checked={config?.snapshot === true}
                   onCheckedChange={(v) => updateConfig({ snapshot: v })}
                 />
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.proxy} onOpenChange={() => toggleSection("proxy")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5" />
+                  <CardTitle>Proxy Configuration</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.proxy ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Configure local proxy server for rate limit handling</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-6 pt-0">
+              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
+                <div>
+                  <Label>Enable Proxy</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Route all requests through the local proxy ({PROXY_URL})
+                  </p>
+                </div>
+                <Switch
+                  checked={isProxyEnabled}
+                  onCheckedChange={toggleProxy}
+                />
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.prompts} onOpenChange={() => toggleSection("prompts")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileCode className="h-5 w-5" />
+                  <CardTitle>System Prompt</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.prompts ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Edit your global OPENCODE.md instructions</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-4 pt-0">
+              <div className="border rounded-md overflow-hidden h-[400px]">
+                {loadingPrompt ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Editor
+                    height="100%"
+                    defaultLanguage="markdown"
+                    theme={theme === "dark" ? "vs-dark" : "light"}
+                    value={systemPrompt}
+                    onChange={(val) => setSystemPrompt(val || "")}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      padding: { top: 16 },
+                      scrollBeyondLastLine: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveSystemPrompt} disabled={savingPrompt}>
+                  {savingPrompt && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
               </div>
             </CardContent>
           </CollapsibleContent>

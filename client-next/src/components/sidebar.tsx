@@ -32,6 +32,7 @@ const navItems = [
   { href: "/skills", label: "Skills", icon: Puzzle },
   { href: "/plugins", label: "Plugins", icon: FileCode },
   { href: "/commands", label: "Commands", icon: Command },
+
   { href: "/usage", label: "Usage", icon: BarChart },
   { href: "/auth", label: "Auth", icon: Key },
   { href: "/settings", label: "Settings", icon: Settings },
