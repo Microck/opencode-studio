@@ -507,6 +507,17 @@ export default function AuthPage() {
       toast.error(`Failed to remove: ${msg}`);
     }
   };
+
+  const handleOpenaiPoolClearAll = async () => {
+    try {
+      await clearAllAuthProfiles('openai');
+      toast.success("All OpenAI accounts removed");
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to clear accounts: ${msg}`);
+    }
+  };
   
   const handleOpenaiPoolCooldown = async (name: string) => {
     try {
@@ -671,6 +682,7 @@ export default function AuthPage() {
               onCooldown={handleOpenaiPoolCooldown}
               onClearCooldown={handleOpenaiPoolClearCooldown}
               onRemove={handleOpenaiPoolRemove}
+              onClearAll={handleOpenaiPoolClearAll}
               onRename={(name, newName) => handleRenameProfile('openai', name, newName)}
               rotating={openaiRotating}
               providerName="OpenAI"
