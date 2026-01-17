@@ -1918,12 +1918,6 @@ function syncAntigravityPool() {
     const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
 
     if (!accounts.length) {
-        if (fs.existsSync(profileDir)) fs.rmSync(profileDir, { recursive: true, force: true });
-        const metadata = loadPoolMetadata();
-        if (metadata[namespace]) {
-            delete metadata[namespace];
-            savePoolMetadata(metadata);
-        }
         return;
     }
 
