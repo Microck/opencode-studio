@@ -663,15 +663,17 @@ export default function AuthPage() {
             <Select
               value=""
               onValueChange={(value) => {
-                if (value) handleLogin(value);
+                if (value && value !== '__none__') handleLogin(value);
               }}
             >
               <SelectTrigger className="h-8 text-xs w-auto min-w-[100px]">
                 <SelectValue placeholder="Connect..." />
               </SelectTrigger>
               <SelectContent>
-                {sidebarProviders
+                {credentials
                   .filter((cred) => {
+                    const isInMain = mainProviders.some(p => p.id === cred.id);
+                    if (isInMain) return false;
                     const providerProfiles = profiles[cred.id] || { 
                       profiles: cred.profiles || [], 
                       active: cred.active || null, 
@@ -684,7 +686,9 @@ export default function AuthPage() {
                       {cred.name}
                     </SelectItem>
                   ))}
-                {sidebarProviders.filter((cred) => {
+                {credentials.filter((cred) => {
+                  const isInMain = mainProviders.some(p => p.id === cred.id);
+                  if (isInMain) return false;
                   const providerProfiles = profiles[cred.id] || { 
                     profiles: cred.profiles || [], 
                     active: cred.active || null, 
