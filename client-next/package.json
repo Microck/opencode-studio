@@ -1,6 +1,6 @@
 {
   "name": "client-next",
-  "version": "1.5.5",
+  "version": "1.5.8",
   "private": true,
   "scripts": {
     "dev": "next dev",

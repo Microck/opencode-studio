@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.14.5';
+export const MIN_SERVER_VERSION = '1.14.8';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -570,6 +570,17 @@ export interface ProxyStatus {
 
 export async function getProxyStatus(): Promise<ProxyStatus> {
   const { data } = await api.get<ProxyStatus>('/proxy/status');
+  return data;
+}
+
+export interface ProxyAccount {
+  id: string;
+  provider: string;
+  email: string;
+}
+
+export async function getProxyAccounts(): Promise<ProxyAccount[]> {
+  const { data } = await api.get<ProxyAccount[]>('/proxy/accounts');
   return data;
 }
 

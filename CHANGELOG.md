@@ -12,6 +12,22 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Proxy Config**: Version bump for npm publish.
 
+## [1.14.7] - 2026-01-17
+
+### Fixed
+- **Proxy**: Version bump for npm publish.
+
+## [1.14.8] - 2026-01-17
+
+### Fixed
+- **Proxy**: Version bump for npm publish.
+
+## [1.14.7] - 2026-01-17
+
+### Added
+- **Auth UI**: Added "Active Accounts Pool" list to visualize available proxy accounts.
+- **Proxy Config**: Enabled CORS in default proxy configuration.
+
 ## [1.14.5] - 2026-01-17
 
 ### Fixed

@@ -2510,6 +2510,10 @@ app.post('/api/proxy/login', async (req, res) => {
     }
 });
 
+app.get('/api/proxy/accounts', (req, res) => {
+    res.json(proxyManager.listAccounts());
+});
+
 app.get('/api/proxy/config', (req, res) => {
     res.json(proxyManager.loadProxyConfig());
 });

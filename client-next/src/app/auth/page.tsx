@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { 
@@ -14,14 +15,18 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertTriangle,
-  Copy
+  Copy,
+  Users,
+  User
 } from "lucide-react";
 import { 
   getProxyStatus, 
   startProxy, 
   stopProxy, 
   runProxyLogin, 
-  type ProxyStatus 
+  type ProxyStatus,
+  type ProxyAccount,
+  getProxyAccounts
 } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -37,6 +42,7 @@ function Metric({ label, value, sub }: { label: string, value: string, sub?: str
 
 export default function AuthPage() {
   const [status, setStatus] = useState<ProxyStatus | null>(null);
+  const [accounts, setAccounts] = useState<ProxyAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -44,6 +50,9 @@ export default function AuthPage() {
     try {
       const s = await getProxyStatus();
       setStatus(s);
+      
+      const acc = await getProxyAccounts();
+      setAccounts(acc);
     } catch (e) {
       toast.error("Failed to load proxy status");
     } finally {
@@ -290,6 +299,37 @@ export default function AuthPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Active Accounts Pool
+          </CardTitle>
+          <CardDescription>Accounts currently available for rotation in the proxy.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {accounts.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No accounts found. Use the buttons above to login.
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {accounts.map(acc => (
+                <div key={acc.id} className="flex items-center gap-3 p-3 border rounded-lg bg-card">
+                  <div className={`p-2 rounded-md ${acc.provider === 'antigravity' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
+                    <User className="h-4 w-4" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="font-medium text-sm truncate" title={acc.email}>{acc.email}</div>
+                    <div className="text-xs text-muted-foreground capitalize">{acc.provider}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

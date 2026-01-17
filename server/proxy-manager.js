@@ -54,6 +54,8 @@ const loadProxyConfig = () => {
         // Default config
         const defaultConfig = {
             port: 8317,
+            cors: true,
+            "allow-origin": "*",
             "auth-dir": PROXY_AUTH_DIR,
             "management-key": "",
             routing: { strategy: "round-robin" },
@@ -72,6 +74,11 @@ const loadProxyConfig = () => {
         const config = yaml.load(content);
         if (config && config['management-key'] === undefined) {
             config['management-key'] = "";
+            saveProxyConfig(config);
+        }
+        if (config && config.cors === undefined) {
+            config.cors = true;
+            config['allow-origin'] = "*";
             saveProxyConfig(config);
         }
         return config;
@@ -178,11 +185,28 @@ const runLogin = async (provider) => {
     };
 };
 
+const listAccounts = () => {
+    if (!fs.existsSync(PROXY_AUTH_DIR)) return [];
+    try {
+        return fs.readdirSync(PROXY_AUTH_DIR)
+            .filter(f => f.endsWith('.json'))
+            .map(f => {
+                const parts = f.replace('.json', '').split('-');
+                const provider = parts[0];
+                const email = parts.slice(1).join('-').replace(/_/g, '.').replace('.gmail.com', '@gmail.com');
+                return { id: f, provider, email: email || f };
+            });
+    } catch {
+        return [];
+    }
+};
+
 module.exports = {
     startProxy,
     stopProxy,
     getStatus,
     loadProxyConfig,
     saveProxyConfig,
-    runLogin
+    runLogin,
+    listAccounts
 };
