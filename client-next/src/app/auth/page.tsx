@@ -175,6 +175,17 @@ export default function AuthPage() {
   }, []);
 
   const handleLogin = async (providerId: string = "") => {
+    // Start polling immediately (in case user runs manual command or auto-launch fails)
+    const startTime = Date.now();
+    const pollInterval = setInterval(async () => {
+      if (Date.now() - startTime > 120000) {
+        clearInterval(pollInterval);
+        setLoginLoading(false);
+        return;
+      }
+      await loadData(true);
+    }, 3000);
+
     try {
       setLoginLoading(true);
       const pid = providerId === 'google' ? "" : providerId;
@@ -184,21 +195,17 @@ export default function AuthPage() {
       if (result.command) {
         toast.info(`Command: ${result.command}`, { duration: 30000 });
       }
-
-      // Poll for login completion
-      const startTime = Date.now();
-      const pollInterval = setInterval(async () => {
-        if (Date.now() - startTime > 120000) {
-          clearInterval(pollInterval);
-          setLoginLoading(false);
-          return;
-        }
-        await loadData(true);
-      }, 3000);
-
     } catch {
-      toast.error("Failed to open terminal");
-      setLoginLoading(false);
+      const cmd = `opencode auth login ${providerId === 'google' ? '' : providerId}`.trim();
+      toast.error("Automatic terminal launch failed. Run manually:", {
+        description: cmd,
+        action: {
+          label: "Copy",
+          onClick: () => navigator.clipboard.writeText(cmd),
+        },
+        duration: 30000,
+      });
+      // Do not stop polling
     }
   };
 
