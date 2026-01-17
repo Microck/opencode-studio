@@ -65,7 +65,63 @@ interface AccountPoolCardProps {
   rotating: boolean;
   isAdding: boolean;
   providerName?: string;
-  cooldownRules?: CooldownRule[];
+}
+
+function formatTimeRemaining(until: number | null): string {
+  if (!until) return "";
+  const diff = until - Date.now();
+  if (diff <= 0) return "Ready";
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(mins / 60);
+  if (hours > 0) return `${hours}h ${mins % 60}m`;
+  return `${mins}m`;
+}
+
+function getStatusColor(status: AccountPoolEntry["status"]): string {
+  switch (status) {
+    case "active":
+      return "bg-primary/10 text-primary border-primary/20";
+    case "ready":
+      return "bg-muted text-muted-foreground border-border";
+    case "cooldown":
+      return "bg-yellow-500/10 text-yellow-600 border-yellow-200 dark:border-yellow-900/30";
+    case "expired":
+      return "bg-destructive/10 text-destructive border-destructive/20";
+    default:
+      return "";
+  }
+}
+
+function getStatusIcon(status: AccountPoolEntry["status"]) {
+  switch (status) {
+    case "active":
+      return <Star className="h-3 w-3" />;
+    case "ready":
+      return <Play className="h-3 w-3" />;
+    case "cooldown":
+      return <Snowflake className="h-3 w-3" />;
+    case "expired":
+      return <AlertCircle className="h-3 w-3" />;
+    default:
+      return null;
+  }
+}
+
+export function AccountPoolCard({
+  pool,
+  quota,
+  onRotate,
+  onActivate,
+  onCooldown,
+  onClearCooldown,
+  onRemove,
+  onClearAll,
+  onRename,
+  onAddAccount,
+  rotating,
+  isAdding,
+  providerName = "Google",
+  cooldownRules = [],
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
   const [renameOpen, setRenameOpen] = useState(false);
