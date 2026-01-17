@@ -1883,13 +1883,17 @@ function importCurrentGoogleAuthToPool() {
     if (studio.activeGooglePlugin !== 'antigravity') return;
 
     const authCfg = loadAuthConfig();
-    if (!authCfg || !authCfg.google || !authCfg.google.email) return;
+    if (!authCfg) return;
+
+    // Check google.antigravity first, then google
+    const creds = authCfg['google.antigravity'] || authCfg.google;
+    if (!creds || !creds.email) return;
 
     const namespace = 'google.antigravity';
     const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
-    const email = authCfg.google.email;
+    const email = creds.email;
     const profilePath = path.join(profileDir, `${email}.json`);
 
     // Check if we need to sync (new account or updated tokens)
@@ -1897,7 +1901,7 @@ function importCurrentGoogleAuthToPool() {
     if (fs.existsSync(profilePath)) {
         try {
             const current = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-            if (current.access_token === authCfg.google.access_token) {
+            if (current.access_token === creds.access_token) {
                 shouldSync = false;
             }
         } catch {
@@ -1907,12 +1911,13 @@ function importCurrentGoogleAuthToPool() {
 
     if (shouldSync) {
         console.log(`[Auth] Syncing Google login for ${email} to Antigravity pool.`);
-        atomicWriteFileSync(profilePath, JSON.stringify(authCfg.google, null, 2));
+        atomicWriteFileSync(profilePath, JSON.stringify(creds, null, 2));
 
         const metadata = loadPoolMetadata();
         if (!metadata[namespace]) metadata[namespace] = {};
         
-        // Only update metadata if it doesn't exist
+        // Update metadata
+        // Always update to ensure projectId is captured if added later
         if (!metadata[namespace][email]) {
             metadata[namespace][email] = {
                 email: email,
@@ -1921,8 +1926,8 @@ function importCurrentGoogleAuthToPool() {
                 usageCount: 0,
                 imported: true
             };
-            savePoolMetadata(metadata);
         }
+        savePoolMetadata(metadata);
     }
 }
 
