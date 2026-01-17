@@ -557,15 +557,18 @@ export default function AuthPage() {
   const otherCredentials = credentials.filter(c => c.id !== 'google');
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Authentication</h1>
-          {authFile && (
-            <Badge variant="outline" className="text-xs font-normal text-muted-foreground hidden sm:flex">
-              {authFile}
-            </Badge>
-          )}
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
+      <header className="flex justify-between items-end border-b pb-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">Authentication</h1>
+            {authFile && (
+              <Badge variant="outline" className="text-xs font-mono font-normal text-muted-foreground hidden sm:flex">
+                {authFile}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground mt-1">Manage AI provider connections and account pools.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={() => setShowTutorial(true)} title="Show help">
@@ -576,139 +579,117 @@ export default function AuthPage() {
             Refresh
           </Button>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Main Column: Google Auth & Pool */}
-        <div className="xl:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Column: Google & OpenAI Pools */}
+        <div className="lg:col-span-2 space-y-8">
           
-          {hasBothPlugins && (
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  Google Auth Plugin
-                </CardTitle>
-                <CardDescription>
-                  Choose between Gemini (standard) and Antigravity (multi-account)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Button
-                    variant={activeGooglePlugin === 'gemini' ? 'default' : 'outline'}
-                    disabled={switchingPlugin}
-                    className={`justify-between h-[80px] px-4 border-2 transition-all group ${
-                      activeGooglePlugin === 'gemini' ? 'border-primary' : 'border-transparent hover:border-primary/20'
-                    }`}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">Google</h2>
+              {hasBothPlugins && (
+                <div className="bg-muted p-1 rounded-lg inline-flex items-center">
+                  <button
                     onClick={() => handleSetGooglePlugin('gemini')}
-                  >
-                    <div className="text-left">
-                      <div className="font-bold flex items-center gap-2">
-                        {activeGooglePlugin === 'gemini' && <Check className="h-4 w-4" />}
-                        Gemini Auth
-                      </div>
-                      <div className="text-xs opacity-70 mt-1">Standard single-account access</div>
-                    </div>
-                    <GeminiLogo className={`h-8 w-8 opacity-50 group-hover:opacity-100 transition-opacity ${activeGooglePlugin === 'gemini' ? 'opacity-100 text-primary-foreground' : ''}`} />
-                  </Button>
-                  <Button
-                    variant={activeGooglePlugin === 'antigravity' ? 'default' : 'outline'}
                     disabled={switchingPlugin}
-                    className={`justify-between h-[80px] px-4 border-2 transition-all group ${
-                      activeGooglePlugin === 'antigravity' ? 'border-primary' : 'border-transparent hover:border-primary/20'
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                      activeGooglePlugin === 'gemini' 
+                        ? "bg-background shadow-sm text-foreground" 
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
-                    onClick={() => handleSetGooglePlugin('antigravity')}
                   >
-                    <div className="text-left">
-                      <div className="font-bold flex items-center gap-2">
-                        {activeGooglePlugin === 'antigravity' && <Check className="h-4 w-4" />}
-                        Antigravity
-                      </div>
-                      <div className="text-xs opacity-70 mt-1">Manage multiple accounts with rotation</div>
-                    </div>
-                    <AntigravityLogo className={`h-8 w-8 opacity-50 group-hover:opacity-100 transition-opacity ${activeGooglePlugin === 'antigravity' ? 'text-primary-foreground' : ''}`} />
-                  </Button>
+                    <GeminiLogo className="h-3 w-3" />
+                    Gemini
+                  </button>
+                  <button
+                    onClick={() => handleSetGooglePlugin('antigravity')}
+                    disabled={switchingPlugin}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                      activeGooglePlugin === 'antigravity' 
+                        ? "bg-background shadow-sm text-foreground" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <AntigravityLogo className="h-3 w-3" />
+                    Antigravity
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </div>
 
-          {pool && quota ? (
-            <AccountPoolCard
-              pool={pool}
-              quota={quota}
-              cooldownRules={cooldownRules}
-              onAddAccount={handleGoogleLogin}
-              isAdding={googleOAuthLoading}
-              onRotate={handlePoolRotate}
-              onActivate={handlePoolActivate}
-              onCooldown={handlePoolCooldown}
-              onClearCooldown={handlePoolClearCooldown}
-              onClearAll={handlePoolClearAll}
-              onRemove={handlePoolRemove}
-              onRename={(name, newName) => handleRenameProfile('google', name, newName)}
-              rotating={rotating}
-              providerName="Google"
-            />
-          ) : (
-            <Card className="border-dashed">
-              <CardContent className="p-8 flex flex-col items-center text-center">
-                <div className="bg-primary/10 p-4 rounded-full mb-4">
-                  <Key className="h-8 w-8 text-primary" />
+            {pool && quota ? (
+              <AccountPoolCard
+                pool={pool}
+                quota={quota}
+                cooldownRules={cooldownRules}
+                onAddAccount={handleGoogleLogin}
+                isAdding={googleOAuthLoading}
+                onRotate={handlePoolRotate}
+                onActivate={handlePoolActivate}
+                onCooldown={handlePoolCooldown}
+                onClearCooldown={handlePoolClearCooldown}
+                onClearAll={handlePoolClearAll}
+                onRemove={handlePoolRemove}
+                onRename={(name, newName) => handleRenameProfile('google', name, newName)}
+                rotating={rotating}
+                providerName="Google"
+              />
+            ) : (
+              <div className="border border-dashed rounded-lg p-8 flex flex-col items-center text-center bg-muted/10">
+                <div className="bg-primary/10 p-3 rounded-full mb-4">
+                  <Key className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-medium mb-2">Connect Google Account</h3>
-                <p className="text-sm text-muted-foreground mb-6 max-w-md">
+                <h3 className="text-base font-medium mb-1">Connect Google Account</h3>
+                <p className="text-sm text-muted-foreground mb-6 max-w-sm">
                   Connect your Google account to access Gemini models. 
                   Install <b>antigravity-auth</b> to enable multi-account pooling.
                 </p>
-                <Button onClick={handleGoogleLogin} disabled={googleOAuthLoading} variant="outline">
-                  {googleOAuthLoading ? "Connecting..." : "Login with Google"}
+                <Button onClick={handleGoogleLogin} disabled={googleOAuthLoading} className="min-w-[140px]">
+                  {googleOAuthLoading ? "Connecting..." : "Connect Google"}
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
+          </section>
 
           {openaiPool && openaiQuota && (openaiPool.accounts.length > 0) && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-3">OpenAI Pool</h3>
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold tracking-tight">OpenAI</h2>
               <AccountPoolCard
                 pool={openaiPool}
                 quota={openaiQuota}
                 onAddAccount={() => handleLogin('openai')}
                 isAdding={loginLoading}
-              onRotate={handleOpenaiPoolRotate}
-              onActivate={handleOpenaiPoolActivate}
-              onCooldown={handleOpenaiPoolCooldown}
-              onClearCooldown={handleOpenaiPoolClearCooldown}
-              onRemove={handleOpenaiPoolRemove}
-              onClearAll={handleOpenaiPoolClearAll}
-              onRename={(name, newName) => handleRenameProfile('openai', name, newName)}
-              rotating={openaiRotating}
-              providerName="OpenAI"
-            />
-            </div>
+                onRotate={handleOpenaiPoolRotate}
+                onActivate={handleOpenaiPoolActivate}
+                onCooldown={handleOpenaiPoolCooldown}
+                onClearCooldown={handleOpenaiPoolClearCooldown}
+                onRemove={handleOpenaiPoolRemove}
+                onClearAll={handleOpenaiPoolClearAll}
+                onRename={(name, newName) => handleRenameProfile('openai', name, newName)}
+                rotating={openaiRotating}
+                providerName="OpenAI"
+              />
+            </section>
           )}
 
           {installedGooglePlugins.length < 2 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-lg border bg-muted/20">
-              <div className="flex items-center gap-3 mb-3 sm:mb-0">
+            <div className="border rounded-lg p-4 bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <Sparkles className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Enhanced Google Auth</p>
-                  <p className="text-xs text-muted-foreground">
-                    Install plugins to enable specific auth modes.
-                  </p>
+                  <p className="text-sm font-medium">Enhance Google Auth</p>
+                  <p className="text-xs text-muted-foreground">Install plugins for specific auth modes.</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 {!installedGooglePlugins.includes('gemini') && (
-                  <Button onClick={() => handleAddPlugin(GEMINI_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm">
+                  <Button onClick={() => handleAddPlugin(GEMINI_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
                     Add Gemini
                   </Button>
                 )}
                 {!installedGooglePlugins.includes('antigravity') && (
-                  <Button onClick={() => handleAddPlugin(ANTIGRAVITY_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm">
+                  <Button onClick={() => handleAddPlugin(ANTIGRAVITY_AUTH_PLUGIN)} disabled={!!addingPlugin} variant="outline" size="sm" className="h-8 text-xs">
                     Add Antigravity
                   </Button>
                 )}
@@ -718,12 +699,12 @@ export default function AuthPage() {
         </div>
 
         {/* Side Column: Other Providers */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Other Providers</h2>
-            <Button variant="ghost" size="sm" onClick={() => handleLogin()} className="h-7 text-xs" disabled={loginLoading}>
-              <Terminal className="h-3 w-3 mr-1" />
-              Terminal Login
+            <h2 className="text-lg font-semibold tracking-tight">Other Providers</h2>
+            <Button variant="ghost" size="sm" onClick={() => handleLogin()} className="h-8 text-xs text-muted-foreground" disabled={loginLoading}>
+              <Terminal className="h-3.5 w-3.5 mr-1.5" />
+              Terminal
             </Button>
           </div>
 
@@ -740,42 +721,33 @@ export default function AuthPage() {
               const isConnected = providerProfiles.hasCurrentAuth || hasProfiles;
               
               return (
-                <Card key={cred.id} className={`transition-all hover:border-primary/50 ${!isConnected ? 'opacity-70' : ''}`}>
-                  <CardHeader className="p-4 pb-2">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-md ${isConnected ? 'bg-primary/10' : 'bg-muted'}`}>
-                          <Key className={`h-4 w-4 ${isConnected ? 'text-primary' : 'text-muted-foreground'}`} />
-                        </div>
-                        <div>
-                          <CardTitle className="text-sm font-medium">{cred.name}</CardTitle>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-                            <span className="text-[10px] text-muted-foreground">{isConnected ? 'Connected' : 'Disconnected'}</span>
-                          </div>
+                <div key={cred.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="p-3 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-md ${isConnected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        <Key className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{cred.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className="text-[10px] text-muted-foreground">{isConnected ? 'Connected' : 'Disconnected'}</span>
                         </div>
                       </div>
-                      
-                      {isConnected && !hasProfiles && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLogoutTarget(cred)}
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        >
-                          <LogOut className="h-3 w-3" />
-                        </Button>
-                      )}
                     </div>
-                  </CardHeader>
+                    {isConnected && !hasProfiles && (
+                      <Button variant="ghost" size="icon" onClick={() => setLogoutTarget(cred)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                        <LogOut className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                   
-                  <CardContent className="p-4 pt-2">
-                    {isConnected ? (
-                      <div className="space-y-2">
+                  {isConnected && (
+                    <div className="px-3 pb-3 space-y-2">
                         {providerProfiles.active && (
-                          <div className="flex items-center gap-2 text-xs bg-muted/50 p-1.5 rounded px-2">
+                          <div className="flex items-center gap-2 text-xs bg-muted/50 p-1.5 rounded border border-border/50">
                             <Check className="h-3 w-3 text-primary" />
-                            <span className="truncate flex-1 font-mono">{providerProfiles.active}</span>
+                            <span className="truncate flex-1 font-mono text-muted-foreground">{providerProfiles.active}</span>
                           </div>
                         )}
                         
@@ -784,7 +756,7 @@ export default function AuthPage() {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="w-full h-7 text-xs"
+                              className="w-full h-7 text-xs font-normal"
                               onClick={() => toggleProfileExpansion(cred.id)}
                             >
                               <Users className="h-3 w-3 mr-1.5" />
@@ -795,7 +767,7 @@ export default function AuthPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="w-full h-7 text-xs"
+                              className="w-full h-7 text-xs font-normal"
                               onClick={() => handleSaveProfile(cred.id)}
                               disabled={savingProfile === cred.id}
                             >
@@ -810,8 +782,8 @@ export default function AuthPage() {
                             {profileList.map((profileName: string) => (
                               <div
                                 key={profileName}
-                                className={`flex items-center justify-between p-1.5 rounded text-xs transition-colors group ${
-                                  providerProfiles.active === profileName ? "bg-primary/5 text-primary font-medium" : "hover:bg-muted cursor-pointer"
+                                className={`flex items-center justify-between p-1.5 rounded text-xs transition-colors group cursor-pointer ${
+                                  providerProfiles.active === profileName ? "bg-primary/5 text-primary font-medium" : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                 }`}
                                 onClick={() => providerProfiles.active !== profileName && handleActivateProfile(cred.id, profileName)}
                               >
@@ -820,46 +792,51 @@ export default function AuthPage() {
                                   <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); setRenameTarget({ provider: cred.id, name: profileName, current: profileName }); setNewName(profileName); }}>
                                     <Edit2 className="h-3 w-3" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); handleLogoutProfile(cred.id, profileName); }}>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleLogoutProfile(cred.id, profileName); }}>
                                     <LogOut className="h-3 w-3" />
                                   </Button>
                                 </div>
                               </div>
                             ))}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full h-6 text-[10px] text-muted-foreground"
-                              onClick={() => handleLogin(cred.id)}
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Another
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full h-6 text-[10px] text-muted-foreground hover:text-destructive"
-                              onClick={() => handleClearAllProfiles(cred.id)}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Clear All
-                            </Button>
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] text-muted-foreground hover:text-primary"
+                                  onClick={() => handleLogin(cred.id)}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] text-muted-foreground hover:text-destructive"
+                                  onClick={() => handleClearAllProfiles(cred.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Clear All
+                                </Button>
+                            </div>
                           </div>
                         )}
+                    </div>
+                  )}
+                  
+                  {!isConnected && (
+                      <div className="px-3 pb-3">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-8 text-xs"
+                            onClick={() => handleLogin(cred.id)}
+                            disabled={loginLoading}
+                        >
+                            Connect
+                        </Button>
                       </div>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full h-8"
-                        onClick={() => handleLogin(cred.id)}
-                        disabled={loginLoading}
-                      >
-                        Connect
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -1,26 +1,26 @@
-# Session Handoff - Clear All Feature (v1.10.0)
+# Session Handoff - Auth UI Redesign (v1.11.0)
 
 ## Status
-Added "Clear All" functionality to Auth UI and bumped to **v1.10.0**.
+Redesigned Auth page with Vercel-style minimalism and improved hierarchy. Bumped to **v1.11.0**.
 
-## Changes (v1.10.0)
+## Changes (v1.11.0)
 
-### 1. Clear All Accounts
-- **UI**: Added a trash icon button to the Account Pool card header.
-- **Confirmation**: Clicking triggers a confirmation dialog ("This action cannot be undone").
-- **Backend**: Uses the existing `DELETE /api/auth/profiles/:provider/all` endpoint (fixed in v1.9.6).
+### 1. Design Overhaul
+- **Layout**: Moved to a split layout (Main Content + Sidebar) for better hierarchy.
+- **Account Pool**: Replaced card grid with a clean, border-separated list view (Vercel-style).
+- **Status Indicators**: Switched from pills/badges to minimal status dots.
+- **Typography**: Optimized for data density (monospace numbers) and readability.
+- **Plugin Switcher**: Redesigned as a compact segmented control.
 
-### 2. Previous Fixes (v1.9.9)
-- **Robust Login**: Manual command fallback + continuous polling.
-- **Manual Auth**: Manual switching + Cooldown Rules.
+### 2. Functional Improvements
+- **Actions**: "Rotate" renamed to "Next" for clarity.
+- **Connect State**: "Connect Google" is now a clear empty state block.
+- **Clear All**: Retained and styled consistently.
 
 ## Verification
-- **Clear All**:
-  1. Add multiple accounts.
-  2. Click the trash icon in the pool header.
-  3. Confirm dialog.
-  4. Verify all accounts are removed and list is empty.
+- **Visual Check**: Verify the page looks cleaner, with high contrast borders and less "card" clutter.
+- **Functionality**: Ensure all buttons (Next, Switch, Add, Clear) still work with the new layout.
 
 ## Next Steps
-- **Restart Server**: Required for v1.10.0.
-- **Run build**: `cd client-next && npm run build` to ensure client matches new version requirement.
+- **Restart Server**: Required for v1.11.0.
+- **Run build**: `cd client-next && npm run build`.

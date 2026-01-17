@@ -202,143 +202,128 @@ export function AccountPoolCard({
 
   return (
     <>
-    <Card className="border-primary/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              {providerName} Pool
-            </CardTitle>
+      <div className="border rounded-lg bg-background shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-md text-primary">
+              <Users className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium leading-none tracking-tight">{providerName} Pool</h3>
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
+                {pool.availableAccounts} / {pool.totalAccounts} available
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {onClearAll && (
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 mr-1" 
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" 
                 onClick={() => setClearAllOpen(true)}
-                title="Clear All Accounts"
+                title="Clear All"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onAddAccount}
-              disabled={isAdding}
-              className="h-8"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Add Account
+            <div className="h-4 w-px bg-border mx-1" />
+            <Button variant="outline" size="sm" onClick={onAddAccount} disabled={isAdding} className="h-8 text-xs font-medium">
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Add
             </Button>
-            <Badge variant="outline" className="text-xs">
-              {pool.availableAccounts}/{pool.totalAccounts} available
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRotate}
-              disabled={rotating || pool.availableAccounts <= 1}
-              className="h-8"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${rotating ? "animate-spin" : ""}`} />
-              Rotate
+            <Button variant="outline" size="sm" onClick={onRotate} disabled={rotating} className="h-8 text-xs font-medium">
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${rotating ? "animate-spin" : ""}`} />
+              Next
             </Button>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
+        <div className="divide-y">
           {pool.accounts.map((account) => (
-            <div
-              key={account.name}
-              className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                account.status === "active"
-                  ? "bg-primary/5 border border-primary/20"
-                  : account.status === "cooldown"
-                  ? "bg-yellow-500/10 border border-yellow-200/60 dark:border-yellow-900/30"
-                  : "bg-muted/30 hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Badge
-                  variant="outline"
-                  className={`${getStatusColor(account.status)} flex items-center gap-1 shrink-0`}
-                >
-                  {getStatusIcon(account.status)}
-                  {account.status}
-                </Badge>
-                <div className="min-w-0 flex-1">
+            <div key={account.name} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors group">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${
+                  account.status === 'active' ? 'bg-green-500 ring-2 ring-green-500/20' : 
+                  account.status === 'cooldown' ? 'bg-amber-500 ring-2 ring-amber-500/20' : 'bg-slate-300 dark:bg-slate-700'
+                }`} />
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-sm truncate">
-                      {account.email || account.name}
-                    </p>
-                    {account.status !== "active" && (
-                        <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-6 px-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary"
-                            onClick={() => onActivate(account.name)}
-                        >
-                            Switch
-                        </Button>
-                    )}
+                    <span className="text-sm font-medium truncate text-foreground">{account.email || account.name}</span>
+                    {account.status === 'active' && <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-medium bg-green-500/10 text-green-700 hover:bg-green-500/20 border-0">Active</Badge>}
+                    {account.status === 'cooldown' && <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-medium bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-0">Cooldown</Badge>}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{account.usageCount} requests</span>
-                    {account.status === "cooldown" && cooldownTimers[account.name] && (
-                      <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400">
-                        <Clock className="h-3 w-3" />
-                        {cooldownTimers[account.name]}
-                      </span>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground font-mono">
+                    <span className="flex items-center gap-1">
+                        <span className="font-semibold text-foreground/80">{account.usageCount}</span> reqs
+                    </span>
+                    {account.status === 'cooldown' && cooldownTimers[account.name] && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-border" />
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-500 font-medium">
+                          <Clock className="h-3 w-3" />
+                          {cooldownTimers[account.name]} left
+                        </span>
+                      </>
                     )}
                   </div>
                 </div>
               </div>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                    <MoreVertical className="h-4 w-4" />
+              <div className="flex items-center gap-1">
+                {account.status !== 'active' && (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs font-medium opacity-0 group-hover:opacity-100 transition-all data-[state=open]:opacity-100 bg-primary/5 hover:bg-primary/10 text-primary" 
+                    onClick={() => onActivate(account.name)}
+                  >
+                    Switch
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {account.status !== "active" && (
-                    <DropdownMenuItem onClick={() => onActivate(account.name)}>
-                      <Check className="h-3.5 w-3.5 mr-2" />
-                      Set Active
+                )}
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all data-[state=open]:opacity-100">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {account.status !== "active" && (
+                      <DropdownMenuItem onClick={() => onActivate(account.name)}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Set Active
+                      </DropdownMenuItem>
+                    )}
+                    {account.status === "cooldown" ? (
+                      <DropdownMenuItem onClick={() => onClearCooldown(account.name)}>
+                        <Play className="h-4 w-4 mr-2" />
+                        Clear Cooldown
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleCooldownClick(account.name)}>
+                        <Snowflake className="h-4 w-4 mr-2" />
+                        Mark Cooldown
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onRemove(account.name)} className="text-destructive focus:text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove Account
                     </DropdownMenuItem>
-                  )}
-                  {account.status === "cooldown" ? (
-                    <DropdownMenuItem onClick={() => onClearCooldown(account.name)}>
-                      <Play className="h-3.5 w-3.5 mr-2" />
-                      Clear Cooldown
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem onClick={() => handleCooldownClick(account.name)}>
-                      <Snowflake className="h-3.5 w-3.5 mr-2" />
-                      Mark Cooldown
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onRemove(account.name)} className="text-destructive">
-                    <Trash2 className="h-3.5 w-3.5 mr-2" />
-                    Remove Account
-                  </DropdownMenuItem>
-                  {onRename && (
-                    <DropdownMenuItem onClick={() => handleRenameClick(account.name)}>
-                      <Edit2 className="h-3.5 w-3.5 mr-2" />
-                      Rename
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    {onRename && (
+                      <DropdownMenuItem onClick={() => handleRenameClick(account.name)}>
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent>
