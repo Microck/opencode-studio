@@ -2069,10 +2069,14 @@ function buildAccountPool(provider) {
             const name = file.replace('.json', '');
             const meta = providerMeta[name] || {};
             let profileEmail = null;
+            let projectId = null;
+            let tier = null;
             try {
                 const raw = fs.readFileSync(path.join(profileDir, file), 'utf8');
                 const parsed = JSON.parse(raw);
                 profileEmail = parsed?.email || null;
+                projectId = parsed?.projectId || null;
+                tier = parsed?.tier || null;
             } catch {}
             let status = getAccountStatus(meta, now);
             if (name === activeProfile && status === 'ready') status = 'active';
@@ -2084,7 +2088,9 @@ function buildAccountPool(provider) {
                 lastUsed: meta.lastUsed || 0,
                 usageCount: meta.usageCount || 0,
                 cooldownUntil: meta.cooldownUntil || null,
-                createdAt: meta.createdAt || 0
+                createdAt: meta.createdAt || 0,
+                projectId,
+                tier
             });
         });
     }
@@ -2347,7 +2353,7 @@ app.post('/api/auth/pool/:name/usage', (req, res) => {
 // PUT /api/auth/pool/:name/metadata - Update account metadata (email, etc.)
 app.put('/api/auth/pool/:name/metadata', (req, res) => {
     const { name } = req.params;
-    const { provider = 'google', email, createdAt } = req.body;
+    const { provider = 'google', email, createdAt, projectId, tier } = req.body;
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
@@ -2362,6 +2368,23 @@ app.put('/api/auth/pool/:name/metadata', (req, res) => {
     if (createdAt !== undefined) metadata[namespace][name].createdAt = createdAt;
     
     savePoolMetadata(metadata);
+
+    // Update physical profile file if needed
+    if (projectId !== undefined || tier !== undefined) {
+        const profileDir = getProfileDir(provider, activePlugin);
+        const profilePath = path.join(profileDir, `${name}.json`);
+        if (fs.existsSync(profilePath)) {
+            try {
+                const content = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+                if (projectId !== undefined) content.projectId = projectId;
+                if (tier !== undefined) content.tier = tier;
+                atomicWriteFileSync(profilePath, JSON.stringify(content, null, 2));
+            } catch (e) {
+                console.error('[Auth] Failed to update profile file:', e);
+            }
+        }
+    }
+
     res.json({ success: true });
 });
 

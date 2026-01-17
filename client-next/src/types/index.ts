@@ -338,6 +338,8 @@ export interface AccountPoolEntry {
   usageCount: number;
   cooldownUntil: number | null;
   createdAt: number;
+  projectId?: string | null;
+  tier?: string | null;
 }
 
 export interface AccountPool {

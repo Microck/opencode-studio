@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.12.6';
+export const MIN_SERVER_VERSION = '1.12.7';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -516,8 +516,8 @@ export async function incrementAccountUsage(name: string, provider: string = 'go
   return data;
 }
 
-export async function updateAccountMetadata(name: string, provider: string = 'google', email?: string): Promise<{ success: boolean }> {
-  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/metadata`, { provider, email });
+export async function updateAccountMetadata(name: string, provider: string = 'google', email?: string, projectId?: string, tier?: string): Promise<{ success: boolean }> {
+  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/metadata`, { provider, email, projectId, tier });
   return data;
 }
 

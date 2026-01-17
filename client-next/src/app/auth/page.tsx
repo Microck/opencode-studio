@@ -75,6 +75,7 @@ import {
   markAccountCooldown,
   clearAccountCooldown,
   clearAllAuthProfiles,
+  updateAccountMetadata,
   getCooldownRules,
   addCooldownRule,
   deleteCooldownRule,
@@ -368,95 +369,19 @@ export default function AuthPage() {
     try {
       await renameAuthProfile(provider, name, newName);
       toast.success(`Renamed to ${newName}`);
-      await loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to rename: ${msg}`);
-      throw err;
-    }
-  };
-
-  const handleSaveProfile = async (provider: string) => {
-    try {
-      setSavingProfile(provider);
-      const result = await saveAuthProfile(provider);
-      toast.success(`Saved as ${result.name}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to save profile: ${msg}`);
-    } finally {
-      setSavingProfile(null);
-    }
-  };
-
-  const handleActivateProfile = async (provider: string, name: string) => {
-    try {
-      setActivatingProfile(`${provider}-${name}`);
-      await activateAuthProfile(provider, name);
-      toast.success(`Switched to ${name}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to switch profile: ${msg}`);
-    } finally {
-      setActivatingProfile(null);
-    }
-  };
-
-  const handleDeleteProfile = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteAuthProfile(deleteTarget.provider, deleteTarget.name);
-      toast.success(`Deleted ${deleteTarget.name}`);
-      loadData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "Unknown error";
-      toast.error(`Failed to delete profile: ${msg}`);
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
-
-  const handleRenameSubmit = async () => {
-    if (!renameTarget || !newName.trim()) return;
-    try {
-      await handleRenameProfile(renameTarget.provider, renameTarget.name, newName.trim());
-      setRenameTarget(null);
-      setNewName("");
-    } catch {
-      // Error already handled
-    }
-  };
-
-  const toggleProfileExpansion = (provider: string) => {
-    setExpandedProfiles(prev => ({ ...prev, [provider]: !prev[provider] }));
-  };
-
-  const handleRotate = async (provider: string) => {
-    try {
-      if (provider === 'google') setRotating(true);
-      else if (provider === 'openai') setOpenaiRotating(true);
-      
-      const result = await rotateAccount(provider);
-      toast.success(`Switched from ${result.previousAccount || 'none'} to ${result.newAccount}`);
       await loadData(true);
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || "No available accounts";
-      toast.error(`Failed to rotate: ${msg}`);
-    } finally {
-      if (provider === 'google') setRotating(false);
-      else if (provider === 'openai') setOpenaiRotating(false);
+      toast.error(`Failed to rename: ${err.message}`);
     }
   };
 
-  const handleActivate = async (provider: string, name: string) => {
+  const handleEditMetadata = async (provider: string, name: string, metadata: { projectId?: string; tier?: string }) => {
     try {
-      await activateAuthProfile(provider, name);
-      toast.success(`Activated ${name}`);
+      await updateAccountMetadata(name, provider, undefined, metadata.projectId, metadata.tier);
+      toast.success(`Updated metadata for ${name}`);
       await loadData(true);
     } catch (err: any) {
-      toast.error(`Failed to activate: ${err.message}`);
+      toast.error(`Failed to update metadata: ${err.message}`);
     }
   };
 
@@ -643,6 +568,7 @@ export default function AuthPage() {
                       onClearAll={() => handleClearAll(cred.id)}
                       onRemove={(name) => handleRemove(cred.id, name)}
                       onRename={(name, newName) => handleRenameProfile(cred.id, name, newName)}
+                      onEditMetadata={(name, meta) => handleEditMetadata(cred.id, name, meta)}
                       onAddCooldownRule={handleAddCooldownRule}
                       onDeleteCooldownRule={handleDeleteCooldownRule}
                       rotating={cred.id === 'openai' ? openaiRotating : (isGoogle ? rotating : false)}

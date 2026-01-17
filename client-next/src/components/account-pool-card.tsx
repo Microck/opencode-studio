@@ -44,6 +44,7 @@ import {
   AlertCircle,
   Clock,
   Check,
+  Settings,
 } from "lucide-react";
 
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
@@ -60,6 +61,7 @@ interface AccountPoolCardProps {
   onRemove: (name: string) => Promise<void>;
   onClearAll?: () => Promise<void>;
   onRename?: (name: string, newName: string) => Promise<void>;
+  onEditMetadata?: (name: string, metadata: { projectId?: string; tier?: string }) => Promise<void>;
   onAddAccount: () => void;
   onAddCooldownRule?: (name: string, duration: number) => Promise<void>;
   onDeleteCooldownRule?: (name: string) => Promise<void>;
@@ -117,6 +119,7 @@ export function AccountPoolCard({
   onRemove,
   onClearAll,
   onRename,
+  onEditMetadata,
   onAddAccount,
   onAddCooldownRule,
   onDeleteCooldownRule,
@@ -129,9 +132,13 @@ export function AccountPoolCard({
   const [renameOpen, setRenameOpen] = useState(false);
   const [cooldownOpen, setCooldownOpen] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const [cooldownTarget, setCooldownTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
+  const [metadataTarget, setMetadataTarget] = useState<AccountPoolEntry | null>(null);
   const [newName, setNewName] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [editTier, setEditTier] = useState("");
   
   const [addingRule, setAddingRule] = useState(false);
   const [newRuleName, setNewRuleName] = useState("");
@@ -142,6 +149,25 @@ export function AccountPoolCard({
     setCooldownTarget(name);
     setCooldownOpen(true);
     setAddingRule(false);
+  };
+
+  const handleRenameClick = (name: string) => {
+    setRenameTarget({ name, current: name });
+    setNewName(name);
+    setRenameOpen(true);
+  };
+
+  const handleEditMetadataClick = (account: AccountPoolEntry) => {
+    setMetadataTarget(account);
+    setEditProjectId(account.projectId || "");
+    setEditTier(account.tier || "");
+    setMetadataOpen(true);
+  };
+
+  const handleMetadataSubmit = async () => {
+    if (!metadataTarget || !onEditMetadata) return;
+    await onEditMetadata(metadataTarget.name, { projectId: editProjectId, tier: editTier });
+    setMetadataOpen(false);
   };
 
   const handleAddRule = async () => {
@@ -163,12 +189,6 @@ export function AccountPoolCard({
     await onCooldown(cooldownTarget, rule);
     setCooldownOpen(false);
     setCooldownTarget(null);
-  };
-
-  const handleRenameClick = (name: string) => {
-    setRenameTarget({ name, current: name });
-    setNewName(name);
-    setRenameOpen(true);
   };
 
   const handleRenameSubmit = async () => {
@@ -339,6 +359,12 @@ export function AccountPoolCard({
                         Rename
                       </DropdownMenuItem>
                     )}
+                    {onEditMetadata && (
+                      <DropdownMenuItem onClick={() => handleEditMetadataClick(account)}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Edit Metadata
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -364,6 +390,36 @@ export function AccountPoolCard({
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
             <Button onClick={handleRenameSubmit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={metadataOpen} onOpenChange={setMetadataOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Metadata</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Project ID</Label>
+              <Input 
+                value={editProjectId} 
+                onChange={(e) => setEditProjectId(e.target.value)} 
+                placeholder="e.g. my-project-123"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Tier</Label>
+              <Input 
+                value={editTier} 
+                onChange={(e) => setEditTier(e.target.value)} 
+                placeholder="e.g. free, paid"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMetadataOpen(false)}>Cancel</Button>
+            <Button onClick={handleMetadataSubmit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
