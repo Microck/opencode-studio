@@ -1,23 +1,26 @@
-# Session Handoff - Auth UI Robustness (v1.9.9)
+# Session Handoff - Clear All Feature (v1.10.0)
 
 ## Status
-Fixed "Failed to start Google login" and "Not detecting" issues by making the login flow robust with manual fallback and continuous polling.
-Bumped version to **v1.9.9**.
+Added "Clear All" functionality to Auth UI and bumped to **v1.10.0**.
 
-## Changes (v1.9.9)
+## Changes (v1.10.0)
 
-### 1. Robust Login Flow
-- **Continuous Polling**: Login polling now starts *immediately* and continues even if the automatic terminal launch fails. This ensures that if the user runs the command manually, the UI will still detect it.
-- **Manual Command Fallback**: If the automatic terminal launch fails, the UI now displays the exact command to run (with a Copy button) instead of just an error.
+### 1. Clear All Accounts
+- **UI**: Added a trash icon button to the Account Pool card header.
+- **Confirmation**: Clicking triggers a confirmation dialog ("This action cannot be undone").
+- **Backend**: Uses the existing `DELETE /api/auth/profiles/:provider/all` endpoint (fixed in v1.9.6).
 
-### 2. Manual Auth (from v1.9.7)
-- **Manual Switching**: Simplified pool UI for manual account switching.
-- **Configurable Cooldowns**: Rules-based cooldowns in Settings.
+### 2. Previous Fixes (v1.9.9)
+- **Robust Login**: Manual command fallback + continuous polling.
+- **Manual Auth**: Manual switching + Cooldown Rules.
 
 ## Verification
-- **Test Failure**: Try to login. If terminal fails, verify the command is shown.
-- **Test Detection**: Run the command manually. Verify the UI updates within 3 seconds.
+- **Clear All**:
+  1. Add multiple accounts.
+  2. Click the trash icon in the pool header.
+  3. Confirm dialog.
+  4. Verify all accounts are removed and list is empty.
 
 ## Next Steps
-- **Restart Server**: Required for v1.9.9.
+- **Restart Server**: Required for v1.10.0.
 - **Run build**: `cd client-next && npm run build` to ensure client matches new version requirement.

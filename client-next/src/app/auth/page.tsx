@@ -461,6 +461,17 @@ export default function AuthPage() {
     }
   };
 
+  const handlePoolClearAll = async () => {
+    try {
+      await clearAllAuthProfiles('google');
+      toast.success("All Google accounts removed");
+      await loadData(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Unknown error";
+      toast.error(`Failed to clear accounts: ${msg}`);
+    }
+  };
+
   const handleOpenaiPoolRotate = async () => {
     try {
       setOpenaiRotating(true);
@@ -623,6 +634,7 @@ export default function AuthPage() {
               onActivate={handlePoolActivate}
               onCooldown={handlePoolCooldown}
               onClearCooldown={handlePoolClearCooldown}
+              onClearAll={handlePoolClearAll}
               onRemove={handlePoolRemove}
               onRename={(name, newName) => handleRenameProfile('google', name, newName)}
               rotating={rotating}

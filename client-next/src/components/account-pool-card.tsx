@@ -19,6 +19,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -49,71 +59,18 @@ interface AccountPoolCardProps {
   onCooldown: (name: string, rule?: string) => Promise<void>;
   onClearCooldown: (name: string) => Promise<void>;
   onRemove: (name: string) => Promise<void>;
+  onClearAll?: () => Promise<void>;
   onRename?: (name: string, newName: string) => Promise<void>;
   onAddAccount: () => void;
   rotating: boolean;
   isAdding: boolean;
   providerName?: string;
-}
-
-function formatTimeRemaining(until: number | null): string {
-  if (!until) return "";
-  const diff = until - Date.now();
-  if (diff <= 0) return "Ready";
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(mins / 60);
-  if (hours > 0) return `${hours}h ${mins % 60}m`;
-  return `${mins}m`;
-}
-
-function getStatusColor(status: AccountPoolEntry["status"]): string {
-  switch (status) {
-    case "active":
-      return "bg-primary/10 text-primary border-primary/20";
-    case "ready":
-      return "bg-muted text-muted-foreground border-border";
-    case "cooldown":
-      return "bg-yellow-500/10 text-yellow-600 border-yellow-200 dark:border-yellow-900/30";
-    case "expired":
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    default:
-      return "";
-  }
-}
-
-function getStatusIcon(status: AccountPoolEntry["status"]) {
-  switch (status) {
-    case "active":
-      return <Star className="h-3 w-3" />;
-    case "ready":
-      return <Play className="h-3 w-3" />;
-    case "cooldown":
-      return <Snowflake className="h-3 w-3" />;
-    case "expired":
-      return <AlertCircle className="h-3 w-3" />;
-    default:
-      return null;
-  }
-}
-
-export function AccountPoolCard({
-  pool,
-  quota,
-  onRotate,
-  onActivate,
-  onCooldown,
-  onClearCooldown,
-  onRemove,
-  onRename,
-  onAddAccount,
-  rotating,
-  isAdding,
-  providerName = "Google",
-  cooldownRules = [],
+  cooldownRules?: CooldownRule[];
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
   const [renameOpen, setRenameOpen] = useState(false);
   const [cooldownOpen, setCooldownOpen] = useState(false);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
   const [cooldownTarget, setCooldownTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
   const [newName, setNewName] = useState("");
@@ -197,6 +154,17 @@ export function AccountPoolCard({
               {providerName} Pool
             </CardTitle>
           <div className="flex items-center gap-2">
+            {onClearAll && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 mr-1" 
+                onClick={() => setClearAllOpen(true)}
+                title="Clear All Accounts"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -364,6 +332,26 @@ export function AccountPoolCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All Accounts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all {providerName} accounts from the pool. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => { onClearAll?.(); setClearAllOpen(false); }} 
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
