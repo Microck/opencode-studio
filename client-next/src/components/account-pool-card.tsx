@@ -61,6 +61,8 @@ interface AccountPoolCardProps {
   onClearAll?: () => Promise<void>;
   onRename?: (name: string, newName: string) => Promise<void>;
   onAddAccount: () => void;
+  onAddCooldownRule?: (name: string, duration: number) => Promise<void>;
+  onDeleteCooldownRule?: (name: string) => Promise<void>;
   rotating: boolean;
   isAdding: boolean;
   providerName?: string;
@@ -116,6 +118,8 @@ export function AccountPoolCard({
   onClearAll,
   onRename,
   onAddAccount,
+  onAddCooldownRule,
+  onDeleteCooldownRule,
   rotating,
   isAdding,
   providerName = "Google",
@@ -128,10 +132,30 @@ export function AccountPoolCard({
   const [cooldownTarget, setCooldownTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
   const [newName, setNewName] = useState("");
+  
+  const [addingRule, setAddingRule] = useState(false);
+  const [newRuleName, setNewRuleName] = useState("");
+  const [newRuleDuration, setNewRuleDuration] = useState("1");
+  const [newRuleUnit, setNewRuleUnit] = useState("h");
 
   const handleCooldownClick = (name: string) => {
     setCooldownTarget(name);
     setCooldownOpen(true);
+    setAddingRule(false);
+  };
+
+  const handleAddRule = async () => {
+     if (!newRuleName || !newRuleDuration || !onAddCooldownRule) return;
+     
+     let ms = parseFloat(newRuleDuration);
+     if (newRuleUnit === 'm') ms *= 60000;
+     else if (newRuleUnit === 'h') ms *= 3600000;
+     else if (newRuleUnit === 'd') ms *= 86400000;
+     
+     await onAddCooldownRule(newRuleName, ms);
+     setAddingRule(false);
+     setNewRuleName("");
+     setNewRuleDuration("1");
   };
 
   const handleCooldownSubmit = async (rule?: string) => {
@@ -351,20 +375,67 @@ export function AccountPoolCard({
           </DialogHeader>
           <div className="grid gap-2 py-4">
             {cooldownRules.map(rule => (
-              <Button 
-                key={rule.name} 
-                onClick={() => handleCooldownSubmit(rule.name)}
-                className="justify-between"
-                variant="outline"
-              >
-                <span>{rule.name}</span>
-                <span className="text-xs text-muted-foreground">{rule.duration / 3600000}h</span>
-              </Button>
+              <div key={rule.name} className="flex items-center gap-2">
+                <Button 
+                  onClick={() => handleCooldownSubmit(rule.name)}
+                  className="flex-1 justify-between"
+                  variant="outline"
+                >
+                  <span>{rule.name}</span>
+                  <span className="text-xs text-muted-foreground">{Math.round(rule.duration / 360000) / 10}h</span>
+                </Button>
+                {onDeleteCooldownRule && (
+                  <Button variant="ghost" size="icon" onClick={() => onDeleteCooldownRule(rule.name)} className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             ))}
-            <Button variant="outline" onClick={() => handleCooldownSubmit()} className="justify-between">
+            <Button variant="outline" onClick={() => handleCooldownSubmit()} className="justify-between w-full">
               <span>Default</span>
               <span className="text-xs text-muted-foreground">1h</span>
             </Button>
+
+            {onAddCooldownRule && (
+              <div className="mt-2 pt-2 border-t">
+                {!addingRule ? (
+                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setAddingRule(true)}>
+                      <Plus className="h-3 w-3 mr-2" /> Add Preset
+                    </Button>
+                ) : (
+                    <div className="space-y-2 p-2 bg-muted/30 rounded-md border">
+                      <Input 
+                        placeholder="Name (e.g. Rate Limit)" 
+                        value={newRuleName} 
+                        onChange={e => setNewRuleName(e.target.value)} 
+                        className="h-8 text-xs" 
+                      />
+                      <div className="flex gap-2">
+                          <Input 
+                            type="number" 
+                            placeholder="Duration" 
+                            value={newRuleDuration} 
+                            onChange={e => setNewRuleDuration(e.target.value)} 
+                            className="h-8 text-xs flex-1" 
+                          />
+                          <select 
+                            className="h-8 text-xs border rounded bg-background px-2 w-20" 
+                            value={newRuleUnit} 
+                            onChange={e => setNewRuleUnit(e.target.value)}
+                          >
+                            <option value="m">min</option>
+                            <option value="h">hour</option>
+                            <option value="d">day</option>
+                          </select>
+                      </div>
+                      <div className="flex gap-2">
+                          <Button size="sm" variant="ghost" className="flex-1 h-7 text-xs" onClick={() => setAddingRule(false)}>Cancel</Button>
+                          <Button size="sm" className="flex-1 h-7 text-xs" onClick={handleAddRule} disabled={!newRuleName || !newRuleDuration}>Save</Button>
+                      </div>
+                    </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCooldownOpen(false)}>Cancel</Button>

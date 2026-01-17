@@ -76,6 +76,8 @@ import {
   clearAccountCooldown,
   clearAllAuthProfiles,
   getCooldownRules,
+  addCooldownRule,
+  deleteCooldownRule,
   type CooldownRule,
 } from "@/lib/api";
 import type { AuthCredential, AuthProfilesInfo, AccountPool, QuotaInfo } from "@/types";
@@ -499,6 +501,26 @@ export default function AuthPage() {
     }
   };
 
+  const handleAddCooldownRule = async (name: string, duration: number) => {
+    try {
+      const updated = await addCooldownRule(name, duration);
+      setCooldownRules(updated);
+      toast.success(`Added preset: ${name}`);
+    } catch (err: any) {
+      toast.error(`Failed to add preset: ${err.message}`);
+    }
+  };
+
+  const handleDeleteCooldownRule = async (name: string) => {
+    try {
+      const updated = await deleteCooldownRule(name);
+      setCooldownRules(updated);
+      toast.success(`Deleted preset: ${name}`);
+    } catch (err: any) {
+      toast.error(`Failed to delete preset: ${err.message}`);
+    }
+  };
+
   const hasBothPlugins = installedGooglePlugins.includes('gemini') && installedGooglePlugins.includes('antigravity');
   
   // Logic: Providers with pools or special handling go to main column
@@ -595,6 +617,19 @@ export default function AuthPage() {
                    )}
                  </div>
 
+                 {isGoogle && activeGooglePlugin === 'antigravity' && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md text-xs text-yellow-700 dark:text-yellow-400 flex gap-2">
+                      <HelpCircle className="h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Google Cloud Project Required</p>
+                        <p className="mt-0.5 opacity-90">
+                          Antigravity requires a Google Cloud Project ID with "Gemini for Google Cloud API" enabled. 
+                          When adding an account, you must provide this ID when prompted in the terminal.
+                        </p>
+                      </div>
+                    </div>
+                 )}
+
                  {currentPool ? (
                     <AccountPoolCard
                       pool={currentPool}
@@ -608,6 +643,8 @@ export default function AuthPage() {
                       onClearAll={() => handleClearAll(cred.id)}
                       onRemove={(name) => handleRemove(cred.id, name)}
                       onRename={(name, newName) => handleRenameProfile(cred.id, name, newName)}
+                      onAddCooldownRule={handleAddCooldownRule}
+                      onDeleteCooldownRule={handleDeleteCooldownRule}
                       rotating={cred.id === 'openai' ? openaiRotating : (isGoogle ? rotating : false)}
                       providerName={cred.name}
                     />

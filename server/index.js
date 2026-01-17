@@ -1384,7 +1384,12 @@ app.get('/api/auth/providers', (req, res) => {
         { id: 'openai', name: 'OpenAI', type: 'api', description: 'GPT models' },
         { id: 'xai', name: 'xAI', type: 'api', description: 'Grok models' },
         { id: 'openrouter', name: 'OpenRouter', type: 'api', description: 'Unified LLM API' },
-        { id: 'github-copilot', name: 'GitHub Copilot', type: 'api', description: 'Copilot models' }
+        { id: 'github-copilot', name: 'GitHub Copilot', type: 'api', description: 'Copilot models' },
+        { id: 'mistral', name: 'Mistral AI', type: 'api', description: 'Mistral models' },
+        { id: 'deepseek', name: 'DeepSeek', type: 'api', description: 'DeepSeek models' },
+        { id: 'groq', name: 'Groq', type: 'api', description: 'LPU Inference' },
+        { id: 'amazon-bedrock', name: 'AWS Bedrock', type: 'api', description: 'Amazon Bedrock' },
+        { id: 'azure', name: 'Azure OpenAI', type: 'api', description: 'Azure OpenAI' }
     ];
     res.json(providers);
 });
@@ -1412,7 +1417,12 @@ app.get('/api/auth', (req, res) => {
         { id: 'openai', name: 'OpenAI', type: 'api' },
         { id: 'xai', name: 'xAI', type: 'api' },
         { id: 'openrouter', name: 'OpenRouter', type: 'api' },
-        { id: 'github-copilot', name: 'GitHub Copilot', type: 'api' }
+        { id: 'github-copilot', name: 'GitHub Copilot', type: 'api' },
+        { id: 'mistral', name: 'Mistral AI', type: 'api' },
+        { id: 'deepseek', name: 'DeepSeek', type: 'api' },
+        { id: 'groq', name: 'Groq', type: 'api' },
+        { id: 'amazon-bedrock', name: 'AWS Bedrock', type: 'api' },
+        { id: 'azure', name: 'Azure OpenAI', type: 'api' }
     ];
 
     const opencodeCfg = loadConfig();
