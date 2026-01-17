@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus } from "@/lib/api";
+import { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, getCooldownRules, addCooldownRule, deleteCooldownRule, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus, type CooldownRule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -74,9 +74,14 @@ export default function SettingsPage() {
     tui: false,
     path: false,
     auth: false,
+    cooldowns: false,
     sync: false,
     backup: false,
   });
+
+  const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
+  const [newRuleName, setNewRuleName] = useState("");
+  const [newRuleDuration, setNewRuleDuration] = useState("");
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -90,6 +95,7 @@ export default function SettingsPage() {
     getPaths().then(setPathsInfo).catch(console.error);
     getAuthDebug().then(setAuthDebug).catch(console.error);
     getSyncStatus().then(setSyncStatus).catch(console.error);
+    getCooldownRules().then(setCooldownRules).catch(console.error);
     
     // Check for OAuth callback
     const params = new URLSearchParams(window.location.search);
@@ -241,12 +247,37 @@ export default function SettingsPage() {
 
   const handleToggleAutoSync = async (enabled: boolean) => {
     try {
-      await setSyncConfig({ autoSync: enabled });
+      const config = { autoSync: enabled };
+      await setSyncConfig(config);
       const status = await getSyncStatus();
       setSyncStatus(status);
       toast.success(enabled ? "Auto-sync enabled" : "Auto-sync disabled");
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
+    }
+  };
+
+  const handleAddCooldownRule = async () => {
+    if (!newRuleName || !newRuleDuration) return;
+    const duration = parseFloat(newRuleDuration) * 3600000; // hours to ms
+    try {
+      const rules = await addCooldownRule(newRuleName, duration);
+      setCooldownRules(rules);
+      setNewRuleName("");
+      setNewRuleDuration("");
+      toast.success("Rule added");
+    } catch (e) {
+      toast.error("Failed to add rule");
+    }
+  };
+
+  const handleDeleteCooldownRule = async (name: string) => {
+    try {
+      const rules = await deleteCooldownRule(name);
+      setCooldownRules(rules);
+      toast.success("Rule deleted");
+    } catch (e) {
+      toast.error("Failed to delete rule");
     }
   };
 
@@ -514,6 +545,57 @@ export default function SettingsPage() {
               ) : (
                 <p className="text-muted-foreground text-sm">Loading...</p>
               )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.cooldowns} onOpenChange={() => toggleSection("cooldowns")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  <CardTitle>Cooldown Configurations</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.cooldowns ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Configure cooldown durations for different models/plugins</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-6 pt-0">
+              <div className="space-y-4">
+                {cooldownRules.map((rule) => (
+                  <div key={rule.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
+                    <div>
+                      <div className="font-medium">{rule.name}</div>
+                      <div className="text-sm text-muted-foreground">{rule.duration / 3600000} hours</div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCooldownRule(rule.name)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                      Delete
+                    </Button>
+                  </div>
+                ))}
+                
+                <div className="grid grid-cols-[1fr,100px,auto] gap-2 pt-2 border-t">
+                  <Input 
+                    placeholder="Rule Name (e.g. Opus 4.5)" 
+                    value={newRuleName} 
+                    onChange={(e) => setNewRuleName(e.target.value)} 
+                  />
+                  <Input 
+                    placeholder="Hours" 
+                    type="number"
+                    value={newRuleDuration} 
+                    onChange={(e) => setNewRuleDuration(e.target.value)} 
+                  />
+                  <Button onClick={handleAddCooldownRule} disabled={!newRuleName || !newRuleDuration}>
+                    Add
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </CollapsibleContent>
         </Card>

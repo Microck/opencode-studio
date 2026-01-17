@@ -68,6 +68,8 @@ import {
   markAccountCooldown,
   clearAccountCooldown,
   clearAllAuthProfiles,
+  getCooldownRules,
+  type CooldownRule,
 } from "@/lib/api";
 import type { AuthCredential, AuthProfilesInfo, AccountPool, QuotaInfo } from "@/types";
 import { AccountPoolCard } from "@/components/account-pool-card";
@@ -118,6 +120,7 @@ export default function AuthPage() {
   const [openaiPool, setOpenaiPool] = useState<AccountPool | null>(null);
   const [openaiQuota, setOpenaiQuota] = useState<QuotaInfo | null>(null);
   const [openaiRotating, setOpenaiRotating] = useState(false);
+  const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
 
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -136,17 +139,19 @@ export default function AuthPage() {
   const loadData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [authInfo, profilesData, poolData, openaiPoolData] = await Promise.all([
+      const [authInfo, profilesData, poolData, openaiPoolData, rules] = await Promise.all([
         getAuthInfo(),
         getAuthProfiles(),
         getAccountPool('google').catch(() => null),
         getAccountPool('openai').catch(() => null),
+        getCooldownRules().catch(() => []),
       ]);
       setCredentials(authInfo.credentials);
       setAuthFile(authInfo.authFile);
       setInstalledGooglePlugins(authInfo.installedGooglePlugins || []);
       setActiveGooglePluginState(authInfo.activeGooglePlugin || null);
       setProfiles(profilesData || {});
+      setCooldownRules(rules || []);
       if (poolData) {
         setPool(poolData.pool);
         setQuota(poolData.quota);
@@ -426,10 +431,11 @@ export default function AuthPage() {
     }
   };
 
-  const handlePoolCooldown = async (name: string) => {
+  const handlePoolCooldown = async (name: string, rule?: string) => {
     try {
-      await markAccountCooldown(name, 'google', 3600000);
-      toast.success(`${name} marked as cooldown for 1 hour`);
+      await markAccountCooldown(name, 'google', undefined, rule);
+      const ruleText = rule ? ` (${rule})` : ' for 1 hour';
+      toast.success(`${name} marked as cooldown${ruleText}`);
       await loadData(true);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
@@ -603,6 +609,7 @@ export default function AuthPage() {
             <AccountPoolCard
               pool={pool}
               quota={quota}
+              cooldownRules={cooldownRules}
               onAddAccount={handleGoogleLogin}
               isAdding={googleOAuthLoading}
               onRotate={handlePoolRotate}

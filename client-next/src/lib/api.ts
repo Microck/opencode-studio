@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.9.6';
+export const MIN_SERVER_VERSION = '1.9.7';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -481,8 +481,28 @@ export async function rotateAccount(provider: string = 'google'): Promise<PoolRo
   return data;
 }
 
-export async function markAccountCooldown(name: string, provider: string = 'google', duration: number = 3600000): Promise<{ success: boolean; cooldownUntil: number }> {
-  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/cooldown`, { provider, duration });
+export interface CooldownRule {
+  name: string;
+  duration: number;
+}
+
+export async function getCooldownRules(): Promise<CooldownRule[]> {
+  const { data } = await api.get<CooldownRule[]>('/cooldowns');
+  return data;
+}
+
+export async function addCooldownRule(name: string, duration: number): Promise<CooldownRule[]> {
+  const { data } = await api.post<CooldownRule[]>('/cooldowns', { name, duration });
+  return data;
+}
+
+export async function deleteCooldownRule(name: string): Promise<CooldownRule[]> {
+  const { data } = await api.delete<CooldownRule[]>(`/cooldowns/${encodeURIComponent(name)}`);
+  return data;
+}
+
+export async function markAccountCooldown(name: string, provider: string = 'google', duration?: number, rule?: string): Promise<{ success: boolean; cooldownUntil: number }> {
+  const { data } = await api.put(`/auth/pool/${encodeURIComponent(name)}/cooldown`, { provider, duration, rule });
   return data;
 }
 

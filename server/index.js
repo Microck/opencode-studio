@@ -290,6 +290,10 @@ function loadStudioConfig() {
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
         presets: [],
+        cooldownRules: [
+            { name: "Opus 4.5 (Antigravity)", duration: 4 * 60 * 60 * 1000 }, // 4 hours
+            { name: "Gemini 3 Pro (Antigravity)", duration: 24 * 60 * 60 * 1000 } // 24 hours
+        ],
         pluginModels: {
             gemini: {
                 "gemini-3-pro-preview": {
@@ -644,6 +648,36 @@ app.post('/api/restore', (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+app.get('/api/cooldowns', (req, res) => {
+    const studio = loadStudioConfig();
+    res.json(studio.cooldownRules || []);
+});
+
+app.post('/api/cooldowns', (req, res) => {
+    const { name, duration } = req.body;
+    if (!name || typeof duration !== 'number') return res.status(400).json({ error: 'Invalid name or duration' });
+    const studio = loadStudioConfig();
+    if (!studio.cooldownRules) studio.cooldownRules = [];
+    
+    // Update if exists, else push
+    const idx = studio.cooldownRules.findIndex(r => r.name === name);
+    if (idx >= 0) studio.cooldownRules[idx] = { name, duration };
+    else studio.cooldownRules.push({ name, duration });
+    
+    saveStudioConfig(studio);
+    res.json(studio.cooldownRules);
+});
+
+app.delete('/api/cooldowns/:name', (req, res) => {
+    const { name } = req.params;
+    const studio = loadStudioConfig();
+    if (studio.cooldownRules) {
+        studio.cooldownRules = studio.cooldownRules.filter(r => r.name !== name);
+        saveStudioConfig(studio);
+    }
+    res.json(studio.cooldownRules || []);
 });
 
 const DROPBOX_CLIENT_ID = 'your-dropbox-app-key';
@@ -2223,7 +2257,15 @@ app.post('/api/auth/pool/limit', (req, res) => {
 // PUT /api/auth/pool/:name/cooldown - Mark account as in cooldown
 app.put('/api/auth/pool/:name/cooldown', (req, res) => {
     const { name } = req.params;
-    const { duration = 3600000, provider = 'google' } = req.body; // default 1 hour
+    let { duration, provider = 'google', rule } = req.body;
+    
+    if (rule) {
+        const studio = loadStudioConfig();
+        const r = (studio.cooldownRules || []).find(cr => cr.name === rule);
+        if (r) duration = r.duration;
+    }
+
+    if (!duration) duration = 3600000; // default 1 hour
     
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
@@ -2950,7 +2992,7 @@ app.post('/api/presets/:id/apply', (req, res) => {
 
 // Start watcher on server start
 function startServer() {
-    setupLogWatcher();
+    // setupLogWatcher(); // Disabled as per user request (manual switching only)
     importExistingAuth();
     app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }

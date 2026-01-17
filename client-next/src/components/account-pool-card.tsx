@@ -38,14 +38,15 @@ import {
 
 import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
 
-import { savePoolLimit } from "@/lib/api";
+import { savePoolLimit, type CooldownRule } from "@/lib/api";
 
 interface AccountPoolCardProps {
   pool: AccountPool;
   quota: QuotaInfo;
+  cooldownRules?: CooldownRule[];
   onRotate: () => Promise<void>;
   onActivate: (name: string) => Promise<void>;
-  onCooldown: (name: string) => Promise<void>;
+  onCooldown: (name: string, rule?: string) => Promise<void>;
   onClearCooldown: (name: string) => Promise<void>;
   onRemove: (name: string) => Promise<void>;
   onRename?: (name: string, newName: string) => Promise<void>;
@@ -108,27 +109,25 @@ export function AccountPoolCard({
   rotating,
   isAdding,
   providerName = "Google",
+  cooldownRules = [],
 }: AccountPoolCardProps) {
   const [cooldownTimers, setCooldownTimers] = useState<Record<string, string>>({});
   const [renameOpen, setRenameOpen] = useState(false);
-  const [limitOpen, setLimitOpen] = useState(false);
-  const [newLimit, setNewLimit] = useState("");
+  const [cooldownOpen, setCooldownOpen] = useState(false);
+  const [cooldownTarget, setCooldownTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{name: string, current: string} | null>(null);
   const [newName, setNewName] = useState("");
 
-  const handleLimitSubmit = async () => {
-    const limit = parseInt(newLimit, 10);
-    if (isNaN(limit) || limit < 0) return;
-    try {
-      await savePoolLimit(providerName.toLowerCase(), limit);
-      // Trigger refresh somehow? The parent refreshes on actions.
-      // We might need an onRefresh prop or just wait for the next periodic refresh.
-      setLimitOpen(false);
-      // Hack: window reload or just let the user see it update next time
-      window.location.reload(); 
-    } catch {
-      // Error handled
-    }
+  const handleCooldownClick = (name: string) => {
+    setCooldownTarget(name);
+    setCooldownOpen(true);
+  };
+
+  const handleCooldownSubmit = async (rule?: string) => {
+    if (!cooldownTarget) return;
+    await onCooldown(cooldownTarget, rule);
+    setCooldownOpen(false);
+    setCooldownTarget(null);
   };
 
   const handleRenameClick = (name: string) => {
@@ -226,23 +225,6 @@ export function AccountPoolCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground items-center">
-            <span className="flex items-center gap-1">
-              Daily Quota
-              <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => { setNewLimit(String(quota.dailyLimit)); setLimitOpen(true); }}>
-                <Edit2 className="h-3 w-3" />
-              </Button>
-            </span>
-            <span>{quota.percentage}% remaining</span>
-          </div>
-          <Progress value={quota.percentage} className="h-2" />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{quota.used} used</span>
-            <span>{quota.remaining} left</span>
-          </div>
-        </div>
-
         <div className="space-y-2">
           {pool.accounts.map((account) => (
             <div
@@ -255,18 +237,30 @@ export function AccountPoolCard({
                   : "bg-muted/30 hover:bg-muted/50"
               }`}
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <Badge
                   variant="outline"
-                  className={`${getStatusColor(account.status)} flex items-center gap-1`}
+                  className={`${getStatusColor(account.status)} flex items-center gap-1 shrink-0`}
                 >
                   {getStatusIcon(account.status)}
                   {account.status}
                 </Badge>
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">
-                    {account.email || account.name}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">
+                      {account.email || account.name}
+                    </p>
+                    {account.status !== "active" && (
+                        <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-6 px-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary"
+                            onClick={() => onActivate(account.name)}
+                        >
+                            Switch
+                        </Button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{account.usageCount} requests</span>
                     {account.status === "cooldown" && cooldownTimers[account.name] && (
@@ -298,7 +292,7 @@ export function AccountPoolCard({
                       Clear Cooldown
                     </DropdownMenuItem>
                   ) : (
-                    <DropdownMenuItem onClick={() => onCooldown(account.name)}>
+                    <DropdownMenuItem onClick={() => handleCooldownClick(account.name)}>
                       <Snowflake className="h-3.5 w-3.5 mr-2" />
                       Mark Cooldown
                     </DropdownMenuItem>
@@ -343,24 +337,30 @@ export function AccountPoolCard({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
+      <Dialog open={cooldownOpen} onOpenChange={setCooldownOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set Daily Limit</DialogTitle>
+            <DialogTitle>Mark Cooldown</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Label>Limit (requests/day)</Label>
-            <Input 
-              type="number"
-              value={newLimit} 
-              onChange={(e) => setNewLimit(e.target.value)} 
-              placeholder="e.g. 1000"
-              onKeyDown={(e) => e.key === 'Enter' && handleLimitSubmit()}
-            />
+          <div className="grid gap-2 py-4">
+            {cooldownRules.map(rule => (
+              <Button 
+                key={rule.name} 
+                onClick={() => handleCooldownSubmit(rule.name)}
+                className="justify-between"
+                variant="outline"
+              >
+                <span>{rule.name}</span>
+                <span className="text-xs text-muted-foreground">{rule.duration / 3600000}h</span>
+              </Button>
+            ))}
+            <Button variant="outline" onClick={() => handleCooldownSubmit()} className="justify-between">
+              <span>Default</span>
+              <span className="text-xs text-muted-foreground">1h</span>
+            </Button>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLimitOpen(false)}>Cancel</Button>
-            <Button onClick={handleLimitSubmit}>Save</Button>
+            <Button variant="ghost" onClick={() => setCooldownOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
