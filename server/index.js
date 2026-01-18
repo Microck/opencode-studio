@@ -293,8 +293,8 @@ function loadStudioConfig() {
         availableGooglePlugins: [],
         presets: [],
         cooldownRules: [
-            { name: "Antigravity Claude Opus (4h)", duration: 4 * 60 * 60 * 1000 },
-            { name: "Antigravity Gemini 3 Pro (24h)", duration: 24 * 60 * 60 * 1000 }
+            { name: "Antigravity Claude Opus 4 (4h)", duration: 4 * 60 * 60 * 1000 },
+            { name: "Gemini 3 Pro (24h)", duration: 24 * 60 * 60 * 1000 }
         ],
         pluginModels: {
             gemini: {

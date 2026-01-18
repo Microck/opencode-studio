@@ -431,32 +431,25 @@ export function AccountPoolCard({
           </DialogHeader>
           <div className="grid gap-2 py-4">
             {cooldownRules
-              .sort((a, b) => {
-                const aIsAg = a.name.includes("Antigravity");
-                const bIsAg = b.name.includes("Antigravity");
-                if (aIsAg && !bIsAg) return -1;
-                if (!aIsAg && bIsAg) return 1;
-                return a.name.localeCompare(b.name);
-              })
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(rule => (
                 <div key={rule.name} className="flex items-center gap-2">
                   <Button 
                     onClick={() => handleCooldownSubmit(rule.name)}
-                    className={`flex-1 justify-between ${rule.name.includes("Antigravity") ? "border-primary/50 bg-primary/5 hover:bg-primary/10" : ""}`}
+                    className="flex-1 justify-between"
                     variant="outline"
                   >
                     <span className="flex items-center gap-2">
-                      {rule.name.includes("Antigravity") && <Snowflake className="h-3 w-3 text-primary" />}
                       {rule.name}
                     </span>
                     <span className="text-xs text-muted-foreground">{Math.round(rule.duration / 360000) / 10}h</span>
                   </Button>
-                  {onDeleteCooldownRule && !rule.name.includes("Antigravity") && (
-                  <Button variant="ghost" size="icon" onClick={() => onDeleteCooldownRule(rule.name)} className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+                  {onDeleteCooldownRule && (
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteCooldownRule(rule.name)} className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
             ))}
             <Button variant="outline" onClick={() => handleCooldownSubmit()} className="justify-between w-full">
               <span>Default</span>

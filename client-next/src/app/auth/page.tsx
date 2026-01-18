@@ -53,25 +53,38 @@ function Metric({ label, value, sub }: { label: string, value: string, sub?: str
   );
 }
 
+type ProviderPoolState = {
+  pool: AccountPool | null;
+  quota: QuotaInfo | null;
+};
+
 export default function AuthPage() {
   const [status, setStatus] = useState<ProxyStatus | null>(null);
-  const [pool, setPool] = useState<AccountPool | null>(null);
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [pools, setPools] = useState<Record<string, ProviderPoolState>>({
+    google: { pool: null, quota: null },
+    openai: { pool: null, quota: null },
+    anthropic: { pool: null, quota: null }
+  });
   const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [rotating, setRotating] = useState(false);
+  const [rotating, setRotating] = useState<string | null>(null);
 
   const loadStatus = async () => {
     try {
-      const [s, poolData, rules] = await Promise.all([
+      const [s, googlePool, openaiPool, anthropicPool, rules] = await Promise.all([
         getProxyStatus(),
         getAccountPool('google'),
+        getAccountPool('openai'),
+        getAccountPool('anthropic'),
         getCooldownRules()
       ]);
       setStatus(s);
-      setPool(poolData.pool);
-      setQuota(poolData.quota);
+      setPools({
+        google: { pool: googlePool.pool, quota: googlePool.quota },
+        openai: { pool: openaiPool.pool, quota: openaiPool.quota },
+        anthropic: { pool: anthropicPool.pool, quota: anthropicPool.quota }
+      });
       setCooldownRules(rules);
     } catch (e) {
       console.error("Failed to load status", e);
@@ -134,22 +147,22 @@ export default function AuthPage() {
     }
   };
 
-  const handleRotate = async () => {
+  const handleRotate = async (provider: string) => {
     try {
-      setRotating(true);
-      await rotateAccount('google');
+      setRotating(provider);
+      await rotateAccount(provider);
       await loadStatus();
       toast.success("Account rotated");
     } catch (e) {
       toast.error("Rotation failed");
     } finally {
-      setRotating(false);
+      setRotating(null);
     }
   };
 
-  const handleActivate = async (name: string) => {
+  const handleActivate = async (provider: string, name: string) => {
     try {
-      await activateAuthProfile('google', name);
+      await activateAuthProfile(provider, name);
       await loadStatus();
       toast.success("Account activated");
     } catch (e) {
@@ -157,9 +170,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleCooldown = async (name: string, rule?: string) => {
+  const handleCooldown = async (provider: string, name: string, rule?: string) => {
     try {
-      await markAccountCooldown(name, 'google', undefined, rule);
+      await markAccountCooldown(name, provider, undefined, rule);
       await loadStatus();
       toast.success("Account cooldown set");
     } catch (e) {
@@ -167,9 +180,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleClearCooldown = async (name: string) => {
+  const handleClearCooldown = async (provider: string, name: string) => {
     try {
-      await clearAccountCooldown(name, 'google');
+      await clearAccountCooldown(name, provider);
       await loadStatus();
       toast.success("Cooldown cleared");
     } catch (e) {
@@ -177,9 +190,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleRemove = async (name: string) => {
+  const handleRemove = async (provider: string, name: string) => {
     try {
-      await deleteAuthProfile('google', name);
+      await deleteAuthProfile(provider, name);
       await loadStatus();
       toast.success("Account removed");
     } catch (e) {
@@ -187,9 +200,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleRename = async (name: string, newName: string) => {
+  const handleRename = async (provider: string, name: string, newName: string) => {
     try {
-      await renameAuthProfile('google', name, newName);
+      await renameAuthProfile(provider, name, newName);
       await loadStatus();
       toast.success("Account renamed");
     } catch (e) {
@@ -197,9 +210,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleEditMetadata = async (name: string, metadata: { projectId?: string; tier?: string }) => {
+  const handleEditMetadata = async (provider: string, name: string, metadata: { projectId?: string; tier?: string }) => {
     try {
-      await updateAccountMetadata(name, 'google', undefined, metadata.projectId, metadata.tier);
+      await updateAccountMetadata(name, provider, undefined, metadata.projectId, metadata.tier);
       await loadStatus();
       toast.success("Metadata updated");
     } catch (e) {
@@ -207,9 +220,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleClearAll = async () => {
+  const handleClearAll = async (provider: string) => {
     try {
-      await clearAllAuthProfiles('google');
+      await clearAllAuthProfiles(provider);
       await loadStatus();
       toast.success("All accounts cleared");
     } catch (e) {
@@ -423,26 +436,70 @@ export default function AuthPage() {
         </Card>
       </div>
 
-      {pool && (
-        <AccountPoolCard
-          pool={pool}
-          cooldownRules={cooldownRules}
-          onRotate={handleRotate}
-          onActivate={handleActivate}
-          onCooldown={handleCooldown}
-          onClearCooldown={handleClearCooldown}
-          onRemove={handleRemove}
-          onClearAll={handleClearAll}
-          onRename={handleRename}
-          onEditMetadata={handleEditMetadata}
-          onAddAccount={() => handleLogin('antigravity')}
-          onAddCooldownRule={handleAddCooldownRule}
-          onDeleteCooldownRule={handleDeleteCooldownRule}
-          rotating={rotating}
-          isAdding={actionLoading}
-          providerName="Antigravity"
-        />
-      )}
+      <div className="space-y-6">
+        {pools.google.pool && (
+          <AccountPoolCard
+            pool={pools.google.pool}
+            cooldownRules={cooldownRules}
+            onRotate={() => handleRotate('google')}
+            onActivate={(name) => handleActivate('google', name)}
+            onCooldown={(name, rule) => handleCooldown('google', name, rule)}
+            onClearCooldown={(name) => handleClearCooldown('google', name)}
+            onRemove={(name) => handleRemove('google', name)}
+            onClearAll={() => handleClearAll('google')}
+            onRename={(name, newName) => handleRename('google', name, newName)}
+            onEditMetadata={(name, metadata) => handleEditMetadata('google', name, metadata)}
+            onAddAccount={() => handleLogin('antigravity')}
+            onAddCooldownRule={handleAddCooldownRule}
+            onDeleteCooldownRule={handleDeleteCooldownRule}
+            rotating={rotating === 'google'}
+            isAdding={actionLoading}
+            providerName="Antigravity (Google)"
+          />
+        )}
+
+        {pools.openai.pool && (
+          <AccountPoolCard
+            pool={pools.openai.pool}
+            cooldownRules={cooldownRules}
+            onRotate={() => handleRotate('openai')}
+            onActivate={(name) => handleActivate('openai', name)}
+            onCooldown={(name, rule) => handleCooldown('openai', name, rule)}
+            onClearCooldown={(name) => handleClearCooldown('openai', name)}
+            onRemove={(name) => handleRemove('openai', name)}
+            onClearAll={() => handleClearAll('openai')}
+            onRename={(name, newName) => handleRename('openai', name, newName)}
+            onEditMetadata={(name, metadata) => handleEditMetadata('openai', name, metadata)}
+            onAddAccount={() => handleLogin('codex')}
+            onAddCooldownRule={handleAddCooldownRule}
+            onDeleteCooldownRule={handleDeleteCooldownRule}
+            rotating={rotating === 'openai'}
+            isAdding={actionLoading}
+            providerName="OpenAI Codex"
+          />
+        )}
+
+        {pools.anthropic.pool && (
+          <AccountPoolCard
+            pool={pools.anthropic.pool}
+            cooldownRules={cooldownRules}
+            onRotate={() => handleRotate('anthropic')}
+            onActivate={(name) => handleActivate('anthropic', name)}
+            onCooldown={(name, rule) => handleCooldown('anthropic', name, rule)}
+            onClearCooldown={(name) => handleClearCooldown('anthropic', name)}
+            onRemove={(name) => handleRemove('anthropic', name)}
+            onClearAll={() => handleClearAll('anthropic')}
+            onRename={(name, newName) => handleRename('anthropic', name, newName)}
+            onEditMetadata={(name, metadata) => handleEditMetadata('anthropic', name, metadata)}
+            onAddAccount={() => handleLogin('anthropic')}
+            onAddCooldownRule={handleAddCooldownRule}
+            onDeleteCooldownRule={handleDeleteCooldownRule}
+            rotating={rotating === 'anthropic'}
+            isAdding={actionLoading}
+            providerName="Anthropic Claude"
+          />
+        )}
+      </div>
     </div>
   );
 }
