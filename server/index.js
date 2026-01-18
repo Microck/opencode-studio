@@ -184,8 +184,12 @@ function processLogLine(line) {
     const modelMatch = line.match(/modelID=([^\s]+)/);
     
     if (providerMatch) {
-        const provider = providerMatch[1];
+        let provider = providerMatch[1];
         const model = modelMatch ? modelMatch[1] : 'unknown';
+        
+        // Normalize providers
+        if (provider === 'codex') provider = 'openai';
+        if (provider === 'claude') provider = 'anthropic';
         
         // Map provider to pool namespace
         let namespace = provider;
@@ -1668,9 +1672,23 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
             delete authCfg['google.gemini'];
             changed = true;
         }
-    } else if (wasActive && authCfg[provider]) {
-        delete authCfg[provider];
-        changed = true;
+    } else if (authCfg[provider]) {
+        // Check if the auth config matches the profile being deleted
+        const creds = authCfg[provider];
+        let matches = false;
+        
+        // Try to match by email if available (OpenAI/Anthropic don't store email in auth.json usually, but we can check decoded token)
+        if (creds.email === name) matches = true;
+        else if (creds.accountId === name) matches = true;
+        else if (provider === 'openai' && creds.access) {
+             const decoded = decodeJWT(creds.access);
+             if (decoded && decoded['https://api.openai.com/profile']?.email === name) matches = true;
+        }
+        
+        if (matches) {
+            delete authCfg[provider];
+            changed = true;
+        }
     }
 
     if (changed) {
@@ -2004,6 +2022,14 @@ function importCurrentGoogleAuthToPool() {
             };
         }
         savePoolMetadata(metadata);
+
+        // Also update active profile to match what we just imported
+        const studio = loadStudioConfig();
+        if (!studio.activeProfiles) studio.activeProfiles = {};
+        if (studio.activeProfiles.google !== email) {
+            studio.activeProfiles.google = email;
+            saveStudioConfig(studio);
+        }
     }
 }
 
