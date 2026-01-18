@@ -1615,15 +1615,37 @@ app.delete('/api/auth/profiles/:provider/all', (req, res) => {
     
     const authCfg = loadAuthConfig() || {};
     if (authCfg[provider]) {
-        delete authCfg[provider];
-        if (provider === 'google') {
-             const key = 'google.antigravity';
-             delete authCfg.google;
-             delete authCfg[key];
+        const paths = getPaths();
+        const allPaths = paths.candidates;
+        if (paths.current && !allPaths.includes(paths.current)) {
+            allPaths.push(paths.current);
         }
-        const cp = getConfigPath();
-        const ap = path.join(path.dirname(cp), 'auth.json');
-        atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+
+        allPaths.forEach(p => {
+            const ap = path.join(path.dirname(p), 'auth.json');
+            if (fs.existsSync(ap)) {
+                try {
+                    const cfg = JSON.parse(fs.readFileSync(ap, 'utf8'));
+                    let modified = false;
+                    
+                    if (provider === 'google') {
+                        if (cfg.google) { delete cfg.google; modified = true; }
+                        if (cfg['google.antigravity']) { delete cfg['google.antigravity']; modified = true; }
+                        if (cfg['google.gemini']) { delete cfg['google.gemini']; modified = true; }
+                    } else if (cfg[provider]) {
+                        delete cfg[provider];
+                        modified = true;
+                    }
+                    
+                    if (modified) {
+                        console.log(`[Auth] Removing ${provider} (all) from ${ap}`);
+                        atomicWriteFileSync(ap, JSON.stringify(cfg, null, 2));
+                    }
+                } catch (e) {
+                    console.error(`[Auth] Failed to update ${ap}:`, e.message);
+                }
+            }
+        });
     }
     
     const metadata = loadPoolMetadata();
@@ -1692,9 +1714,51 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
     }
 
     if (changed) {
-        const cp = getConfigPath();
-        const ap = path.join(path.dirname(cp), 'auth.json');
-        atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
+        const paths = getPaths();
+        const allPaths = paths.candidates;
+        if (paths.current && !allPaths.includes(paths.current)) {
+            allPaths.push(paths.current);
+        }
+
+        allPaths.forEach(p => {
+            const ap = path.join(path.dirname(p), 'auth.json');
+            if (fs.existsSync(ap)) {
+                try {
+                    const cfg = JSON.parse(fs.readFileSync(ap, 'utf8'));
+                    let modified = false;
+                    
+                    if (provider === 'google') {
+                        if (cfg.google?.email === name || cfg['google.antigravity']?.email === name || cfg['google.gemini']?.email === name) {
+                            delete cfg.google;
+                            delete cfg['google.antigravity'];
+                            delete cfg['google.gemini'];
+                            modified = true;
+                        }
+                    } else if (cfg[provider]) {
+                        const creds = cfg[provider];
+                        let matches = false;
+                        if (creds.email === name) matches = true;
+                        else if (creds.accountId === name) matches = true;
+                        else if (provider === 'openai' && creds.access) {
+                             const decoded = decodeJWT(creds.access);
+                             if (decoded && decoded['https://api.openai.com/profile']?.email === name) matches = true;
+                        }
+                        
+                        if (matches) {
+                            delete cfg[provider];
+                            modified = true;
+                        }
+                    }
+                    
+                    if (modified) {
+                        console.log(`[Auth] Removing credentials from ${ap}`);
+                        atomicWriteFileSync(ap, JSON.stringify(cfg, null, 2));
+                    }
+                } catch (e) {
+                    console.error(`[Auth] Failed to update ${ap}:`, e.message);
+                }
+            }
+        });
     }
 
     const metadata = loadPoolMetadata();
