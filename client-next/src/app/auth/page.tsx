@@ -24,11 +24,24 @@ import {
   startProxy, 
   stopProxy, 
   runProxyLogin, 
+  getAccountPool,
+  rotateAccount,
+  markAccountCooldown,
+  clearAccountCooldown,
+  activateAuthProfile,
+  deleteAuthProfile,
+  clearAllAuthProfiles,
+  renameAuthProfile,
+  updateAccountMetadata,
+  getCooldownRules,
+  addCooldownRule,
+  deleteCooldownRule,
   type ProxyStatus,
-  type ProxyAccount,
-  getProxyAccounts
+  type CooldownRule
 } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AccountPoolCard } from "@/components/account-pool-card";
+import type { AccountPool, QuotaInfo } from "@/types";
 
 function Metric({ label, value, sub }: { label: string, value: string, sub?: string }) {
   return (
@@ -42,19 +55,26 @@ function Metric({ label, value, sub }: { label: string, value: string, sub?: str
 
 export default function AuthPage() {
   const [status, setStatus] = useState<ProxyStatus | null>(null);
-  const [accounts, setAccounts] = useState<ProxyAccount[]>([]);
+  const [pool, setPool] = useState<AccountPool | null>(null);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
   const loadStatus = async () => {
     try {
-      const s = await getProxyStatus();
+      const [s, poolData, rules] = await Promise.all([
+        getProxyStatus(),
+        getAccountPool('google'),
+        getCooldownRules()
+      ]);
       setStatus(s);
-      
-      const acc = await getProxyAccounts();
-      setAccounts(acc);
+      setPool(poolData.pool);
+      setQuota(poolData.quota);
+      setCooldownRules(rules);
     } catch (e) {
-      toast.error("Failed to load proxy status");
+      console.error("Failed to load status", e);
     } finally {
       setLoading(false);
     }
@@ -111,6 +131,109 @@ export default function AuthPage() {
       }
     } catch (e) {
       toast.error("Error launching login");
+    }
+  };
+
+  const handleRotate = async () => {
+    try {
+      setRotating(true);
+      await rotateAccount('google');
+      await loadStatus();
+      toast.success("Account rotated");
+    } catch (e) {
+      toast.error("Rotation failed");
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const handleActivate = async (name: string) => {
+    try {
+      await activateAuthProfile('google', name);
+      await loadStatus();
+      toast.success("Account activated");
+    } catch (e) {
+      toast.error("Activation failed");
+    }
+  };
+
+  const handleCooldown = async (name: string, rule?: string) => {
+    try {
+      await markAccountCooldown(name, 'google', undefined, rule);
+      await loadStatus();
+      toast.success("Account cooldown set");
+    } catch (e) {
+      toast.error("Cooldown failed");
+    }
+  };
+
+  const handleClearCooldown = async (name: string) => {
+    try {
+      await clearAccountCooldown(name, 'google');
+      await loadStatus();
+      toast.success("Cooldown cleared");
+    } catch (e) {
+      toast.error("Failed to clear cooldown");
+    }
+  };
+
+  const handleRemove = async (name: string) => {
+    try {
+      await deleteAuthProfile('google', name);
+      await loadStatus();
+      toast.success("Account removed");
+    } catch (e) {
+      toast.error("Removal failed");
+    }
+  };
+
+  const handleRename = async (name: string, newName: string) => {
+    try {
+      await renameAuthProfile('google', name, newName);
+      await loadStatus();
+      toast.success("Account renamed");
+    } catch (e) {
+      toast.error("Rename failed");
+    }
+  };
+
+  const handleEditMetadata = async (name: string, metadata: { projectId?: string; tier?: string }) => {
+    try {
+      await updateAccountMetadata(name, 'google', undefined, metadata.projectId, metadata.tier);
+      await loadStatus();
+      toast.success("Metadata updated");
+    } catch (e) {
+      toast.error("Update failed");
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      await clearAllAuthProfiles('google');
+      await loadStatus();
+      toast.success("All accounts cleared");
+    } catch (e) {
+      toast.error("Clear all failed");
+    }
+  };
+
+  const handleAddCooldownRule = async (name: string, duration: number) => {
+    try {
+      const rules = await addCooldownRule(name, duration);
+      setCooldownRules(rules);
+      toast.success("Rule added");
+    } catch (e) {
+      toast.error("Failed to add rule");
+    }
+  };
+
+  const handleDeleteCooldownRule = async (name: string) => {
+    try {
+      const rules = await deleteCooldownRule(name);
+      setCooldownRules(rules);
+      toast.success("Rule deleted");
+    } catch (e) {
+      toast.error("Failed to delete rule");
     }
   };
 
@@ -300,36 +423,26 @@ export default function AuthPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Active Accounts Pool
-          </CardTitle>
-          <CardDescription>Accounts currently available for rotation in the proxy.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {accounts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              No accounts found. Use the buttons above to login.
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {accounts.map(acc => (
-                <div key={acc.id} className="flex items-center gap-3 p-3 border rounded-lg bg-card">
-                  <div className={`p-2 rounded-md ${acc.provider === 'antigravity' ? 'bg-blue-500/10 text-blue-500' : 'bg-muted text-muted-foreground'}`}>
-                    <User className="h-4 w-4" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="font-medium text-sm truncate" title={acc.email}>{acc.email}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{acc.provider}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {pool && (
+        <AccountPoolCard
+          pool={pool}
+          cooldownRules={cooldownRules}
+          onRotate={handleRotate}
+          onActivate={handleActivate}
+          onCooldown={handleCooldown}
+          onClearCooldown={handleClearCooldown}
+          onRemove={handleRemove}
+          onClearAll={handleClearAll}
+          onRename={handleRename}
+          onEditMetadata={handleEditMetadata}
+          onAddAccount={() => handleLogin('antigravity')}
+          onAddCooldownRule={handleAddCooldownRule}
+          onDeleteCooldownRule={handleDeleteCooldownRule}
+          rotating={rotating}
+          isAdding={actionLoading}
+          providerName="Antigravity"
+        />
+      )}
     </div>
   );
 }

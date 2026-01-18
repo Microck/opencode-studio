@@ -2008,11 +2008,41 @@ function importCurrentGoogleAuthToPool() {
 }
 
 function syncAntigravityPool() {
-    const accounts = listAntigravityAccounts();
     const namespace = 'google.antigravity';
     const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
 
-    if (!accounts.length) {
+    // Collect accounts from multiple sources
+    const allAccounts = [];
+
+    // Source 1: antigravity-accounts.json (antigravity plugin format)
+    const antigravityAccounts = listAntigravityAccounts();
+    antigravityAccounts.forEach(acc => {
+        if (acc.email) allAccounts.push({ email: acc.email, source: 'antigravity' });
+    });
+
+    // Source 2: CLIProxyAPI auth directory (~/.cli-proxy-api/)
+    const CLIPROXY_AUTH_DIR = path.join(HOME_DIR, '.cli-proxy-api');
+    if (fs.existsSync(CLIPROXY_AUTH_DIR)) {
+        try {
+            const files = fs.readdirSync(CLIPROXY_AUTH_DIR).filter(f => f.endsWith('.json') && f.startsWith('antigravity-'));
+            files.forEach(f => {
+                // Format: antigravity-email_at_gmail_com.json
+                const parts = f.replace('.json', '').split('-');
+                if (parts.length > 1) {
+                    const emailPart = parts.slice(1).join('-');
+                    // Convert underscore notation back to email
+                    const email = emailPart.replace(/_/g, '.').replace('.gmail.com', '@gmail.com').replace('.googlemail.com', '@googlemail.com');
+                    if (email && !allAccounts.find(a => a.email === email)) {
+                        allAccounts.push({ email, source: 'cliproxy', file: f });
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('[Pool] Error reading CLIProxy auth dir:', e.message);
+        }
+    }
+
+    if (!allAccounts.length) {
         return;
     }
 
@@ -2022,12 +2052,12 @@ function syncAntigravityPool() {
     if (!metadata[namespace]) metadata[namespace] = {};
 
     const seen = new Set();
-    accounts.forEach((account, idx) => {
+    allAccounts.forEach((account, idx) => {
         const name = account.email || `account-${idx + 1}`;
         seen.add(name);
         const profilePath = path.join(profileDir, `${name}.json`);
         if (!fs.existsSync(profilePath)) {
-            atomicWriteFileSync(profilePath, JSON.stringify({ email: account.email }, null, 2));
+            atomicWriteFileSync(profilePath, JSON.stringify({ email: account.email, source: account.source }, null, 2));
         }
         if (!metadata[namespace][name]) {
             metadata[namespace][name] = {
@@ -2039,15 +2069,8 @@ function syncAntigravityPool() {
         }
     });
 
-    const profileFiles = fs.existsSync(profileDir) ? fs.readdirSync(profileDir).filter(f => f.endsWith('.json')) : [];
-    profileFiles.forEach(file => {
-        const name = file.replace('.json', '');
-        if (!seen.has(name)) {
-            fs.unlinkSync(path.join(profileDir, file));
-            if (metadata[namespace]?.[name]) delete metadata[namespace][name];
-        }
-    });
-
+    // Don't delete profiles that aren't in current sources - they might have been manually added
+    // Only update metadata for accounts we found
     savePoolMetadata(metadata);
 }
 
