@@ -2265,7 +2265,10 @@ function rotateAccount(provider, reason = 'manual_rotation') {
 // GET /api/auth/pool - Get account pool for Google (or specified provider)
 app.get('/api/auth/pool', (req, res) => {
     const provider = req.query.provider || 'google';
-    syncAntigravityPool();
+    if (provider === 'google') {
+        syncAntigravityPool();
+    }
+    importCurrentAuthToPool(provider);
     const pool = buildAccountPool(provider);
     const quota = getPoolQuota(provider, pool);
     res.json({ pool, quota });
