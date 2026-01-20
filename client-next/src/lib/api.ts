@@ -466,6 +466,8 @@ export async function cancelGoogleOAuth(): Promise<{ success: boolean }> {
 
 import type { AccountPool, QuotaInfo, PoolRotationResult } from '@/types';
 
+export type { AccountPool, QuotaInfo, PoolRotationResult };
+
 export interface PoolResponse {
   pool: AccountPool;
   quota: QuotaInfo;
@@ -634,4 +636,162 @@ export async function activateProfile(name: string): Promise<{ success: boolean 
   return data;
 }
 
+
+export interface ManagementUsage {
+  total_requests: number;
+  success_count: number;
+  failure_count: number;
+  total_tokens: number;
+  requests_by_day: Record<string, number>;
+  requests_by_hour: Record<string, number>;
+  tokens_by_day: Record<string, number>;
+  tokens_by_hour: Record<string, number>;
+  apis: Record<string, any>;
+  failed_requests: number;
+}
+
+export async function getManagementUsage(): Promise<{ usage: ManagementUsage }> {
+  const { data } = await api.get<{ usage: ManagementUsage }>('/management/usage');
+  return data;
+}
+
+export async function getManagementConfig(): Promise<any> {
+  const { data } = await api.get('/management/config');
+  return data;
+}
+
+export async function getManagementConfigYaml(): Promise<string> {
+  const { data } = await api.get('/management/config.yaml', { responseType: 'text' });
+  return data;
+}
+
+export async function saveManagementConfigYaml(yaml: string): Promise<{ ok: boolean; changed: string[] }> {
+  const { data } = await api.put<{ ok: boolean; changed: string[] }>('/management/config.yaml', yaml, {
+    headers: { 'Content-Type': 'application/yaml' }
+  });
+  return data;
+}
+
+export async function getManagementApiKeys(): Promise<{ "api-keys": string[] }> {
+  const { data } = await api.get<{ "api-keys": string[] }>('/management/api-keys');
+  return data;
+}
+
+export async function saveManagementApiKeys(keys: string[]): Promise<{ status: string }> {
+  const { data } = await api.put<{ status: string }>('/management/api-keys', keys);
+  return data;
+}
+
+export async function updateManagementApiKey(oldVal: string, newVal: string): Promise<{ status: string }> {
+  const { data } = await api.patch<{ status: string }>('/management/api-keys', { old: oldVal, new: newVal });
+  return data;
+}
+
+export async function deleteManagementApiKey(value: string): Promise<{ status: string }> {
+  const { data } = await api.delete<{ status: string }>(`/management/api-keys?value=${encodeURIComponent(value)}`);
+  return data;
+}
+
+export async function getGeminiApiKeys(): Promise<any> {
+  const { data } = await api.get('/management/gemini-api-key');
+  return data;
+}
+
+export async function saveGeminiApiKeys(keys: any[]): Promise<any> {
+  const { data } = await api.put('/management/gemini-api-key', keys);
+  return data;
+}
+
+export async function getCodexApiKeys(): Promise<any> {
+  const { data } = await api.get('/management/codex-api-key');
+  return data;
+}
+
+export async function saveCodexApiKeys(keys: any[]): Promise<any> {
+  const { data } = await api.put('/management/codex-api-key', keys);
+  return data;
+}
+
+export async function getClaudeApiKeys(): Promise<any> {
+  const { data } = await api.get('/management/claude-api-key');
+  return data;
+}
+
+export async function saveClaudeApiKeys(keys: any[]): Promise<any> {
+  const { data } = await api.put('/management/claude-api-key', keys);
+  return data;
+}
+
+export async function getQwenApiKeys(): Promise<any> {
+  const { data } = await api.get('/management/qwen-api-key');
+  return data;
+}
+
+export async function saveQwenApiKeys(keys: any[]): Promise<any> {
+  const { data } = await api.put('/management/qwen-api-key', keys);
+  return data;
+}
+
+export async function getIflowApiKeys(): Promise<any> {
+  const { data } = await api.get('/management/iflow-api-key');
+  return data;
+}
+
+export async function saveIflowApiKeys(keys: any[]): Promise<any> {
+  const { data } = await api.put('/management/iflow-api-key', keys);
+  return data;
+}
+
+export async function getDebugMode(): Promise<{ debug: boolean }> {
+  const { data } = await api.get<{ debug: boolean }>('/management/debug');
+  return data;
+}
+
+export async function setDebugMode(enabled: boolean): Promise<{ status: string }> {
+  const { data } = await api.put<{ status: string }>('/management/debug', { value: enabled });
+  return data;
+}
+
+export async function getFileLogging(): Promise<{ "logging-to-file": boolean }> {
+  const { data } = await api.get<{ "logging-to-file": boolean }>('/management/logging-to-file');
+  return data;
+}
+
+export async function setFileLogging(enabled: boolean): Promise<{ status: string }> {
+  const { data } = await api.patch<{ status: string }>('/management/logging-to-file', { value: enabled });
+  return data;
+}
+
+export async function getManagementLogs(after?: number): Promise<{ lines: string[]; "line-count": number; "latest-timestamp": number }> {
+  const params = after ? `?after=${after}` : '';
+  const { data } = await api.get<{ lines: string[]; "line-count": number; "latest-timestamp": number }>(`/management/logs${params}`);
+  return data;
+}
+
+export async function clearManagementLogs(): Promise<{ success: boolean; removed: number }> {
+  const { data } = await api.delete<{ success: boolean; removed: number }>('/management/logs');
+  return data;
+}
+
+export async function getProxyUrl(): Promise<{ "proxy-url": string }> {
+  const { data } = await api.get<{ "proxy-url": string }>('/management/proxy-url');
+  return data;
+}
+
+export async function setProxyUrl(url: string): Promise<{ status: string }> {
+  const { data } = await api.put<{ status: string }>('/management/proxy-url', { value: url });
+  return data;
+}
+
+export async function getWsAuth(): Promise<{ "ws-auth": boolean }> {
+  const { data } = await api.get<{ "ws-auth": boolean }>('/management/ws-auth');
+  return data;
+}
+
+export async function setWsAuth(enabled: boolean): Promise<{ status: string }> {
+  const { data } = await api.patch<{ status: string }>('/management/ws-auth', { value: enabled });
+  return data;
+}
+
 export default api;
+
