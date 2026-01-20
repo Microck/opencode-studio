@@ -1,4 +1,4 @@
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -12,7 +12,6 @@ const PROXY_AUTH_DIR = path.join(HOME_DIR, '.cli-proxy-api');
 let proxyProcess = null;
 let isProxyRunning = false;
 
-// Helper to check if binary exists
 const checkBinary = (cmd) => {
     return new Promise((resolve) => {
         if (path.isAbsolute(cmd)) {
@@ -48,10 +47,8 @@ const getProxyCommand = async () => {
     return null;
 };
 
-// Config Management
 const loadProxyConfig = () => {
     if (!fs.existsSync(PROXY_CONFIG_FILE)) {
-        // Default config
         const defaultConfig = {
             port: 8317,
             cors: true,
@@ -98,24 +95,24 @@ const saveProxyConfig = (config) => {
     }
 };
 
-// Process Management
 const startProxy = async () => {
     if (isProxyRunning) return { success: true, message: "Already running" };
 
     const cmd = await getProxyCommand();
     if (!cmd) return { success: false, error: "CLIProxyAPI binary not found. Please install it." };
 
-    // Ensure config exists
     if (!fs.existsSync(PROXY_CONFIG_FILE)) loadProxyConfig();
 
-    console.log(`Starting proxy with command: ${cmd} -config ${PROXY_CONFIG_FILE}`);
+    console.log(`Starting proxy with command: ${cmd} -config "${PROXY_CONFIG_FILE}"`);
     
     try {
-        // -no-browser flag to prevent it from trying to open browser on startup if that's a thing
         proxyProcess = spawn(cmd, ['-config', PROXY_CONFIG_FILE], {
-            detached: false,
-            stdio: 'pipe' 
+            detached: true,
+            stdio: 'pipe',
+            windowsHide: true
         });
+        
+        proxyProcess.unref();
 
         proxyProcess.stdout.on('data', (data) => {
             console.log(`[Proxy] ${data}`);
@@ -150,6 +147,27 @@ const stopProxy = () => {
 
 const getStatus = async () => {
     const cmd = await getProxyCommand();
+    
+    let portBusy = false;
+    try {
+        if (process.platform === 'win32') {
+            const out = execSync('netstat -ano | findstr :8317 | findstr LISTENING', { encoding: 'utf8' });
+            portBusy = out.includes('LISTENING');
+        } else {
+            const out = execSync('lsof -i :8317 | grep LISTEN', { encoding: 'utf8' });
+            portBusy = out.length > 0;
+        }
+    } catch (e) {
+        portBusy = false;
+    }
+
+    if (portBusy) {
+        isProxyRunning = true;
+    } else {
+        isProxyRunning = false;
+        proxyProcess = null;
+    }
+
     return { 
         running: isProxyRunning, 
         pid: proxyProcess?.pid,
@@ -174,8 +192,6 @@ const runLogin = async (provider) => {
         default: return { success: false, error: "Unknown provider" };
     }
 
-    // Return the command so the UI can spawn a terminal for it
-    // We pass the config file so it saves the token to the right place/knows the auth-dir
     const fullCmd = `${cmd} ${loginFlag} -config "${PROXY_CONFIG_FILE}"`;
     
     return { 
