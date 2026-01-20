@@ -84,6 +84,7 @@ app.use(cors({
 }));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(bodyParser.text({ type: ['text/*', 'application/yaml'], limit: '50mb' }));
 
 const HOME_DIR = os.homedir();
 const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'studio.json');
@@ -2637,6 +2638,129 @@ app.get('/api/proxy/config', (req, res) => {
 app.post('/api/proxy/config', (req, res) => {
     proxyManager.saveProxyConfig(req.body);
     res.json({ success: true });
+});
+
+const PROXY_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'cliproxy.yaml');
+
+app.get('/api/management/config.yaml', (req, res) => {
+    console.log('GET config.yaml hit');
+    if (!fs.existsSync(PROXY_CONFIG_PATH)) {
+        console.log('Config file not found:', PROXY_CONFIG_PATH);
+        return res.send("");
+    }
+    console.log('Sending config file:', PROXY_CONFIG_PATH);
+    const content = fs.readFileSync(PROXY_CONFIG_PATH, 'utf8');
+    res.send(content);
+});
+
+app.put('/api/management/config.yaml', (req, res) => {
+    fs.writeFileSync(PROXY_CONFIG_PATH, req.body);
+    res.json({ ok: true, changed: [] });
+});
+
+app.get('/api/management/api-keys', (req, res) => {
+    if (!fs.existsSync(PROXY_CONFIG_PATH)) return res.json({ "api-keys": [] });
+    const content = fs.readFileSync(PROXY_CONFIG_PATH, 'utf8');
+    const yaml = require('js-yaml');
+    try {
+        const doc = yaml.load(content) || {};
+        const keys = [];
+        if (doc['management-key']) keys.push(doc['management-key']);
+        if (Array.isArray(doc['api-keys'])) keys.push(...doc['api-keys']);
+        res.json({ "api-keys": [...new Set(keys)].filter(k => k) });
+    } catch (e) {
+        res.json({ "api-keys": [] });
+    }
+});
+
+app.put('/api/management/api-keys', (req, res) => {
+    const keys = req.body;
+    if (!fs.existsSync(PROXY_CONFIG_PATH)) return res.status(404).json({ error: "Config not found" });
+    const content = fs.readFileSync(PROXY_CONFIG_PATH, 'utf8');
+    const yaml = require('js-yaml');
+    try {
+        const doc = yaml.load(content) || {};
+        doc['api-keys'] = keys;
+        if (keys.length > 0) doc['management-key'] = keys[0];
+        
+        fs.writeFileSync(PROXY_CONFIG_PATH, yaml.dump(doc));
+        res.json({ status: "ok" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/management/logs', (req, res) => {
+    if (!fs.existsSync(LOG_DIR)) return res.json({ lines: [], "line-count": 0, "latest-timestamp": Date.now() });
+    const logFiles = fs.readdirSync(LOG_DIR).filter(f => f.endsWith('.log'));
+    if (logFiles.length === 0) return res.json({ lines: [], "line-count": 0, "latest-timestamp": Date.now() });
+    
+    const latest = logFiles.map(f => ({ name: f, time: fs.statSync(path.join(LOG_DIR, f)).mtime.getTime() }))
+        .sort((a, b) => b.time - a.time)[0];
+    
+    const content = fs.readFileSync(path.join(LOG_DIR, latest.name), 'utf8');
+    const lines = content.split('\n').slice(-1000);
+    res.json({ lines, "line-count": lines.length, "latest-timestamp": latest.time });
+});
+
+app.get('/api/management/usage', (req, res) => {
+    res.json({
+        usage: {
+            total_requests: 0,
+            success_count: 0,
+            failure_count: 0,
+            total_tokens: 0,
+            requests_by_day: {},
+            requests_by_hour: {},
+            tokens_by_day: {},
+            tokens_by_hour: {},
+            apis: {},
+            failed_requests: 0
+        }
+    });
+});
+
+app.get('/api/management/logging-to-file', (req, res) => {
+    if (!fs.existsSync(PROXY_CONFIG_PATH)) return res.json({ "logging-to-file": false });
+    try {
+        const content = fs.readFileSync(PROXY_CONFIG_PATH, 'utf8');
+        const yaml = require('js-yaml');
+        const doc = yaml.load(content) || {};
+        res.json({ "logging-to-file": !!doc['logging-to-file'] });
+    } catch (e) {
+        res.json({ "logging-to-file": false });
+    }
+});
+
+app.patch('/api/management/logging-to-file', (req, res) => {
+    if (!fs.existsSync(PROXY_CONFIG_PATH)) return res.status(404).json({ error: "Config not found" });
+    const enabled = req.body.value;
+    const content = fs.readFileSync(PROXY_CONFIG_PATH, 'utf8');
+    const yaml = require('js-yaml');
+    try {
+        const doc = yaml.load(content) || {};
+        doc['logging-to-file'] = enabled;
+        fs.writeFileSync(PROXY_CONFIG_PATH, yaml.dump(doc));
+        res.json({ status: "ok" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/management/logs', (req, res) => {
+    if (!fs.existsSync(LOG_DIR)) return res.json({ success: true, removed: 0 });
+    const logFiles = fs.readdirSync(LOG_DIR).filter(f => f.endsWith('.log'));
+    let removed = 0;
+    try {
+        logFiles.forEach(f => {
+            const filePath = path.join(LOG_DIR, f);
+            fs.unlinkSync(filePath);
+            removed++;
+        });
+        res.json({ success: true, removed });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/api/profiles', (req, res) => {
