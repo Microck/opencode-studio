@@ -561,4 +561,29 @@ export async function applyPreset(id: string, mode: 'exclusive' | 'additive'): P
   await api.post(`/presets/${id}/apply`, { mode });
 }
 
+export interface ProfileList {
+  profiles: string[];
+  active: string | null;
+}
+
+export async function getProfiles(): Promise<ProfileList> {
+  const { data } = await api.get<ProfileList>('/profiles');
+  return data;
+}
+
+export async function createProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.post('/profiles', { name });
+  return data;
+}
+
+export async function deleteProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.delete(`/profiles/${encodeURIComponent(name)}`);
+  return data;
+}
+
+export async function activateProfile(name: string): Promise<{ success: boolean }> {
+  const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
+  return data;
+}
+
 export default api;
