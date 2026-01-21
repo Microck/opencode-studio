@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +38,19 @@ export default function ProfilesPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
 
+  const getErrorMessage = (err: unknown) => {
+    if (axios.isAxiosError(err)) return err.response?.data?.error || err.message;
+    if (err instanceof Error) return err.message;
+    return null;
+  };
+
   const loadProfiles = async () => {
     try {
       const res = await getProfiles();
       setData(res);
     } catch (e) {
-      toast.error("Failed to load profiles");
+      const msg = getErrorMessage(e);
+      toast.error(msg ? `Failed to load profiles: ${msg}` : "Failed to load profiles");
     } finally {
       setLoading(false);
     }
@@ -62,7 +70,8 @@ export default function ProfilesPage() {
       setNewProfileName("");
       loadProfiles();
     } catch (e) {
-      toast.error("Failed to create profile");
+      const msg = getErrorMessage(e);
+      toast.error(msg ? `Failed to create profile: ${msg}` : "Failed to create profile");
     } finally {
       setCreating(false);
     }
@@ -75,7 +84,8 @@ export default function ProfilesPage() {
       toast.success("Profile deleted");
       loadProfiles();
     } catch (e) {
-      toast.error("Failed to delete profile");
+      const msg = getErrorMessage(e);
+      toast.error(msg ? `Failed to delete profile: ${msg}` : "Failed to delete profile");
     } finally {
       setDeleteTarget(null);
     }
@@ -88,7 +98,8 @@ export default function ProfilesPage() {
       toast.success(`Switched to ${name}`);
       loadProfiles();
     } catch (e) {
-      toast.error("Failed to switch profile");
+      const msg = getErrorMessage(e);
+      toast.error(msg ? `Failed to switch profile: ${msg}` : "Failed to switch profile");
     } finally {
       setActivating(null);
     }

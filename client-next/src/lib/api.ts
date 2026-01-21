@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.16.5';
+export const MIN_SERVER_VERSION = '1.16.6';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -617,22 +617,22 @@ export interface ProfileList {
 }
 
 export async function getProfiles(): Promise<ProfileList> {
-  const { data } = await api.get<ProfileList>('/api/profiles');
+  const { data } = await api.get<ProfileList>('/profiles');
   return data;
 }
 
 export async function createProfile(name: string): Promise<{ success: boolean }> {
-  const { data } = await api.post('/api/profiles', { name });
+  const { data } = await api.post('/profiles', { name });
   return data;
 }
 
 export async function deleteProfile(name: string): Promise<{ success: boolean }> {
-  const { data } = await api.delete(`/api/profiles/${encodeURIComponent(name)}`);
+  const { data } = await api.delete(`/profiles/${encodeURIComponent(name)}`);
   return data;
 }
 
 export async function activateProfile(name: string): Promise<{ success: boolean }> {
-  const { data } = await api.post(`/api/profiles/${encodeURIComponent(name)}/activate`);
+  const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
   return data;
 }
 
@@ -794,4 +794,3 @@ export async function setWsAuth(enabled: boolean): Promise<{ status: string }> {
 }
 
 export default api;
-
