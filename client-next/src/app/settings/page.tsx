@@ -24,7 +24,6 @@ import { Label } from "@/components/ui/label";
 import {
   Settings,
   Shield,
-  ShieldCheck,
   Bot,
   Keyboard,
   Monitor,
@@ -79,7 +78,6 @@ export default function SettingsPage() {
     tui: false,
     path: false,
     auth: false,
-    proxy: false,
     prompts: false,
     cooldowns: false,
     sync: false,
@@ -99,20 +97,6 @@ export default function SettingsPage() {
   const [savingPrompt, setSavingPrompt] = useState(false);
   const { theme } = useTheme();
 
-  const PROXY_URL = "http://localhost:8317/v1";
-  const isProxyEnabled = config?.base_url === PROXY_URL;
-
-  const toggleProxy = async (enabled: boolean) => {
-    if (!config) return;
-    const newConfig = { ...config };
-    if (enabled) {
-      newConfig.base_url = PROXY_URL;
-    } else {
-      delete newConfig.base_url;
-    }
-    await saveConfig(newConfig);
-    refreshData();
-  };
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -491,40 +475,7 @@ export default function SettingsPage() {
           </CollapsibleContent>
         </Card>
       </Collapsible>
-
-      <Collapsible open={openSections.proxy} onOpenChange={() => toggleSection("proxy")}>
-        <Card className="hover-lift">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5" />
-                  <CardTitle>Proxy Configuration</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.proxy ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Configure local proxy server for rate limit handling</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="animate-scale-in">
-            <CardContent className="space-y-6 pt-0">
-              <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                <div>
-                  <Label>Enable Proxy</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Route all requests through the local proxy ({PROXY_URL})
-                  </p>
-                </div>
-                <Switch
-                  checked={isProxyEnabled}
-                  onCheckedChange={toggleProxy}
-                />
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
+ 
       <Collapsible open={openSections.prompts} onOpenChange={() => toggleSection("prompts")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
