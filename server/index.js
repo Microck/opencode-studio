@@ -1104,7 +1104,11 @@ async function ensureGitHubRepo(token, repoName) {
     
     if (response.ok) {
         const data = await response.json();
-        if (!data.default_branch) {
+        const branch = data.default_branch || 'main';
+        const refRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (refRes.status === 404 || refRes.status === 409) {
             await bootstrapEmptyRepo(token, owner, repo);
         }
         return data;
