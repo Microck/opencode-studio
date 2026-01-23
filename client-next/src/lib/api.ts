@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.17.0';
+export const MIN_SERVER_VERSION = '1.18.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -263,17 +263,6 @@ export async function getDropboxAuthUrl(redirectUri?: string): Promise<{ url: st
 
 export async function dropboxCallback(code: string, state: string): Promise<{ success: boolean; provider: string }> {
   const { data } = await api.post('/sync/dropbox/callback', { code, state });
-  return data;
-}
-
-export async function getGoogleDriveAuthUrl(redirectUri?: string): Promise<{ url: string }> {
-  const params = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
-  const { data } = await api.get<{ url: string }>(`/sync/gdrive/auth-url${params}`);
-  return data;
-}
-
-export async function googleDriveCallback(code: string, state: string): Promise<{ success: boolean; provider: string }> {
-  const { data } = await api.post('/sync/gdrive/callback', { code, state });
   return data;
 }
 
@@ -583,6 +572,28 @@ export async function deleteProfile(name: string): Promise<{ success: boolean }>
 
 export async function activateProfile(name: string): Promise<{ success: boolean }> {
   const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
+  return data;
+}
+
+import type { OhMyPreferences, OhMyConfigResponse, GitHubBackupStatus, GitHubBackupResult, GitHubBackupConfig } from '@/types';
+
+export async function getOhMyConfig(): Promise<OhMyConfigResponse> {
+  const { data } = await api.get<OhMyConfigResponse>('/ohmyopencode');
+  return data;
+}
+
+export async function saveOhMyConfig(preferences: OhMyPreferences): Promise<OhMyConfigResponse> {
+  const { data } = await api.post<OhMyConfigResponse>('/ohmyopencode', { preferences });
+  return data;
+}
+
+export async function getGitHubBackupStatus(): Promise<GitHubBackupStatus> {
+  const { data } = await api.get<GitHubBackupStatus>('/github/backup/status');
+  return data;
+}
+
+export async function backupToGitHub(config: GitHubBackupConfig): Promise<GitHubBackupResult> {
+  const { data } = await api.post<GitHubBackupResult>('/github/backup', config);
   return data;
 }
 
