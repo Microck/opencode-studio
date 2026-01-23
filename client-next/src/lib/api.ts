@@ -12,7 +12,7 @@ const api = axios.create({
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.23.0';
+export const MIN_SERVER_VERSION = '1.24.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);

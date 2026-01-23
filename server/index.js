@@ -1163,23 +1163,28 @@ async function bootstrapEmptyRepo(token, owner, repo) {
 function collectBlobs(rootDir, basePath = '', blobs = []) {
     const dir = basePath || rootDir;
     if (!fs.existsSync(dir)) return blobs;
+    const MAX_FILE_SIZE = 1024 * 1024;
+    const SKIP_EXT = ['.log', '.tmp', '.db', '.sqlite', '.cache', '.pack', '.idx'];
     
     for (const name of fs.readdirSync(dir)) {
         const fullPath = path.join(dir, name);
         const stat = fs.statSync(fullPath);
         
         if (stat.isDirectory()) {
-            if (name === 'node_modules' || name === '.git' || name === '.next') continue;
+            if (name === 'node_modules' || name === '.git' || name === '.next' || name === 'cache') continue;
             collectBlobs(rootDir, fullPath, blobs);
         } else {
-            if (name.endsWith('.log') || name.endsWith('.tmp')) continue;
-            const content = fs.readFileSync(fullPath, 'utf8');
-            blobs.push({
-                path: path.relative(rootDir, fullPath).replace(/\\/g, '/'),
-                mode: '100644',
-                type: 'blob',
-                content
-            });
+            if (SKIP_EXT.some(ext => name.endsWith(ext))) continue;
+            if (stat.size > MAX_FILE_SIZE) continue;
+            try {
+                const content = fs.readFileSync(fullPath, 'utf8');
+                blobs.push({
+                    path: path.relative(rootDir, fullPath).replace(/\\/g, '/'),
+                    mode: '100644',
+                    type: 'blob',
+                    content
+                });
+            } catch (e) { }
         }
     }
     return blobs;
