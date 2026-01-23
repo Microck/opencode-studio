@@ -1096,8 +1096,7 @@ async function getGitHubUser(token) {
 }
 
 async function ensureGitHubRepo(token, repoName) {
-    const owner = repoName.split('/')[0];
-    const repo = repoName.split('/')[1];
+    const [owner, repo] = repoName.split('/');
     
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -1105,6 +1104,9 @@ async function ensureGitHubRepo(token, repoName) {
     
     if (response.ok) {
         const data = await response.json();
+        if (!data.default_branch) {
+            await bootstrapEmptyRepo(token, owner, repo);
+        }
         return data;
     }
     
@@ -1118,7 +1120,8 @@ async function ensureGitHubRepo(token, repoName) {
             body: JSON.stringify({
                 name: repo,
                 private: true,
-                description: 'OpenCode Studio backup'
+                description: 'OpenCode Studio backup',
+                auto_init: true
             })
         });
         
@@ -1126,15 +1129,31 @@ async function ensureGitHubRepo(token, repoName) {
             return await createRes.json();
         }
         
-        if (createRes.ok) {
-            return await createRes.json();
-        }
         const err = await createRes.text();
         throw new Error(`Failed to create repo: ${err}`);
     }
     
     const err = await response.text();
     throw new Error(`Failed to check repo: ${err}`);
+}
+
+async function bootstrapEmptyRepo(token, owner, repo) {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/README.md`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message: 'Initial commit',
+            content: Buffer.from('# OpenCode Studio Backup\n').toString('base64')
+        })
+    });
+    
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Failed to bootstrap repo: ${err}`);
+    }
 }
 
 function collectBlobs(rootDir, basePath = '', blobs = []) {
