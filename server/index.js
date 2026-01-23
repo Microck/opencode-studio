@@ -1163,7 +1163,6 @@ async function bootstrapEmptyRepo(token, owner, repo) {
 function collectBlobs(rootDir, basePath = '', blobs = []) {
     const dir = basePath || rootDir;
     if (!fs.existsSync(dir)) return blobs;
-    const MAX_FILE_SIZE = 1024 * 1024;
     const SKIP_EXT = ['.log', '.tmp', '.db', '.sqlite', '.cache', '.pack', '.idx'];
     
     for (const name of fs.readdirSync(dir)) {
@@ -1175,7 +1174,6 @@ function collectBlobs(rootDir, basePath = '', blobs = []) {
             collectBlobs(rootDir, fullPath, blobs);
         } else {
             if (SKIP_EXT.some(ext => name.endsWith(ext))) continue;
-            if (stat.size > MAX_FILE_SIZE) continue;
             try {
                 const content = fs.readFileSync(fullPath, 'utf8');
                 blobs.push({
@@ -1382,20 +1380,31 @@ app.post('/api/github/backup', async (req, res) => {
         
         const opencodeBlobs = collectBlobs(opencodeDir);
         const studioBlobs = collectBlobs(studioDir);
+        const skipped = [];
         
         for (const blob of opencodeBlobs) {
-            blob.sha = await createGitHubBlob(token, repoName, blob);
-            blob.path = `opencode/${blob.path}`;
-            delete blob.content;
+            try {
+                blob.sha = await createGitHubBlob(token, repoName, blob);
+                blob.path = `opencode/${blob.path}`;
+                delete blob.content;
+            } catch (e) {
+                skipped.push({ path: `opencode/${blob.path}`, reason: e.message, size: Buffer.byteLength(blob.content) });
+                blob.skip = true;
+            }
         }
         
         for (const blob of studioBlobs) {
-            blob.sha = await createGitHubBlob(token, repoName, blob);
-            blob.path = `opencode-studio/${blob.path}`;
-            delete blob.content;
+            try {
+                blob.sha = await createGitHubBlob(token, repoName, blob);
+                blob.path = `opencode-studio/${blob.path}`;
+                delete blob.content;
+            } catch (e) {
+                skipped.push({ path: `opencode-studio/${blob.path}`, reason: e.message, size: Buffer.byteLength(blob.content) });
+                blob.skip = true;
+            }
         }
         
-        const allBlobs = [...opencodeBlobs, ...studioBlobs];
+        const allBlobs = [...opencodeBlobs, ...studioBlobs].filter(b => !b.skip);
         const rootTreeSha = await createGitHubTree(token, repoName, allBlobs);
         
         const timestamp = new Date().toISOString();
@@ -1408,7 +1417,7 @@ app.post('/api/github/backup', async (req, res) => {
         studio.lastGithubBackup = timestamp;
         saveStudioConfig(studio);
         
-        res.json({ success: true, timestamp, commit: commitSha, url: `https://github.com/${repoName}` });
+        res.json({ success: true, timestamp, commit: commitSha, url: `https://github.com/${repoName}`, skipped });
     } catch (err) {
         console.error('GitHub backup error:', err);
         res.status(500).json({ error: err.message });
