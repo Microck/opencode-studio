@@ -379,8 +379,18 @@ export interface OhMyModelChoice {
   available: boolean;
 }
 
+export interface OhMyThinkingConfig {
+  type: 'enabled' | 'disabled';
+}
+
+export interface OhMyReasoningConfig {
+  effort: 'low' | 'medium' | 'high';
+}
+
 export interface OhMyAgentPreferences {
   choices: OhMyModelChoice[];
+  thinking?: OhMyThinkingConfig;
+  reasoning?: OhMyReasoningConfig;
 }
 
 export interface OhMyPreferences {

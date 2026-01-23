@@ -9,6 +9,9 @@ build/
 .next/
 out/
 
+# Worktrees
+.worktrees/
+
 # Cache
 .cache/
 *.tsbuildinfo

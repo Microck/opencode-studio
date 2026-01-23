@@ -48,7 +48,18 @@ import type { PermissionValue, OpencodeConfig, OhMyPreferences, OhMyAgentPrefere
 const THEMES = ["dark", "light", "auto"] as const;
 const SHARE_OPTIONS = ["manual", "auto", "disabled"] as const;
 const PERMISSION_VALUES: PermissionValue[] = ["ask", "allow", "deny"];
-const AGENT_NAMES = ["plan", "build", "general", "explore", "title", "summary", "compaction"] as const;
+
+const OHMY_AGENTS = [
+  { id: "Sisyphus", name: "Sisyphus", desc: "Main coding agent - handles implementation, debugging, and code changes" },
+  { id: "oracle", name: "Oracle", desc: "Senior advisor for architecture decisions, code review, and complex reasoning" },
+  { id: "librarian", name: "Librarian", desc: "Documentation lookup, external code search, and library research" },
+  { id: "explore", name: "Explore", desc: "Codebase navigation, file discovery, and pattern searching" },
+  { id: "frontend-ui-ux-engineer", name: "Frontend UI/UX", desc: "Visual design, styling, and UI component implementation" },
+  { id: "document-writer", name: "Document Writer", desc: "README files, API docs, and technical documentation" },
+  { id: "multimodal-looker", name: "Multimodal Looker", desc: "Image/PDF analysis and visual content interpretation" },
+] as const;
+
+const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 
 const ESSENTIAL_KEYBINDS = [
   ["leader", "Leader key"],
@@ -346,7 +357,7 @@ const handleSyncPull = async () => {
     }
   };
 
-  const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'available', value: string | boolean) => {
+const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'available', value: string | boolean) => {
     setOhMyPrefs(prev => {
       const agents = { ...prev.agents };
       if (!agents[agent]) {
@@ -355,7 +366,24 @@ const handleSyncPull = async () => {
       const choices = [...agents[agent].choices];
       while (choices.length < 3) choices.push({ model: '', available: true });
       choices[index] = { ...choices[index], [field]: value };
-      agents[agent] = { choices };
+      agents[agent] = { ...agents[agent], choices };
+      return { agents };
+    });
+  };
+
+  const updateOhMyAgentConfig = (agent: string, field: 'thinking' | 'reasoning', value: { type: 'enabled' | 'disabled' } | { effort: 'low' | 'medium' | 'high' } | undefined) => {
+    setOhMyPrefs(prev => {
+      const agents = { ...prev.agents };
+      if (!agents[agent]) {
+        agents[agent] = { choices: [{ model: '', available: true }, { model: '', available: true }, { model: '', available: true }] };
+      }
+      const updated = { ...agents[agent] };
+      if (value === undefined) {
+        delete updated[field];
+      } else {
+        (updated as Record<string, unknown>)[field] = value;
+      }
+      agents[agent] = updated;
       return { agents };
     });
   };
@@ -888,7 +916,7 @@ const handleSyncPull = async () => {
         </Card>
       </Collapsible>
 
-      <Collapsible open={openSections.ohmy} onOpenChange={() => toggleSection("ohmy")}>
+<Collapsible open={openSections.ohmy} onOpenChange={() => toggleSection("ohmy")}>
         <Card className="hover-lift">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -904,32 +932,80 @@ const handleSyncPull = async () => {
           </CollapsibleTrigger>
           <CollapsibleContent className="animate-scale-in">
             <CardContent className="space-y-6 pt-0">
-              {AGENT_NAMES.map((agent) => {
-                const agentPrefs = ohMyPrefs.agents[agent] || { choices: [] };
+              {OHMY_AGENTS.map(({ id, name, desc }) => {
+                const agentPrefs = ohMyPrefs.agents[id] || { choices: [] };
                 const choices = [...agentPrefs.choices];
                 while (choices.length < 3) choices.push({ model: '', available: true });
                 return (
-                  <div key={agent} className="p-4 bg-background rounded-lg space-y-3">
-                    <Label className="text-base capitalize">{agent}</Label>
+                  <div key={id} className="p-4 bg-background rounded-lg space-y-4">
+                    <div>
+                      <Label className="text-base font-semibold">{name}</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                    </div>
+                    
                     <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wide">Model Fallbacks</Label>
                       {[0, 1, 2].map((i) => (
                         <div key={i} className="flex items-center gap-3">
                           <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
                           <Input
-                            placeholder={`Model ${i + 1}`}
+                            placeholder={`Model ${i + 1} (e.g. google/gemini-3-pro)`}
                             value={choices[i]?.model || ''}
-                            onChange={(e) => updateOhMyAgent(agent, i, 'model', e.target.value)}
+                            onChange={(e) => updateOhMyAgent(id, i, 'model', e.target.value)}
                             className="flex-1"
                           />
                           <div className="flex items-center gap-2">
                             <Label className="text-xs text-muted-foreground">Available</Label>
                             <Switch
                               checked={choices[i]?.available ?? true}
-                              onCheckedChange={(v) => updateOhMyAgent(agent, i, 'available', v)}
+                              onCheckedChange={(v) => updateOhMyAgent(id, i, 'available', v)}
                             />
                           </div>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Thinking (Gemini)</Label>
+                        <Select
+                          value={agentPrefs.thinking?.type || 'disabled'}
+                          onValueChange={(v) => updateOhMyAgentConfig(id, 'thinking', { type: v as 'enabled' | 'disabled' })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="disabled">Disabled</SelectItem>
+                            <SelectItem value="enabled">Enabled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">Extended thinking for Gemini models</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Reasoning (OpenAI)</Label>
+                        <Select
+                          value={agentPrefs.reasoning?.effort || 'disabled'}
+                          onValueChange={(v) => {
+                            if (v === 'disabled') {
+                              updateOhMyAgentConfig(id, 'reasoning', undefined);
+                            } else {
+                              updateOhMyAgentConfig(id, 'reasoning', { effort: v as 'low' | 'medium' | 'high' });
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="disabled">Disabled</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">Reasoning effort for o-series models</p>
+                      </div>
                     </div>
                   </div>
                 );
