@@ -1176,7 +1176,7 @@ app.get('/api/github/backup/status', async (req, res) => {
         if (!user) return res.json({ connected: false, config: backupConfig, error: 'Failed to get GitHub user' });
         
         if (!backupConfig.repo) {
-            return res.json({ connected: true, user: user.login, config: backupConfig });
+            return res.json({ connected: true, user: user.login, config: backupConfig, autoSync: studio.githubAutoSync || false });
         }
         
         const owner = backupConfig.owner || user.login;
@@ -1185,11 +1185,11 @@ app.get('/api/github/backup/status', async (req, res) => {
         });
         
         if (!response.ok) {
-            return res.json({ connected: true, user: user.login, config: backupConfig, repoExists: false });
+            return res.json({ connected: true, user: user.login, config: backupConfig, repoExists: false, autoSync: studio.githubAutoSync || false });
         }
         
         const data = await response.json();
-        res.json({ connected: true, user: user.login, config: backupConfig, repoExists: true, lastUpdated: data.pushed_at });
+        res.json({ connected: true, user: user.login, config: backupConfig, repoExists: true, lastUpdated: data.pushed_at, autoSync: studio.githubAutoSync || false });
     } catch (err) {
         res.json({ connected: false, error: err.message });
     }
@@ -1265,6 +1265,68 @@ app.post('/api/github/backup', async (req, res) => {
         console.error('GitHub backup error:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+app.post('/api/github/restore', async (req, res) => {
+    let tempDir = null;
+    try {
+        const token = await getGitHubToken();
+        if (!token) return res.status(400).json({ error: 'Not logged in to gh CLI. Run: gh auth login' });
+        
+        const user = await getGitHubUser(token);
+        if (!user) return res.status(400).json({ error: 'Failed to get GitHub user' });
+        
+        const { owner, repo, branch } = req.body;
+        const studio = loadStudioConfig();
+        
+        const finalOwner = owner || studio.githubBackup?.owner || user.login;
+        const finalRepo = repo || studio.githubBackup?.repo;
+        const finalBranch = branch || studio.githubBackup?.branch || 'main';
+        
+        if (!finalRepo) return res.status(400).json({ error: 'No repo configured' });
+        
+        const repoName = `${finalOwner}/${finalRepo}`;
+        
+        const opencodeConfig = getConfigPath();
+        if (!opencodeConfig) return res.status(400).json({ error: 'No opencode config path found' });
+        
+        const opencodeDir = path.dirname(opencodeConfig);
+        const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
+        
+        tempDir = path.join(os.tmpdir(), `opencode-restore-${Date.now()}`);
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        await execPromise(`git clone --depth 1 -b ${finalBranch} https://x-access-token:${token}@github.com/${repoName}.git .`, { cwd: tempDir });
+        
+        const backupOpencodeDir = path.join(tempDir, 'opencode');
+        const backupStudioDir = path.join(tempDir, 'opencode-studio');
+        
+        if (!fs.existsSync(backupOpencodeDir)) {
+            fs.rmSync(tempDir, { recursive: true });
+            return res.status(400).json({ error: 'No opencode backup found in repository' });
+        }
+        
+        copyDirContents(backupOpencodeDir, opencodeDir);
+        if (fs.existsSync(backupStudioDir)) {
+            copyDirContents(backupStudioDir, studioDir);
+        }
+        
+        fs.rmSync(tempDir, { recursive: true });
+        
+        res.json({ success: true, message: 'Config restored from GitHub' });
+    } catch (err) {
+        if (tempDir && fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true });
+        console.error('GitHub restore error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/github/autosync', async (req, res) => {
+    const studio = loadStudioConfig();
+    const enabled = req.body.enabled;
+    studio.githubAutoSync = enabled;
+    saveStudioConfig(studio);
+    res.json({ success: true, enabled });
 });
 
 const getSkillDir = () => {

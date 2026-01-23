@@ -597,4 +597,14 @@ export async function backupToGitHub(config: GitHubBackupConfig): Promise<GitHub
   return data;
 }
 
+export async function restoreFromGitHub(config: GitHubBackupConfig): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.post<{ success: boolean; message: string }>('/github/restore', config);
+  return data;
+}
+
+export async function setGitHubAutoSync(enabled: boolean): Promise<{ success: boolean; enabled: boolean }> {
+  const { data } = await api.post<{ success: boolean; enabled: boolean }>('/github/autosync', { enabled });
+  return data;
+}
+
 export default api;

@@ -418,6 +418,7 @@ export interface GitHubBackupStatus {
   repoExists?: boolean;
   lastUpdated?: string;
   error?: string;
+  autoSync?: boolean;
 }
 
 export interface GitHubBackupResult {
