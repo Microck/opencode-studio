@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import api, { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, getGoogleDriveAuthUrl, googleDriveCallback, disconnectSync, getCooldownRules, addCooldownRule, deleteCooldownRule, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus, type CooldownRule } from "@/lib/api";
+import api, { getPaths, setConfigPath, getBackup, restoreBackup, getAuthDebug, getSyncStatus, setSyncConfig, syncPush, syncPull, getDropboxAuthUrl, dropboxCallback, disconnectSync, getCooldownRules, addCooldownRule, deleteCooldownRule, getOhMyConfig, saveOhMyConfig, getGitHubBackupStatus, backupToGitHub, type PathsInfo, type BackupData, type AuthDebugInfo, type SyncStatus, type CooldownRule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -38,11 +38,12 @@ import {
   CloudDownload,
   Loader2,
   FileCode,
+  Github,
 } from "lucide-react";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
-import type { PermissionValue, OpencodeConfig } from "@/types";
+import type { PermissionValue, OpencodeConfig, OhMyPreferences, OhMyAgentPreferences, GitHubBackupStatus } from "@/types";
 
 const THEMES = ["dark", "light", "auto"] as const;
 const SHARE_OPTIONS = ["manual", "auto", "disabled"] as const;
@@ -70,7 +71,7 @@ export default function SettingsPage() {
   const [authDebug, setAuthDebug] = useState<AuthDebugInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     general: true,
     permissions: false,
     agent: false,
@@ -82,6 +83,8 @@ export default function SettingsPage() {
     cooldowns: false,
     sync: false,
     backup: false,
+    ohmy: false,
+    githubBackup: false,
   });
 
   const [cooldownRules, setCooldownRules] = useState<CooldownRule[]>([]);
@@ -92,49 +95,58 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   
-  const [systemPrompt, setSystemPrompt] = useState("");
+const [systemPrompt, setSystemPrompt] = useState("");
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const { theme } = useTheme();
+
+  const [ohMyPrefs, setOhMyPrefs] = useState<OhMyPreferences>({ agents: {} });
+  const [savingOhMy, setSavingOhMy] = useState(false);
+
+  const [ghBackupStatus, setGhBackupStatus] = useState<GitHubBackupStatus | null>(null);
+  const [ghOwner, setGhOwner] = useState("");
+  const [ghRepo, setGhRepo] = useState("opencode-backup");
+  const [ghBranch, setGhBranch] = useState("main");
+  const [backingUp, setBackingUp] = useState(false);
 
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  useEffect(() => {
+useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
     getAuthDebug().then(setAuthDebug).catch(console.error);
     getSyncStatus().then(setSyncStatus).catch(console.error);
     getCooldownRules().then(setCooldownRules).catch(console.error);
     loadSystemPrompt();
     
-    // Check for OAuth callback
+    getOhMyConfig().then(res => {
+      setOhMyPrefs(res.preferences);
+    }).catch(console.error);
+    
+    getGitHubBackupStatus().then(status => {
+      setGhBackupStatus(status);
+      if (status.config) {
+        if (status.config.owner) setGhOwner(status.config.owner);
+        if (status.config.repo) setGhRepo(status.config.repo);
+        if (status.config.branch) setGhBranch(status.config.branch);
+      }
+      if (status.user && !status.config?.owner) setGhOwner(status.user);
+    }).catch(console.error);
+    
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const state = params.get('state');
     if (code && state) {
-      // Try both providers since we don't know which one it is just from params
-      // But we can check if it looks like google (often long) vs dropbox
-      // Actually, we can just try one then the other, or look at session storage if we persisted it
-      // For now, let's try dropbox first, if fails try google
-      
       dropboxCallback(code, state).then(async () => {
         const status = await getSyncStatus();
         setSyncStatus(status);
         toast.success('Dropbox connected successfully');
         window.history.replaceState({}, '', window.location.pathname);
-      }).catch(err => {
-        // If dropbox fails, try google
-        googleDriveCallback(code, state).then(async () => {
-          const status = await getSyncStatus();
-          setSyncStatus(status);
-          toast.success('Google Drive connected successfully');
-          window.history.replaceState({}, '', window.location.pathname);
-        }).catch(err2 => {
-          toast.error('Failed to connect cloud provider');
-          window.history.replaceState({}, '', window.location.pathname);
-        });
+      }).catch(() => {
+        toast.error('Failed to connect Dropbox');
+        window.history.replaceState({}, '', window.location.pathname);
       });
     }
   }, []);
@@ -258,18 +270,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleConnectGoogle = async () => {
-    setConnectingProvider('gdrive');
-    try {
-      const redirectUri = window.location.origin + window.location.pathname;
-      const { url } = await getGoogleDriveAuthUrl(redirectUri);
-      window.location.href = url;
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message);
-      setConnectingProvider(null);
-    }
-  };
-
   const handleDisconnectSync = async () => {
     try {
       await disconnectSync();
@@ -331,7 +331,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSyncPull = async () => {
+const handleSyncPull = async () => {
     setSyncing(true);
     try {
       const result = await syncPull();
@@ -343,6 +343,58 @@ export default function SettingsPage() {
       toast.error(err.response?.data?.error || err.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'available', value: string | boolean) => {
+    setOhMyPrefs(prev => {
+      const agents = { ...prev.agents };
+      if (!agents[agent]) {
+        agents[agent] = { choices: [{ model: '', available: true }, { model: '', available: true }, { model: '', available: true }] };
+      }
+      const choices = [...agents[agent].choices];
+      while (choices.length < 3) choices.push({ model: '', available: true });
+      choices[index] = { ...choices[index], [field]: value };
+      agents[agent] = { choices };
+      return { agents };
+    });
+  };
+
+  const handleSaveOhMy = async () => {
+    setSavingOhMy(true);
+    try {
+      const result = await saveOhMyConfig(ohMyPrefs);
+      if (result.warnings && result.warnings.length > 0) {
+        result.warnings.forEach((w: string) => toast.warning(w));
+      } else {
+        toast.success("Oh My OpenCode config saved");
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    } finally {
+      setSavingOhMy(false);
+    }
+  };
+
+  const handleGitHubBackup = async () => {
+    if (!ghOwner || !ghRepo) {
+      toast.error("Owner and repo required");
+      return;
+    }
+    setBackingUp(true);
+    try {
+      const result = await backupToGitHub({ owner: ghOwner, repo: ghRepo, branch: ghBranch });
+      if (result.success) {
+        toast.success(`Backup complete: ${result.url}`);
+        const status = await getGitHubBackupStatus();
+        setGhBackupStatus(status);
+      } else {
+        toast.error(result.error || "Backup failed");
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message);
+    } finally {
+      setBackingUp(false);
     }
   };
 
@@ -762,20 +814,6 @@ export default function SettingsPage() {
                       </svg>
                       {connectingProvider === 'dropbox' ? 'Connecting...' : 'Connect Dropbox'}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleConnectGoogle}
-                      disabled={connectingProvider === 'gdrive'}
-                      className="flex-1"
-                    >
-                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                      </svg>
-                      {connectingProvider === 'gdrive' ? 'Connecting...' : 'Connect Google Drive'}
-                    </Button>
                   </div>
                 </div>
               )}
@@ -841,10 +879,133 @@ export default function SettingsPage() {
                   <Upload className="h-4 w-4 mr-2" />
                   Select Backup File
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
+<p className="text-xs text-muted-foreground text-center">
                   Warning: This will overwrite your current configuration
                 </p>
               </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.ohmy} onOpenChange={() => toggleSection("ohmy")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  <CardTitle>Oh My OpenCode Models</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.ohmy ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Configure model fallback preferences per agent</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-6 pt-0">
+              {AGENT_NAMES.map((agent) => {
+                const agentPrefs = ohMyPrefs.agents[agent] || { choices: [] };
+                const choices = [...agentPrefs.choices];
+                while (choices.length < 3) choices.push({ model: '', available: true });
+                return (
+                  <div key={agent} className="p-4 bg-background rounded-lg space-y-3">
+                    <Label className="text-base capitalize">{agent}</Label>
+                    <div className="space-y-2">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                          <Input
+                            placeholder={`Model ${i + 1}`}
+                            value={choices[i]?.model || ''}
+                            onChange={(e) => updateOhMyAgent(agent, i, 'model', e.target.value)}
+                            className="flex-1"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground">Available</Label>
+                            <Switch
+                              checked={choices[i]?.available ?? true}
+                              onCheckedChange={(v) => updateOhMyAgent(agent, i, 'available', v)}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex justify-end">
+                <Button onClick={handleSaveOhMy} disabled={savingOhMy}>
+                  {savingOhMy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Model Preferences
+                </Button>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.githubBackup} onOpenChange={() => toggleSection("githubBackup")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Github className="h-5 w-5" />
+                  <CardTitle>GitHub Backup</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.githubBackup ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Backup config to a private GitHub repository</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-6 pt-0">
+              {ghBackupStatus?.connected ? (
+                <>
+                  <div className="p-4 bg-background rounded-lg space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      <span className="font-medium">GitHub CLI authenticated</span>
+                      <span className="text-muted-foreground text-sm">as {ghBackupStatus.user}</span>
+                    </div>
+                    {ghBackupStatus.lastUpdated && (
+                      <p className="text-xs text-muted-foreground">
+                        Last backup: {new Date(ghBackupStatus.lastUpdated).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label>Owner</Label>
+                      <Input value={ghOwner} onChange={(e) => setGhOwner(e.target.value)} placeholder="username" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Repository</Label>
+                      <Input value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} placeholder="opencode-backup" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch</Label>
+                      <Input value={ghBranch} onChange={(e) => setGhBranch(e.target.value)} placeholder="main" />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleGitHubBackup} disabled={backingUp} className="w-full">
+                    {backingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudUpload className="mr-2 h-4 w-4" />}
+                    {backingUp ? "Backing up..." : "Backup to GitHub"}
+                  </Button>
+                </>
+              ) : (
+                <div className="p-4 bg-background rounded-lg space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    GitHub CLI not authenticated. Run <code className="bg-muted px-1 rounded">gh auth login</code> first.
+                  </p>
+                  {ghBackupStatus?.error && (
+                    <p className="text-sm text-destructive">{ghBackupStatus.error}</p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </CollapsibleContent>
         </Card>

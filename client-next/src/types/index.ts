@@ -373,3 +373,47 @@ export interface PoolRotationResult {
   newAccount: string;
   reason?: string;
 }
+
+export interface OhMyModelChoice {
+  model: string;
+  available: boolean;
+}
+
+export interface OhMyAgentPreferences {
+  choices: OhMyModelChoice[];
+}
+
+export interface OhMyPreferences {
+  agents: Record<string, OhMyAgentPreferences>;
+}
+
+export interface OhMyConfigResponse {
+  path: string | null;
+  exists: boolean;
+  config: Record<string, unknown> | null;
+  preferences: OhMyPreferences;
+  warnings?: string[];
+}
+
+export interface GitHubBackupConfig {
+  owner?: string;
+  repo?: string;
+  branch?: string;
+}
+
+export interface GitHubBackupStatus {
+  connected: boolean;
+  user?: string;
+  config?: GitHubBackupConfig;
+  repoExists?: boolean;
+  lastUpdated?: string;
+  error?: string;
+}
+
+export interface GitHubBackupResult {
+  success: boolean;
+  timestamp?: string;
+  commit?: string;
+  url?: string;
+  error?: string;
+}

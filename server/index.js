@@ -296,6 +296,7 @@ function loadStudioConfig() {
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
         presets: [],
+        githubRepo: null,
         cooldownRules: [
             { name: "Antigravity Claude Opus 4 (4h)", duration: 4 * 60 * 60 * 1000 },
             { name: "Gemini 3 Pro (24h)", duration: 24 * 60 * 60 * 1000 }
@@ -489,6 +490,12 @@ const getPaths = () => {
         current: manualPath || detected,
         candidates: [...new Set(candidates)]
     };
+};
+
+const getOhMyOpenCodeConfigPath = () => {
+    const cp = getConfigPath();
+    if (!cp) return null;
+    return path.join(path.dirname(cp), 'oh-my-opencode.json');
 };
 
 const getConfigPath = () => getPaths().current;
@@ -698,7 +705,6 @@ app.delete('/api/cooldowns/:name', (req, res) => {
 });
 
 const DROPBOX_CLIENT_ID = 'your-dropbox-app-key';
-const GDRIVE_CLIENT_ID = 'your-google-client-id';
 
 function buildBackupData() {
     const studio = loadStudioConfig();
@@ -855,76 +861,6 @@ app.post('/api/sync/dropbox/callback', async (req, res) => {
     }
 });
 
-app.get('/api/sync/gdrive/auth-url', (req, res) => {
-    const state = crypto.randomBytes(16).toString('hex');
-    const studio = loadStudioConfig();
-    studio.oauthState = state;
-    
-    const redirectUri = req.query.redirect_uri || 'http://localhost:3000/settings';
-    studio.oauthRedirectUri = redirectUri;
-    saveStudioConfig(studio);
-    
-    const params = new URLSearchParams({
-        client_id: GDRIVE_CLIENT_ID,
-        response_type: 'code',
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        access_type: 'offline',
-        prompt: 'consent',
-        redirect_uri: redirectUri,
-        state: state
-    });
-    res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
-});
-
-app.post('/api/sync/gdrive/callback', async (req, res) => {
-    try {
-        const { code, state } = req.body;
-        const studio = loadStudioConfig();
-        
-        if (state !== studio.oauthState) {
-            return res.status(400).json({ error: 'Invalid state' });
-        }
-        const redirectUri = studio.oauthRedirectUri || 'http://localhost:3000/settings';
-        delete studio.oauthState;
-        delete studio.oauthRedirectUri;
-        
-        const response = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                code,
-                client_id: GDRIVE_CLIENT_ID,
-                // client_secret: 'GDRIVE_CLIENT_SECRET', // NOTE: OAuth flow for installed apps usually requires client secret.
-                // For simplicity in this demo, we assume PKCE or a public client flow if supported, 
-                // OR the user will need to provide the secret in environment variables.
-                // Since this is a local server, we might need the secret.
-                // Let's assume for now we'll put a placeholder or rely on env vars.
-                // Google "Installed App" flow doesn't always need secret if type is "Desktop".
-                // However, for web flow it does. 
-                // Let's assume we need a client secret env var for now.
-                client_secret: process.env.GDRIVE_CLIENT_SECRET || 'your-google-client-secret',
-                redirect_uri: redirectUri,
-                grant_type: 'authorization_code'
-            })
-        });
-        
-        if (!response.ok) {
-            const err = await response.text();
-            return res.status(400).json({ error: `Google auth failed: ${err}` });
-        }
-        
-        const tokens = await response.json();
-        studio.cloudProvider = 'gdrive';
-        studio.cloudToken = tokens.access_token;
-        if (tokens.refresh_token) studio.cloudRefreshToken = tokens.refresh_token;
-        saveStudioConfig(studio);
-        
-        res.json({ success: true, provider: 'gdrive' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.post('/api/sync/push', async (req, res) => {
     try {
         const studio = loadStudioConfig();
@@ -953,57 +889,6 @@ app.post('/api/sync/push', async (req, res) => {
             if (!response.ok) {
                 const err = await response.text();
                 return res.status(400).json({ error: `Dropbox upload failed: ${err}` });
-            }
-        } else if (studio.cloudProvider === 'gdrive') {
-            // Find existing file
-            const listRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name=\'opencode-studio-sync.json\' and trashed=false', {
-                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
-            });
-            const listData = await listRes.json();
-            const existingFile = listData.files?.[0];
-
-            if (existingFile) {
-                // Update content
-                const updateRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${studio.cloudToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: content
-                });
-                if (!updateRes.ok) {
-                    const err = await updateRes.text();
-                    return res.status(400).json({ error: `Google Drive update failed: ${err}` });
-                }
-            } else {
-                // Create new file (multipart)
-                const metadata = { name: 'opencode-studio-sync.json', mimeType: 'application/json' };
-                const boundary = '-------314159265358979323846';
-                const delimiter = "\r\n--" + boundary + "\r\n";
-                const close_delim = "\r\n--" + boundary + "--";
-                
-                const multipartBody = 
-                    delimiter + 
-                    'Content-Type: application/json\r\n\r\n' + 
-                    JSON.stringify(metadata) + 
-                    delimiter + 
-                    'Content-Type: application/json\r\n\r\n' + 
-                    content + 
-                    close_delim;
-
-                const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${studio.cloudToken}`,
-                        'Content-Type': `multipart/related; boundary="${boundary}"`
-                    },
-                    body: multipartBody
-                });
-                if (!createRes.ok) {
-                    const err = await createRes.text();
-                    return res.status(400).json({ error: `Google Drive create failed: ${err}` });
-                }
             }
         }
         
@@ -1042,23 +927,6 @@ app.post('/api/sync/pull', async (req, res) => {
             }
             
             content = await response.text();
-        } else if (studio.cloudProvider === 'gdrive') {
-            const listRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name=\'opencode-studio-sync.json\' and trashed=false', {
-                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
-            });
-            const listData = await listRes.json();
-            const existingFile = listData.files?.[0];
-            
-            if (!existingFile) return res.status(404).json({ error: 'No sync file found in cloud' });
-            
-            const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
-                headers: { 'Authorization': `Bearer ${studio.cloudToken}` }
-            });
-            if (!downloadRes.ok) {
-                const err = await downloadRes.text();
-                return res.status(400).json({ error: `Google Drive download failed: ${err}` });
-            }
-            content = await downloadRes.text();
         }
         
         const backup = JSON.parse(content);
@@ -1119,6 +987,372 @@ app.post('/api/sync/auto', async (req, res) => {
         
         res.json({ action: 'none', reason: 'local is current' });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// OH-MY-OPENCODE PREFERENCES
+// ============================================
+
+function loadOhMyOpenCodeConfig() {
+    const configPath = getOhMyOpenCodeConfigPath();
+    if (!configPath || !fs.existsSync(configPath)) return {};
+    try {
+        return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch {
+        return {};
+    }
+}
+
+function saveOhMyOpenCodeConfig(config) {
+    const configPath = getOhMyOpenCodeConfigPath();
+    if (!configPath) throw new Error('No opencode config path found');
+    atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+app.get('/api/ohmyopencode', (req, res) => {
+    const ohMyPath = getOhMyOpenCodeConfigPath();
+    const exists = ohMyPath && fs.existsSync(ohMyPath);
+    const config = exists ? loadOhMyOpenCodeConfig() : null;
+    const studio = loadStudioConfig();
+    const preferences = studio.ohmy || { agents: {} };
+    res.json({ path: ohMyPath, exists, config, preferences });
+});
+
+app.post('/api/ohmyopencode', (req, res) => {
+    try {
+        const { preferences } = req.body;
+        if (!preferences || !preferences.agents) {
+            return res.status(400).json({ error: 'Missing preferences.agents' });
+        }
+        
+        // Save preferences to studio.json
+        const studio = loadStudioConfig();
+        studio.ohmy = preferences;
+        saveStudioConfig(studio);
+        
+        // Load current oh-my-opencode.json or start fresh
+        const currentConfig = loadOhMyOpenCodeConfig() || {};
+        const warnings = [];
+        
+        // For each agent, pick first available model
+        for (const [agentName, agentPrefs] of Object.entries(preferences.agents)) {
+            const choices = agentPrefs.choices || [];
+            const available = choices.find(c => c.available);
+            if (available) {
+                // Set the model in oh-my-opencode.json
+                if (!currentConfig.agents) currentConfig.agents = {};
+                currentConfig.agents[agentName] = { model: available.model };
+            } else if (choices.length > 0) {
+                // No available model, keep existing or warn
+                warnings.push(`No available model for agent "${agentName}"`);
+            }
+        }
+        
+        saveOhMyOpenCodeConfig(currentConfig);
+        
+        const ohMyPath = getOhMyOpenCodeConfigPath();
+        res.json({ 
+            success: true, 
+            path: ohMyPath, 
+            exists: true, 
+            config: currentConfig, 
+            preferences, 
+            warnings: warnings.length > 0 ? warnings : undefined 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// GITHUB BACKUP
+// ============================================
+
+function getGitHubToken() {
+    return new Promise((resolve, reject) => {
+        exec('gh auth token', (err, stdout, stderr) => {
+            if (err) {
+                resolve(null);
+            } else {
+                resolve(stdout.trim());
+            }
+        });
+    });
+}
+
+async function getGitHubUser(token) {
+    const response = await fetch('https://api.github.com/user', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+}
+
+async function ensureGitHubRepo(token, repoName) {
+    const owner = repoName.split('/')[0];
+    const repo = repoName.split('/')[1];
+    
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (response.ok) {
+        const data = await response.json();
+        return data;
+    }
+    
+    if (response.status === 404) {
+        const createRes = await fetch(`https://api.github.com/user/repos`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: repo,
+                private: true,
+                description: 'OpenCode Studio backup'
+            })
+        });
+        
+        if (createRes.ok) {
+            return await createRes.json();
+        }
+        
+        if (createRes.ok) {
+            return await createRes.json();
+        }
+        const err = await createRes.text();
+        throw new Error(`Failed to create repo: ${err}`);
+    }
+    
+    const err = await response.text();
+    throw new Error(`Failed to check repo: ${err}`);
+}
+
+function buildCommitTree(opencodeDir, studioDir, files = {}, basePath = '') {
+    const tree = [];
+    
+    for (const name of fs.readdirSync(basePath || opencodeDir)) {
+        const fullPath = path.join(basePath || opencodeDir, name);
+        const stat = fs.statSync(fullPath);
+        
+        if (stat.isDirectory()) {
+            if (name === 'node_modules' || name === '.git' || name === '.next') continue;
+            const subtree = buildCommitTree(opencodeDir, studioDir, files, fullPath);
+            tree.push({
+                path: path.relative(opencodeDir, fullPath),
+                mode: '040000',
+                type: 'tree',
+                sha: subtree.sha,
+                size: subtree.size
+            });
+            if (subtree.size) tree[tree.length - 1].size = subtree.size;
+        } else {
+            if (name.endsWith('.log') || name.endsWith('.tmp')) continue;
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const size = Buffer.byteLength(content);
+            const blob = { path: path.relative(opencodeDir, fullPath), mode: '100644', type: 'blob', size, content };
+            const blobKey = `${basePath || opencodeDir}/${name}`;
+            files[blobKey] = blob;
+            tree.push(blob);
+        }
+    }
+    
+    return { sha: null, tree };
+}
+
+async function createGitHubBlob(token, blob) {
+    const response = await fetch('https://api.github.com/git/blobs', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            content: Buffer.from(blob.content).toString('base64'),
+            encoding: 'base64'
+        })
+    });
+    
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Failed to create blob: ${err}`);
+    }
+    
+    const data = await response.json();
+    return data.sha;
+}
+
+async function createGitHubTree(token, repoName, treeItems) {
+    const [owner, repo] = repoName.split('/');
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            tree: treeItems.map(item => ({
+                path: item.path,
+                mode: item.mode,
+                type: item.type,
+                sha: item.sha
+            }))
+        })
+    });
+    
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Failed to create tree: ${err}`);
+    }
+    
+    const data = await response.json();
+    return data.sha;
+}
+
+async function createGitHubCommit(token, repoName, treeSha, message) {
+    const [owner, repo] = repoName.split('/');
+    
+    const headRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    let parentSha = null;
+    if (headRes.ok) {
+        const headData = await headRes.json();
+        parentSha = headData.object.sha;
+    }
+    
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message,
+            tree: treeSha,
+            parents: parentSha ? [parentSha] : []
+        })
+    });
+    
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Failed to create commit: ${err}`);
+    }
+    
+    const data = await response.json();
+    return data.sha;
+}
+
+async function updateGitHubRef(token, repoName, commitSha, branch = 'main') {
+    const [owner, repo] = repoName.split('/');
+    
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sha: commitSha
+        })
+    });
+    
+    if (!response.status === 200 && response.status !== 201) {
+        const err = await response.text();
+        throw new Error(`Failed to update ref: ${err}`);
+    }
+}
+
+app.get('/api/github/backup/status', async (req, res) => {
+    try {
+        const token = await getGitHubToken();
+        const studio = loadStudioConfig();
+        const backupConfig = studio.githubBackup || {};
+        
+        if (!token) return res.json({ connected: false, config: backupConfig, error: 'Not logged in to gh CLI. Run: gh auth login' });
+        
+        const user = await getGitHubUser(token);
+        if (!user) return res.json({ connected: false, config: backupConfig, error: 'Failed to get GitHub user' });
+        
+        if (!backupConfig.repo) {
+            return res.json({ connected: true, user: user.login, config: backupConfig });
+        }
+        
+        const owner = backupConfig.owner || user.login;
+        const response = await fetch(`https://api.github.com/repos/${owner}/${backupConfig.repo}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            return res.json({ connected: true, user: user.login, config: backupConfig, repoExists: false });
+        }
+        
+        const data = await response.json();
+        res.json({ connected: true, user: user.login, config: backupConfig, repoExists: true, lastUpdated: data.pushed_at });
+    } catch (err) {
+        res.json({ connected: false, error: err.message });
+    }
+});
+
+app.post('/api/github/backup', async (req, res) => {
+    try {
+        const token = await getGitHubToken();
+        if (!token) return res.status(400).json({ error: 'Not logged in to gh CLI. Run: gh auth login' });
+        
+        const user = await getGitHubUser(token);
+        if (!user) return res.status(400).json({ error: 'Failed to get GitHub user' });
+        
+        const { owner, repo, branch } = req.body;
+        const studio = loadStudioConfig();
+        
+        const finalOwner = owner || studio.githubBackup?.owner || user.login;
+        const finalRepo = repo || studio.githubBackup?.repo;
+        const finalBranch = branch || studio.githubBackup?.branch || 'main';
+        
+        if (!finalRepo) return res.status(400).json({ error: 'No repo name provided' });
+        
+        const repoName = `${finalOwner}/${finalRepo}`;
+        
+        await ensureGitHubRepo(token, repoName);
+        
+        const opencodeConfig = getConfigPath();
+        if (!opencodeConfig) return res.status(400).json({ error: 'No opencode config path found' });
+        
+        const opencodeDir = path.dirname(opencodeConfig);
+        const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
+        
+        const blobs = {};
+        const opencodeTree = buildCommitTree(opencodeDir, studioDir, blobs);
+        const studioTree = buildCommitTree(studioDir, studioDir, {}, studioDir);
+        
+        const opencodeTreeSha = await createGitHubTree(token, repoName, opencodeTree.tree);
+        const studioTreeSha = await createGitHubTree(token, repoName, studioTree.tree);
+        
+        const rootTreeItems = [
+            { path: 'opencode', mode: '040000', type: 'tree', sha: opencodeTreeSha },
+            { path: 'opencode-studio', mode: '040000', type: 'tree', sha: studioTreeSha }
+        ];
+        
+        const rootTreeSha = await createGitHubTree(token, repoName, rootTreeItems);
+        
+        const timestamp = new Date().toISOString();
+        const commitMessage = `OpenCode Studio backup ${timestamp}`;
+        const commitSha = await createGitHubCommit(token, repoName, rootTreeSha, commitMessage);
+        
+        await updateGitHubRef(token, repoName, commitSha, finalBranch);
+        
+        studio.githubBackup = { owner: finalOwner, repo: finalRepo, branch: finalBranch };
+        studio.lastGithubBackup = timestamp;
+        saveStudioConfig(studio);
+        
+        res.json({ success: true, timestamp, commit: commitSha, url: `https://github.com/${repoName}` });
+    } catch (err) {
+        console.error('GitHub backup error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -1900,7 +2134,7 @@ app.delete('/api/auth/:provider', (req, res) => {
         if (studio.activeProfiles) delete studio.activeProfiles[provider];
         saveStudioConfig(studio);
 
-        // Do NOT delete the profile directory on logout. Users want to keep saved profiles.
+        // Do NOT delete profile directory on logout. Users want to keep saved profiles.
         // const providerDir = path.join(AUTH_PROFILES_DIR, provider);
         // if (fs.existsSync(providerDir)) fs.rmSync(providerDir, { recursive: true, force: true });
 
@@ -1919,9 +2153,24 @@ app.delete('/api/auth/:provider', (req, res) => {
     const ap = path.join(path.dirname(cp), 'auth.json');
     atomicWriteFileSync(ap, JSON.stringify(authCfg, null, 2));
 
+    const cmd = 'opencode auth logout';
+    const configDir = cp ? path.dirname(cp) : process.cwd();
+    const safeDir = configDir.replace(/"/g, '\\"');
+    const platform = process.platform;
+    
+    if (platform === 'win32') {
+        exec(`start "" /d "${safeDir}" cmd /c "call ${cmd} || pause"`);
+    } else if (platform === 'darwin') {
+        exec(`osascript -e 'tell application "Terminal" to do script "cd ${safeDir} && ${cmd}"'`);
+    } else {
+        exec(`bash -c "cd ${safeDir} && ${cmd}"`);
+    }
+
     res.json({ success: true });
 });
 
+// ============================================
+// ACCOUNT POOL MANAGEMENT (Antigravity-style)
 // ============================================
 // ACCOUNT POOL MANAGEMENT (Antigravity-style)
 // ============================================
