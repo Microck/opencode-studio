@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Settings,
   Shield,
@@ -35,10 +36,11 @@ import {
   ChevronDown,
   Cloud,
   CloudUpload,
-  CloudDownload,
+CloudDownload,
   Loader2,
   FileCode,
   Github,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
@@ -967,7 +969,17 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                           </div>
                           <div className="flex items-center gap-4 ml-7">
                             <div className="flex items-center gap-2">
-                              <Label className="text-[10px] text-muted-foreground">Thinking</Label>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1 cursor-help">
+                                    <Label className="text-[10px] text-muted-foreground">Thinking</Label>
+                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs">Extended thinking for Gemini models. Enables multi-step reasoning before responding.</p>
+                                </TooltipContent>
+                              </Tooltip>
                               <Select
                                 value={choices[i]?.thinking?.type || 'disabled'}
                                 onValueChange={(v) => updateOhMyModelConfig(id, i, 'thinking', v === 'disabled' ? undefined : { type: v as 'enabled' | 'disabled' })}
@@ -982,7 +994,17 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                               </Select>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Label className="text-[10px] text-muted-foreground">Reasoning</Label>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1 cursor-help">
+                                    <Label className="text-[10px] text-muted-foreground">Reasoning</Label>
+                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs">Reasoning effort for OpenAI o-series models. Higher = more tokens spent on chain-of-thought before answering.</p>
+                                </TooltipContent>
+                              </Tooltip>
                               <Select
                                 value={choices[i]?.reasoning?.effort || 'disabled'}
                                 onValueChange={(v) => updateOhMyModelConfig(id, i, 'reasoning', v === 'disabled' ? undefined : { effort: v as 'low' | 'medium' | 'high' | 'xhigh' })}

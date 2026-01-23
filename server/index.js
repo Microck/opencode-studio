@@ -1137,40 +1137,34 @@ async function ensureGitHubRepo(token, repoName) {
     throw new Error(`Failed to check repo: ${err}`);
 }
 
-function buildCommitTree(opencodeDir, studioDir, files = {}, basePath = '') {
-    const tree = [];
+function collectBlobs(rootDir, basePath = '', blobs = []) {
+    const dir = basePath || rootDir;
+    if (!fs.existsSync(dir)) return blobs;
     
-    for (const name of fs.readdirSync(basePath || opencodeDir)) {
-        const fullPath = path.join(basePath || opencodeDir, name);
+    for (const name of fs.readdirSync(dir)) {
+        const fullPath = path.join(dir, name);
         const stat = fs.statSync(fullPath);
         
         if (stat.isDirectory()) {
             if (name === 'node_modules' || name === '.git' || name === '.next') continue;
-            const subtree = buildCommitTree(opencodeDir, studioDir, files, fullPath);
-            tree.push({
-                path: path.relative(opencodeDir, fullPath),
-                mode: '040000',
-                type: 'tree',
-                sha: subtree.sha,
-                size: subtree.size
-            });
-            if (subtree.size) tree[tree.length - 1].size = subtree.size;
+            collectBlobs(rootDir, fullPath, blobs);
         } else {
             if (name.endsWith('.log') || name.endsWith('.tmp')) continue;
             const content = fs.readFileSync(fullPath, 'utf8');
-            const size = Buffer.byteLength(content);
-            const blob = { path: path.relative(opencodeDir, fullPath), mode: '100644', type: 'blob', size, content };
-            const blobKey = `${basePath || opencodeDir}/${name}`;
-            files[blobKey] = blob;
-            tree.push(blob);
+            blobs.push({
+                path: path.relative(rootDir, fullPath).replace(/\\/g, '/'),
+                mode: '100644',
+                type: 'blob',
+                content
+            });
         }
     }
-    
-    return { sha: null, tree };
+    return blobs;
 }
 
-async function createGitHubBlob(token, blob) {
-    const response = await fetch('https://api.github.com/git/blobs', {
+async function createGitHubBlob(token, repoName, blob) {
+    const [owner, repo] = repoName.split('/');
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -1191,22 +1185,25 @@ async function createGitHubBlob(token, blob) {
     return data.sha;
 }
 
-async function createGitHubTree(token, repoName, treeItems) {
+async function createGitHubTree(token, repoName, treeItems, baseSha = null) {
     const [owner, repo] = repoName.split('/');
+    const body = {
+        tree: treeItems.map(item => ({
+            path: item.path,
+            mode: item.mode,
+            type: item.type,
+            sha: item.sha
+        }))
+    };
+    if (baseSha) body.base_tree = baseSha;
+    
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            tree: treeItems.map(item => ({
-                path: item.path,
-                mode: item.mode,
-                type: item.type,
-                sha: item.sha
-            }))
-        })
+        body: JSON.stringify(body)
     });
     
     if (!response.ok) {
@@ -1256,6 +1253,30 @@ async function createGitHubCommit(token, repoName, treeSha, message) {
 async function updateGitHubRef(token, repoName, commitSha, branch = 'main') {
     const [owner, repo] = repoName.split('/');
     
+    const checkRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (checkRes.status === 404) {
+        const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ref: `refs/heads/${branch}`,
+                sha: commitSha
+            })
+        });
+        
+        if (!createRes.ok) {
+            const err = await createRes.text();
+            throw new Error(`Failed to create ref: ${err}`);
+        }
+        return;
+    }
+    
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
         method: 'PATCH',
         headers: {
@@ -1267,7 +1288,7 @@ async function updateGitHubRef(token, repoName, commitSha, branch = 'main') {
         })
     });
     
-    if (!response.status === 200 && response.status !== 201) {
+    if (!response.ok) {
         const err = await response.text();
         throw new Error(`Failed to update ref: ${err}`);
     }
@@ -1331,19 +1352,23 @@ app.post('/api/github/backup', async (req, res) => {
         const opencodeDir = path.dirname(opencodeConfig);
         const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
         
-        const blobs = {};
-        const opencodeTree = buildCommitTree(opencodeDir, studioDir, blobs);
-        const studioTree = buildCommitTree(studioDir, studioDir, {}, studioDir);
+        const opencodeBlobs = collectBlobs(opencodeDir);
+        const studioBlobs = collectBlobs(studioDir);
         
-        const opencodeTreeSha = await createGitHubTree(token, repoName, opencodeTree.tree);
-        const studioTreeSha = await createGitHubTree(token, repoName, studioTree.tree);
+        for (const blob of opencodeBlobs) {
+            blob.sha = await createGitHubBlob(token, repoName, blob);
+            blob.path = `opencode/${blob.path}`;
+            delete blob.content;
+        }
         
-        const rootTreeItems = [
-            { path: 'opencode', mode: '040000', type: 'tree', sha: opencodeTreeSha },
-            { path: 'opencode-studio', mode: '040000', type: 'tree', sha: studioTreeSha }
-        ];
+        for (const blob of studioBlobs) {
+            blob.sha = await createGitHubBlob(token, repoName, blob);
+            blob.path = `opencode-studio/${blob.path}`;
+            delete blob.content;
+        }
         
-        const rootTreeSha = await createGitHubTree(token, repoName, rootTreeItems);
+        const allBlobs = [...opencodeBlobs, ...studioBlobs];
+        const rootTreeSha = await createGitHubTree(token, repoName, allBlobs);
         
         const timestamp = new Date().toISOString();
         const commitMessage = `OpenCode Studio backup ${timestamp}`;
