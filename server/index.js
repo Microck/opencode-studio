@@ -1103,15 +1103,7 @@ async function ensureGitHubRepo(token, repoName) {
     });
     
     if (response.ok) {
-        const data = await response.json();
-        const branch = data.default_branch || 'main';
-        const refRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (refRes.status === 404 || refRes.status === 409) {
-            await bootstrapEmptyRepo(token, owner, repo);
-        }
-        return data;
+        return await response.json();
     }
     
     if (response.status === 404) {
@@ -1130,6 +1122,7 @@ async function ensureGitHubRepo(token, repoName) {
         });
         
         if (createRes.ok) {
+            await new Promise(r => setTimeout(r, 2000));
             return await createRes.json();
         }
         
@@ -1141,183 +1134,34 @@ async function ensureGitHubRepo(token, repoName) {
     throw new Error(`Failed to check repo: ${err}`);
 }
 
-async function bootstrapEmptyRepo(token, owner, repo) {
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/README.md`, {
-        method: 'PUT',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            message: 'Initial commit',
-            content: Buffer.from('# OpenCode Studio Backup\n').toString('base64')
-        })
-    });
-    
-    if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Failed to bootstrap repo: ${err}`);
-    }
-}
-
-function collectBlobs(rootDir, basePath = '', blobs = []) {
-    const dir = basePath || rootDir;
-    if (!fs.existsSync(dir)) return blobs;
+function copyDirContents(src, dest) {
+    if (!fs.existsSync(src)) return;
+    fs.mkdirSync(dest, { recursive: true });
+    const SKIP_DIRS = ['node_modules', '.git', '.next', 'cache'];
     const SKIP_EXT = ['.log', '.tmp', '.db', '.sqlite', '.cache', '.pack', '.idx'];
     
-    for (const name of fs.readdirSync(dir)) {
-        const fullPath = path.join(dir, name);
-        const stat = fs.statSync(fullPath);
+    for (const name of fs.readdirSync(src)) {
+        const srcPath = path.join(src, name);
+        const destPath = path.join(dest, name);
+        const stat = fs.statSync(srcPath);
         
         if (stat.isDirectory()) {
-            if (name === 'node_modules' || name === '.git' || name === '.next' || name === 'cache') continue;
-            collectBlobs(rootDir, fullPath, blobs);
+            if (SKIP_DIRS.includes(name)) continue;
+            copyDirContents(srcPath, destPath);
         } else {
             if (SKIP_EXT.some(ext => name.endsWith(ext))) continue;
-            try {
-                const content = fs.readFileSync(fullPath, 'utf8');
-                blobs.push({
-                    path: path.relative(rootDir, fullPath).replace(/\\/g, '/'),
-                    mode: '100644',
-                    type: 'blob',
-                    content
-                });
-            } catch (e) { }
+            fs.copyFileSync(srcPath, destPath);
         }
     }
-    return blobs;
 }
 
-async function createGitHubBlob(token, repoName, blob) {
-    const [owner, repo] = repoName.split('/');
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            content: Buffer.from(blob.content).toString('base64'),
-            encoding: 'base64'
-        })
-    });
-    
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Failed to create blob: ${err}`);
-    }
-    
-    const data = await response.json();
-    return data.sha;
-}
-
-async function createGitHubTree(token, repoName, treeItems, baseSha = null) {
-    const [owner, repo] = repoName.split('/');
-    const body = {
-        tree: treeItems.map(item => ({
-            path: item.path,
-            mode: item.mode,
-            type: item.type,
-            sha: item.sha
-        }))
-    };
-    if (baseSha) body.base_tree = baseSha;
-    
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-    });
-    
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Failed to create tree: ${err}`);
-    }
-    
-    const data = await response.json();
-    return data.sha;
-}
-
-async function createGitHubCommit(token, repoName, treeSha, message) {
-    const [owner, repo] = repoName.split('/');
-    
-    const headRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    let parentSha = null;
-    if (headRes.ok) {
-        const headData = await headRes.json();
-        parentSha = headData.object.sha;
-    }
-    
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            message,
-            tree: treeSha,
-            parents: parentSha ? [parentSha] : []
-        })
-    });
-    
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Failed to create commit: ${err}`);
-    }
-    
-    const data = await response.json();
-    return data.sha;
-}
-
-async function updateGitHubRef(token, repoName, commitSha, branch = 'main') {
-    const [owner, repo] = repoName.split('/');
-    
-    const checkRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (checkRes.status === 404) {
-        const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ref: `refs/heads/${branch}`,
-                sha: commitSha
-            })
+function execPromise(cmd, opts = {}) {
+    return new Promise((resolve, reject) => {
+        exec(cmd, opts, (err, stdout, stderr) => {
+            if (err) reject(new Error(stderr || err.message));
+            else resolve(stdout.trim());
         });
-        
-        if (!createRes.ok) {
-            const err = await createRes.text();
-            throw new Error(`Failed to create ref: ${err}`);
-        }
-        return;
-    }
-    
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
-        method: 'PATCH',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            sha: commitSha
-        })
     });
-    
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Failed to update ref: ${err}`);
-    }
 }
 
 app.get('/api/github/backup/status', async (req, res) => {
@@ -1352,6 +1196,7 @@ app.get('/api/github/backup/status', async (req, res) => {
 });
 
 app.post('/api/github/backup', async (req, res) => {
+    let tempDir = null;
     try {
         const token = await getGitHubToken();
         if (!token) return res.status(400).json({ error: 'Not logged in to gh CLI. Run: gh auth login' });
@@ -1378,47 +1223,45 @@ app.post('/api/github/backup', async (req, res) => {
         const opencodeDir = path.dirname(opencodeConfig);
         const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
         
-        const opencodeBlobs = collectBlobs(opencodeDir);
-        const studioBlobs = collectBlobs(studioDir);
-        const skipped = [];
+        tempDir = path.join(os.tmpdir(), `opencode-backup-${Date.now()}`);
+        fs.mkdirSync(tempDir, { recursive: true });
         
-        for (const blob of opencodeBlobs) {
-            try {
-                blob.sha = await createGitHubBlob(token, repoName, blob);
-                blob.path = `opencode/${blob.path}`;
-                delete blob.content;
-            } catch (e) {
-                skipped.push({ path: `opencode/${blob.path}`, reason: e.message, size: Buffer.byteLength(blob.content) });
-                blob.skip = true;
-            }
-        }
+        await execPromise(`git clone --depth 1 https://x-access-token:${token}@github.com/${repoName}.git .`, { cwd: tempDir });
         
-        for (const blob of studioBlobs) {
-            try {
-                blob.sha = await createGitHubBlob(token, repoName, blob);
-                blob.path = `opencode-studio/${blob.path}`;
-                delete blob.content;
-            } catch (e) {
-                skipped.push({ path: `opencode-studio/${blob.path}`, reason: e.message, size: Buffer.byteLength(blob.content) });
-                blob.skip = true;
-            }
-        }
+        const backupOpencodeDir = path.join(tempDir, 'opencode');
+        const backupStudioDir = path.join(tempDir, 'opencode-studio');
         
-        const allBlobs = [...opencodeBlobs, ...studioBlobs].filter(b => !b.skip);
-        const rootTreeSha = await createGitHubTree(token, repoName, allBlobs);
+        if (fs.existsSync(backupOpencodeDir)) fs.rmSync(backupOpencodeDir, { recursive: true });
+        if (fs.existsSync(backupStudioDir)) fs.rmSync(backupStudioDir, { recursive: true });
+        
+        copyDirContents(opencodeDir, backupOpencodeDir);
+        copyDirContents(studioDir, backupStudioDir);
+        
+        await execPromise('git add -A', { cwd: tempDir });
         
         const timestamp = new Date().toISOString();
         const commitMessage = `OpenCode Studio backup ${timestamp}`;
-        const commitSha = await createGitHubCommit(token, repoName, rootTreeSha, commitMessage);
         
-        await updateGitHubRef(token, repoName, commitSha, finalBranch);
+        try {
+            await execPromise(`git commit -m "${commitMessage}"`, { cwd: tempDir });
+            await execPromise(`git push origin ${finalBranch}`, { cwd: tempDir });
+        } catch (e) {
+            if (e.message.includes('nothing to commit')) {
+                fs.rmSync(tempDir, { recursive: true });
+                return res.json({ success: true, timestamp, message: 'No changes to backup', url: `https://github.com/${repoName}` });
+            }
+            throw e;
+        }
+        
+        fs.rmSync(tempDir, { recursive: true });
         
         studio.githubBackup = { owner: finalOwner, repo: finalRepo, branch: finalBranch };
         studio.lastGithubBackup = timestamp;
         saveStudioConfig(studio);
         
-        res.json({ success: true, timestamp, commit: commitSha, url: `https://github.com/${repoName}`, skipped });
+        res.json({ success: true, timestamp, url: `https://github.com/${repoName}` });
     } catch (err) {
+        if (tempDir && fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true });
         console.error('GitHub backup error:', err);
         res.status(500).json({ error: err.message });
     }
