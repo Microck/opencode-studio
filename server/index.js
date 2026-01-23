@@ -1027,37 +1027,30 @@ app.post('/api/ohmyopencode', (req, res) => {
             return res.status(400).json({ error: 'Missing preferences.agents' });
         }
         
-        // Save preferences to studio.json
         const studio = loadStudioConfig();
         studio.ohmy = preferences;
         saveStudioConfig(studio);
         
-        // Load current oh-my-opencode.json or start fresh
         const currentConfig = loadOhMyOpenCodeConfig() || {};
         const warnings = [];
         
-        // For each agent, pick first available model and apply thinking/reasoning
         for (const [agentName, agentPrefs] of Object.entries(preferences.agents)) {
             const choices = agentPrefs.choices || [];
             const available = choices.find(c => c.available);
             if (available) {
-                // Set the model in oh-my-opencode.json
                 if (!currentConfig.agents) currentConfig.agents = {};
                 const agentConfig = { model: available.model };
                 
-                // Add thinking config if enabled (for Gemini models)
-                if (agentPrefs.thinking && agentPrefs.thinking.type === 'enabled') {
+                if (available.thinking && available.thinking.type === 'enabled') {
                     agentConfig.thinking = { type: 'enabled' };
                 }
                 
-                // Add reasoning config if set (for OpenAI o-series models)
-                if (agentPrefs.reasoning && agentPrefs.reasoning.effort) {
-                    agentConfig.reasoning = { effort: agentPrefs.reasoning.effort };
+                if (available.reasoning && available.reasoning.effort) {
+                    agentConfig.reasoning = { effort: available.reasoning.effort };
                 }
                 
                 currentConfig.agents[agentName] = agentConfig;
             } else if (choices.length > 0) {
-                // No available model, keep existing or warn
                 warnings.push(`No available model for agent "${agentName}"`);
             }
         }

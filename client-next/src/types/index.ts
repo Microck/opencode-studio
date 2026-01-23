@@ -374,23 +374,23 @@ export interface PoolRotationResult {
   reason?: string;
 }
 
-export interface OhMyModelChoice {
-  model: string;
-  available: boolean;
-}
-
 export interface OhMyThinkingConfig {
   type: 'enabled' | 'disabled';
 }
 
 export interface OhMyReasoningConfig {
-  effort: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high' | 'xhigh';
+}
+
+export interface OhMyModelChoice {
+  model: string;
+  available: boolean;
+  thinking?: OhMyThinkingConfig;
+  reasoning?: OhMyReasoningConfig;
 }
 
 export interface OhMyAgentPreferences {
   choices: OhMyModelChoice[];
-  thinking?: OhMyThinkingConfig;
-  reasoning?: OhMyReasoningConfig;
 }
 
 export interface OhMyPreferences {

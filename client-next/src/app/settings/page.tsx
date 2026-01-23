@@ -368,22 +368,25 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
       choices[index] = { ...choices[index], [field]: value };
       agents[agent] = { ...agents[agent], choices };
       return { agents };
-    });
+});
   };
 
-  const updateOhMyAgentConfig = (agent: string, field: 'thinking' | 'reasoning', value: { type: 'enabled' | 'disabled' } | { effort: 'low' | 'medium' | 'high' } | undefined) => {
+  const updateOhMyModelConfig = (agent: string, index: number, field: 'thinking' | 'reasoning', value: { type: 'enabled' | 'disabled' } | { effort: 'low' | 'medium' | 'high' | 'xhigh' } | undefined) => {
     setOhMyPrefs(prev => {
       const agents = { ...prev.agents };
       if (!agents[agent]) {
         agents[agent] = { choices: [{ model: '', available: true }, { model: '', available: true }, { model: '', available: true }] };
       }
-      const updated = { ...agents[agent] };
+      const choices = [...agents[agent].choices];
+      while (choices.length < 3) choices.push({ model: '', available: true });
+      const updated = { ...choices[index] };
       if (value === undefined) {
-        delete updated[field];
+        delete (updated as Record<string, unknown>)[field];
       } else {
         (updated as Record<string, unknown>)[field] = value;
       }
-      agents[agent] = updated;
+      choices[index] = updated;
+      agents[agent] = { choices };
       return { agents };
     });
   };
@@ -943,69 +946,62 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                       <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
                     </div>
                     
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <Label className="text-xs text-muted-foreground uppercase tracking-wide">Model Fallbacks</Label>
                       {[0, 1, 2].map((i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                          <Input
-                            placeholder={`Model ${i + 1} (e.g. google/gemini-3-pro)`}
-                            value={choices[i]?.model || ''}
-                            onChange={(e) => updateOhMyAgent(id, i, 'model', e.target.value)}
-                            className="flex-1"
-                          />
-                          <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">Available</Label>
-                            <Switch
-                              checked={choices[i]?.available ?? true}
-                              onCheckedChange={(v) => updateOhMyAgent(id, i, 'available', v)}
+                        <div key={i} className="space-y-2 p-3 bg-muted/30 rounded-md">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                            <Input
+                              placeholder={`Model ${i + 1} (e.g. google/gemini-3-pro)`}
+                              value={choices[i]?.model || ''}
+                              onChange={(e) => updateOhMyAgent(id, i, 'model', e.target.value)}
+                              className="flex-1"
                             />
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={choices[i]?.available ?? true}
+                                onCheckedChange={(v) => updateOhMyAgent(id, i, 'available', v)}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 ml-7">
+                            <div className="flex items-center gap-2">
+                              <Label className="text-[10px] text-muted-foreground">Thinking</Label>
+                              <Select
+                                value={choices[i]?.thinking?.type || 'disabled'}
+                                onValueChange={(v) => updateOhMyModelConfig(id, i, 'thinking', v === 'disabled' ? undefined : { type: v as 'enabled' | 'disabled' })}
+                              >
+                                <SelectTrigger className="h-7 w-24 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="disabled">Off</SelectItem>
+                                  <SelectItem value="enabled">On</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-[10px] text-muted-foreground">Reasoning</Label>
+                              <Select
+                                value={choices[i]?.reasoning?.effort || 'disabled'}
+                                onValueChange={(v) => updateOhMyModelConfig(id, i, 'reasoning', v === 'disabled' ? undefined : { effort: v as 'low' | 'medium' | 'high' | 'xhigh' })}
+                              >
+                                <SelectTrigger className="h-7 w-24 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="disabled">Off</SelectItem>
+                                  <SelectItem value="low">Low</SelectItem>
+                                  <SelectItem value="medium">Medium</SelectItem>
+                                  <SelectItem value="high">High</SelectItem>
+                                  <SelectItem value="xhigh">XHigh</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
                       ))}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Thinking (Gemini)</Label>
-                        <Select
-                          value={agentPrefs.thinking?.type || 'disabled'}
-                          onValueChange={(v) => updateOhMyAgentConfig(id, 'thinking', { type: v as 'enabled' | 'disabled' })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="disabled">Disabled</SelectItem>
-                            <SelectItem value="enabled">Enabled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[10px] text-muted-foreground">Extended thinking for Gemini models</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Reasoning (OpenAI)</Label>
-                        <Select
-                          value={agentPrefs.reasoning?.effort || 'disabled'}
-                          onValueChange={(v) => {
-                            if (v === 'disabled') {
-                              updateOhMyAgentConfig(id, 'reasoning', undefined);
-                            } else {
-                              updateOhMyAgentConfig(id, 'reasoning', { effort: v as 'low' | 'medium' | 'high' });
-                            }
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="disabled">Disabled</SelectItem>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[10px] text-muted-foreground">Reasoning effort for o-series models</p>
-                      </div>
                     </div>
                   </div>
                 );
