@@ -61,7 +61,7 @@ export function Sidebar() {
   return (
     <TooltipProvider>
       <div className="w-64 bg-background flex flex-col h-screen" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
-        <div className="p-6 flex items-center gap-3" style={{ borderAndroidtom: '1px solid var(--oc-border-weak)' }}>
+        <div className="p-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
           <Logo className="w-6 h-6" />
           <img src="/opencode-studio-text.png" alt="OpenCode Studio" className="h-6 w-auto" />
         </div>
