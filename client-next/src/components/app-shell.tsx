@@ -107,7 +107,7 @@ return (
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 w-full max-w-sm">
+        <div className="flex flex-col gap-3 w-full max-w-md">
           <div className={isFirstLoad ? "landing-delay-3" : "landing-delay-fast-3"}>
             <Button size="lg" className="w-full gap-2" onClick={handleLaunch}>
               <Play className="h-5 w-5" />
