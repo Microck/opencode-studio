@@ -7,7 +7,6 @@ Express API backend (port 3001). Single-file architecture.
 | File | Purpose |
 |------|---------|
 | `index.js` | All routes, config IO, auth, skills, plugins, usage stats |
-| `proxy-manager.js` | Manages CLIProxyAPI process and config |
 | `cli.js` | npm bin entry, protocol URL parser, pending action queue |
 | `register-protocol.js` | OS-specific `opencodestudio://` handler registration |
 
