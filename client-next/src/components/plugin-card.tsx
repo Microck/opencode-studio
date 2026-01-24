@@ -5,10 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCardSettings, Trash, AddBox, Alert as AlertIcon, Edit, Lock } from "@nsmr/pixelart-react";
-import type { PluginInfoAddBox} from "@/types";
+import type { PluginInfo } from "@/types";
 
 interface PluginCardProps {
-  plugin: PluginInfoAddBox
+  plugin: PluginInfo
   onToggle: () => void;
   onDelete: () => void;
   onClick?: () => void;
@@ -58,7 +58,7 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick, locked }: Plug
         </div>
         {isIncompatible && (
           <div className="mt-2 text-[10px] text-destructive flex items-center gap-1 font-medium bg-destructive/10 p-1 rounded">
-            <Alert className="h-3 w-3" />
+            <AlertIcon className="h-3 w-3" />
             Incompatible with Antigravity. Use openskills instead.
           </div>
         )}
