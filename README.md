@@ -109,6 +109,10 @@ click fetch → preview with checkboxes → existing items unchecked → import 
 
 ### deep links
 
+opencode studio supports deep links for one-click installs from external sites.
+
+> **note**: github blocks custom protocols like `opencodestudio://` in user content. use a redirect page on github pages to bypass this.
+
 | protocol | description |
 |:---|:---|
 | `opencodestudio://launch` | start backend only |
@@ -116,6 +120,40 @@ click fetch → preview with checkboxes → existing items unchecked → import 
 | `opencodestudio://install-mcp?name=NAME&cmd=COMMAND` | install mcp server |
 | `opencodestudio://import-skill?url=URL` | import skill from url |
 | `opencodestudio://import-plugin?url=URL` | import plugin from url |
+
+#### examples
+
+**add mcp server button (for docs/repos):**
+```html
+<a href="https://github.com/Microck/opencode-studio">
+  <img src="https://img.shields.io/badge/opencode-studio-brown" alt="Add with OpenCode Studio" />
+</a>
+```
+
+**import skill button:**
+```html
+<a href="opencodestudio://import-skill?url=https%3A%2F%2Fraw.githubusercontent.com%2F...%2FSKILL.md">
+  Import Skill
+</a>
+```
+
+**with environment variables:**
+```
+opencodestudio://install-mcp?name=api-server&cmd=npx%20-y%20my-mcp&env=%7B%22API_KEY%22%3A%22%22%7D
+```
+
+#### url encoding
+
+parameters must be url-encoded:
+- spaces → `%20`
+- `/` → `%2F`
+- `:` → `%3A`
+- `{` → `%7B`
+- `}` → `%7D`
+
+#### security
+
+when clicking deep links, users see a confirmation dialog showing the command or url and a warning about trusting the source.
 
 ---
 
