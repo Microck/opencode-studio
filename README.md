@@ -48,13 +48,15 @@ open http://localhost:3000
 ### features
 
 - **mcp manager**: toggle servers on/off, add new ones by pasting npx commands, delete unused configs
+- **profiles**: isolated environments with separate configs, history, and sessions. switch instantly.
 - **skill editor**: browse/edit skills, create from templates, import from url, bulk import multiple urls
 - **plugin hub**: manage js/ts plugins, multiple templates (hooks, watchers, lifecycle), bulk import
 - **commands**: browse and manage custom slash commands
-- **auth**: proxy management dashboard for CLIProxyAPI (multi-account rotation, rate-limit handling)
-- **cloud sync**: sync config across devices via dropbox, google drive, onedrive, or any cloud folder
+- **usage dashboard**: token costs, model breakdown, project stats from local message logs
+- **auth**: login/logout per provider, save and switch between credential profiles
+- **github sync**: push/pull config to a private github repo via `gh` cli
 - **backup/restore**: export/import complete config including skills and plugins
-- **settings**: permissions, agents config, keybinds, tui settings, config path management
+- **settings**: general config, system prompt editor, oh my opencode model preferences
 
 ---
 
@@ -81,11 +83,13 @@ flowchart LR
 | route | actions |
 |:---|:---|
 | `/mcp` | toggle switches, add via npx command, search/filter |
+| `/profiles` | create/switch isolated environments |
 | `/skills` | create from template, bulk import, edit in monaco |
 | `/plugins` | pick template, bulk import, click to edit |
 | `/commands` | browse custom slash commands |
-| `/auth` | proxy status, start/stop CLIProxyAPI, add accounts |
-| `/settings` | permissions, agents, keybinds, cloud sync, backup |
+| `/usage` | token costs, model breakdown, project stats |
+| `/auth` | login/logout, save/switch credential profiles |
+| `/settings` | general, system prompt, github sync, oh my opencode models |
 
 ---
 
@@ -120,7 +124,7 @@ click fetch → preview with checkboxes → existing items unchecked → import 
 ```
 opencode-studio/
 ├── client-next/           # next.js 16 frontend
-│   ├── src/app/           # pages (mcp, skills, plugins, auth, settings)
+│   ├── src/app/           # pages (mcp, profiles, skills, plugins, auth, settings, usage)
 │   ├── src/components/    # ui components
 │   └── public/            # static assets
 ├── server/
@@ -133,6 +137,7 @@ opencode-studio/
 config locations:
 - opencode config: `~/.config/opencode/`
 - studio data: `~/.config/opencode-studio/`
+- profiles: `~/.config/opencode-profiles/`
 
 ---
 
@@ -146,6 +151,7 @@ config locations:
 | bulk import fails | ensure urls are raw github links |
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
 | protocol handler not registered | run `opencode-studio-server --register` as admin |
+| github sync not working | run `gh auth login` first |
 
 ---
 
