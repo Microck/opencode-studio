@@ -461,6 +461,16 @@ function saveStudioConfig(config) {
     }
 }
 
+const getWslDistributions = () => {
+    try {
+        const { execSync } = require('child_process');
+        const stdout = execSync('wsl.exe -l -q', { encoding: 'utf16le', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000 });
+        return stdout.trim().split('\n').filter(d => d.length > 0);
+    } catch {
+        return [];
+    }
+};
+
 const getPaths = () => {
     const platform = process.platform;
     const home = os.homedir();
@@ -471,6 +481,13 @@ const getPaths = () => {
     ];
     if (platform === 'win32') {
         candidates.push(path.join(process.env.APPDATA, 'opencode', 'opencode.json'));
+    }
+
+    if (platform === 'win32') {
+        const distros = getWslDistributions();
+        for (const distro of distros) {
+            candidates.push(`\\\\wsl$\\${distro}\\home\\${os.userInfo().username}\\.config\\opencode\\opencode.json`);
+        }
     }
 
     const studioConfig = loadStudioConfig();
