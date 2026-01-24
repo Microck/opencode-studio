@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Layers, Plus, MoreVertical, Play, Trash2 } from "lucide-react";
+import { CardStack, Plus, Menu, Play, Trash } from "@nsmr/pixelart-react";
 import {
   Dialog,
   DialogContent,
@@ -117,7 +117,7 @@ export function PresetsManager() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button variant="outline" size="sm">
-            <Layers className="h-4 w-4 mr-2" />
+            <CardStack className="h-4 w-4 mr-2" />
             Presets
           </Button>
         </DialogTrigger>
@@ -132,7 +132,7 @@ export function PresetsManager() {
           <div className="flex-1 overflow-y-auto p-1 py-4">
             {presets.length === 0 ? (
               <div className="text-center py-12 border border-dashed rounded-lg">
-                <Layers className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <CardStack className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-medium text-muted-foreground">No presets yet</h3>
                 <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm mx-auto">
                   Configure your environment (enable skills, plugins, etc.) then click "New Preset" below.
@@ -146,7 +146,7 @@ export function PresetsManager() {
                       <div className="flex justify-between items-start">
                         <div>
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Layers className="h-4 w-4 text-muted-foreground" />
+                            <CardStack className="h-4 w-4 text-muted-foreground" />
                             {preset.name}
                           </CardTitle>
                           {preset.description && <CardDescription className="mt-1 line-clamp-2">{preset.description}</CardDescription>}
@@ -154,12 +154,12 @@ export function PresetsManager() {
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
+                              <Menu className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleDelete(preset.id)} className="text-destructive">
-                              <Trash2 className="h-4 w-4 mr-2" />
+                              <Trash className="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -313,9 +313,9 @@ export function PresetsManager() {
                         size="sm"
                         className="h-6 text-xs px-2"
                         onClick={() => {
-                          const allKeys = config?.mcp ? Object.keys(config.mcp) : [];
-                          if (selectedMcps.length === allKeys.length) setSelectedMcps([]);
-                          else setSelectedMcps(allKeys);
+                          const allLocks = config?.mcp ? Object.keys(config.mcp) : [];
+                          if (selectedMcps.length === allLocks.length) setSelectedMcps([]);
+                          else setSelectedMcps(allLocks);
                         }}
                       >
                         {selectedMcps.length === (config?.mcp ? Object.keys(config.mcp).length : 0) ? "None" : "All"}

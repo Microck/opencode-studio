@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search } from "@nsmr/pixelart-react";
 import { PresetsManager } from "@/components/presets-manager";
 
 export default function PluginsPage() {

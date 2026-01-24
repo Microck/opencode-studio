@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { FileCode } from "lucide-react";
+import { Code } from "@nsmr/pixelart-react";
 
 interface FileCardProps {
   name: string;
@@ -17,7 +17,7 @@ export function FileCard({ name, icon, onClick }: FileCardProps) {
     >
       <CardContent className="p-4">
         <div className="flex items-center gap-2">
-          {icon || <FileCode className="h-5 w-5 text-yellow-500" />}
+          {icon || <Code className="h-5 w-5 text-yellow-500" />}
           <span className="font-mono text-sm truncate">{name}</span>
         </div>
       </CardContent>

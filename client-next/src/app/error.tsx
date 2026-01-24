@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import { WarningBox, Reload, Home } from "@nsmr/pixelart-react";
 import Link from "next/link";
 
 export default function Error({
@@ -20,7 +20,7 @@ export default function Error({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="rounded-full bg-destructive/10 p-4">
-          <AlertTriangle className="h-8 w-8 text-destructive" />
+          <WarningBox className="h-8 w-8 text-destructive" />
         </div>
         <h1 className="text-2xl font-medium">Something went wrong</h1>
         <p className="max-w-md text-muted-foreground">
@@ -34,7 +34,7 @@ export default function Error({
       </div>
       <div className="flex gap-3">
         <Button onClick={reset} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
+          <Reload className="h-4 w-4" />
           Try again
         </Button>
         <Button asChild>

@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Check, User, Layers, Play } from "lucide-react";
+import { Plus, Trash, Check, User, CardStack, Play } from "@nsmr/pixelart-react"
 import { getProfiles, createProfile, deleteProfile, activateProfile, type ProfileList } from "@/lib/api";
 
 export default function ProfilesPage() {
@@ -162,7 +162,7 @@ export default function ProfilesPage() {
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-2">
                     <div className={`p-2 rounded-md ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                      <Layers className="h-5 w-5" />
+                      <CardStack className="h-5 w-5" />
                     </div>
                     <div>
                       <CardTitle className="text-lg">{profile}</CardTitle>
@@ -197,7 +197,7 @@ export default function ProfilesPage() {
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleteTarget(profile)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

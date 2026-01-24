@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle, Link, Loader2 } from "lucide-react";
+import { Plus, Alert as AlertIcon, Link, Loader } from "@nsmr/pixelart-react";
 import { saveSkill, fetchUrl } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -237,7 +237,7 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
 
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Alert className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -262,7 +262,7 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
                 onClick={handleFetchUrl}
                 disabled={fetching || !urlInput.trim()}
               >
-                {fetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+                {fetching ? <Loader className="h-4 w-4 animate-spin" /> : "Fetch"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">

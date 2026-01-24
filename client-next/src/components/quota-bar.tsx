@@ -2,11 +2,11 @@
 
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Clock } from "lucide-react";
-import type { QuotaInfo } from "@/types";
+import { Clock } from "@nsmr/pixelart-react";
+import type { QuotaInfoAddBox} from "@/types";
 
 interface QuotaBarProps {
-  quota: QuotaInfo;
+  quota: QuotaInfoAddBox
   compact?: boolean;
 }
 

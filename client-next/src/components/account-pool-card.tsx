@@ -33,21 +33,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Users,
-  RefreshCw,
-  MoreVertical,
-  Snowflake,
+  Reload,
+  Menu,
+  Sun,
   Play,
-  Star,
+  MoonStar,
   Plus,
-  Trash2,
-  Edit2,
-  AlertCircle,
+  Trash,
+  EditBox,
+  Alert as AlertIcon,
   Clock,
   Check,
-  Settings,
-} from "lucide-react";
+  CreditCardSettings,
+} from "@nsmr/pixelart-react";
 
-import type { AccountPool, AccountPoolEntry, QuotaInfo } from "@/types";
+import type { AccountPool, AccountPoolEntry, QuotaInfoAddBox} from "@/types";
 
 import { savePoolLimit, type CooldownRule } from "@/lib/api";
 
@@ -98,13 +98,13 @@ function getStatusColor(status: AccountPoolEntry["status"]): string {
 function getStatusIcon(status: AccountPoolEntry["status"]) {
   switch (status) {
     case "active":
-      return <Star className="h-3 w-3" />;
+      return <MoonStar className="h-3 w-3" />;
     case "ready":
       return <Play className="h-3 w-3" />;
     case "cooldown":
-      return <Snowflake className="h-3 w-3" />;
+      return <Sun className="h-3 w-3" />;
     case "expired":
-      return <AlertCircle className="h-3 w-3" />;
+      return <AlertIcon className="h-3 w-3" />;
     default:
       return null;
   }
@@ -266,7 +266,7 @@ export function AccountPoolCard({
                 onClick={() => setClearAllOpen(true)}
                 title="Clear All"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash className="h-4 w-4" />
               </Button>
             )}
             <div className="h-4 w-px bg-border mx-1" />
@@ -275,7 +275,7 @@ export function AccountPoolCard({
               Add
             </Button>
             <Button variant="outline" size="sm" onClick={onRotate} disabled={rotating} className="h-8 text-xs font-medium">
-              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${rotating ? "animate-spin" : ""}`} />
+              <Reload className={`h-3.5 w-3.5 mr-1.5 ${rotating ? "animate-spin" : ""}`} />
               Next
             </Button>
           </div>
@@ -327,7 +327,7 @@ export function AccountPoolCard({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all data-[state=open]:opacity-100">
-                      <MoreVertical className="h-4 w-4" />
+                      <Menu className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
@@ -344,24 +344,24 @@ export function AccountPoolCard({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem onClick={() => handleCooldownClick(account.name)}>
-                        <Snowflake className="h-4 w-4 mr-2" />
+                        <Sun className="h-4 w-4 mr-2" />
                         Mark Cooldown
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => onRemove(account.name)} className="text-destructive focus:text-destructive">
-                      <Trash2 className="h-4 w-4 mr-2" />
+                      <Trash className="h-4 w-4 mr-2" />
                       Remove Account
                     </DropdownMenuItem>
                     {onRename && (
                       <DropdownMenuItem onClick={() => handleRenameClick(account.name)}>
-                        <Edit2 className="h-4 w-4 mr-2" />
+                        <EditBox className="h-4 w-4 mr-2" />
                         Rename
                       </DropdownMenuItem>
                     )}
                     {onEditMetadata && (
                       <DropdownMenuItem onClick={() => handleEditMetadataClick(account)}>
-                        <Settings className="h-4 w-4 mr-2" />
+                        <CreditCardSettings className="h-4 w-4 mr-2" />
                         Edit Metadata
                       </DropdownMenuItem>
                     )}
@@ -384,7 +384,7 @@ export function AccountPoolCard({
               value={newName} 
               onChange={(e) => setNewName(e.target.value)} 
               placeholder={renameTarget?.current}
-              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+              onLockDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
             />
           </div>
           <DialogFooter>
@@ -446,7 +446,7 @@ export function AccountPoolCard({
                   </Button>
                   {onDeleteCooldownRule && (
                     <Button variant="ghost" size="icon" onClick={() => onDeleteCooldownRule(rule.name)} className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-4 w-4" />
+                      <Trash className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

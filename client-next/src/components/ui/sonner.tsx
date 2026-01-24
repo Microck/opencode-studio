@@ -1,12 +1,12 @@
 "use client"
 
 import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon,
-} from "lucide-react"
+  CheckDouble,
+  InfoBox,
+  Loader,
+  CloseBox,
+  WarningBox,
+} from "@nsmr/pixelart-react"
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
@@ -18,11 +18,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CheckDouble className="size-4" />,
+        info: <InfoBox className="size-4" />,
+        warning: <WarningBox className="size-4" />,
+        error: <CloseBox className="size-4" />,
+        loading: <Loader className="size-4 animate-spin" />,
       }}
       style={
         {

@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search } from "@nsmr/pixelart-react";
 import { PresetsManager } from "@/components/presets-manager";
 import type { MCPConfig } from "@/types";
 

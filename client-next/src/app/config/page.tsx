@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Save, RotateCcw, AlertCircle, Check } from "lucide-react";
+import { Save, Undo, Alert as AlertIcon, Check } from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 
 export default function ConfigPage() {
@@ -93,7 +93,7 @@ export default function ConfigPage() {
             Format
           </Button>
           <Button variant="outline" size="sm" onClick={handleReset} disabled={!hasChanges}>
-            <RotateCcw className="h-4 w-4 mr-2" />
+            <Undo className="h-4 w-4 mr-2" />
             Reset
           </Button>
           <Button size="sm" onClick={handleSave} disabled={saving || !hasChanges}>
@@ -123,7 +123,7 @@ export default function ConfigPage() {
         <CardContent>
           {error && (
             <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
+              <AlertIcon className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

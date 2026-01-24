@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, RefreshCcw } from "lucide-react";
+import { Close, Reload } from "@nsmr/pixelart-react"
 import { getDebugPaths } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +81,7 @@ export function DebugMenu() {
                 className="gap-2"
                 disabled={loading}
               >
-                <RefreshCcw className={cn("h-3 w-3", loading && "animate-spin")} />
+                <Reload className={cn("h-3 w-3", loading && "animate-spin")} />
                 Refresh Data
               </Button>
               <Button onClick={() => window.location.reload()} variant="secondary" size="sm">

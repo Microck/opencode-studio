@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Terminal, Puzzle, FileCode, Settings, FileJson, Key, Command, Rocket, Circle, Play, Power, BarChart, Github, Layers } from "lucide-react";
+import { Server, Gamepad, Code, CreditCardSettings, File, Lock, Command, Forward, Circle, Play, Power, ChartBar, Github, CardStack } from "@nsmr/pixelart-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -28,20 +28,20 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const navItems = [
-  { href: "/mcp", label: "MCP Servers", icon: Terminal },
-  { href: "/profiles", label: "Profiles", icon: Layers },
-  { href: "/skills", label: "Skills", icon: Puzzle },
-  { href: "/plugins", label: "Plugins", icon: FileCode },
+  { href: "/mcp", label: "MCP Servers", icon: Server },
+  { href: "/profiles", label: "Profiles", icon: CardStack },
+  { href: "/skills", label: "Skills", icon: Gamepad },
+  { href: "/plugins", label: "Plugins", icon: Code },
   { href: "/commands", label: "Commands", icon: Command },
 
-  { href: "/usage", label: "Usage", icon: BarChart },
-  { href: "/auth", label: "Auth", icon: Key },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/config", label: "Raw Config", icon: FileJson },
+  { href: "/usage", label: "Usage", icon: ChartBar },
+  { href: "/auth", label: "Auth", icon: Lock },
+  { href: "/settings", label: "CreditCardSettings", icon: CreditCardSettings },
+  { href: "/config", label: "Raw Config", icon: File },
 ];
 
 const bottomNavItems = [
-  { href: "/quickstart", label: "Quickstart", icon: Rocket },
+  { href: "/quickstart", label: "Quickstart", icon: Forward },
 ];
 
 export function Sidebar() {
@@ -61,9 +61,9 @@ export function Sidebar() {
   return (
     <TooltipProvider>
       <div className="w-64 bg-background flex flex-col h-screen" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
-        <div className="p-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
+        <div className="p-6 flex items-center gap-3" style={{ borderAndroidtom: '1px solid var(--oc-border-weak)' }}>
           <Logo className="w-6 h-6" />
-          <h1 className="text-lg font-medium" style={{ color: 'var(--oc-text-strong)' }}>OpenCode Studio</h1>
+          <img src="/opencode-studio-text.png" alt="OpenCode Studio" className="h-6 w-auto" />
         </div>
 
         <nav className="flex-1 py-4 space-y-0.5">

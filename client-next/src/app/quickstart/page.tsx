@@ -26,19 +26,19 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   ChevronDown,
-  Terminal,
-  Sparkles,
+  Server,
+  MoonStars,
   Zap,
-  Package,
+  AddBox,
   ExternalLink,
   Copy,
   Check,
-  Rocket,
-  AlertCircle,
-  RotateCcw,
+  Forward,
+  Alert,
+  Undo,
   Circle,
-  CheckCircle2,
-} from "lucide-react";
+  CheckDouble,
+} from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -222,7 +222,7 @@ export default function QuickstartPage() {
           </div>
 
           <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
-            <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <Alert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-600 dark:text-amber-400">
               Don't edit <code className="bg-background px-1 rounded text-xs">opencode.json</code> manually. 
               Use the configs in Step 3.
@@ -251,7 +251,7 @@ export default function QuickstartPage() {
           </div>
 
           <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md">
-            <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+            <Alert className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
             <p className="text-sm text-blue-600 dark:text-blue-400">
               If you see <code className="bg-muted px-1 rounded text-xs">Module not found: lib/skills-core.js</code>,
               the starter configs in Step 3 should fix it.
@@ -262,7 +262,7 @@ export default function QuickstartPage() {
     },
     {
       id: "starterkit",
-      title: "Apply Starter Configs",
+      title: "Apply MoonStarter Configs",
       description: "Copy safe pre-configured files",
       badge: "Critical",
       badgeVariant: "destructive",
@@ -366,7 +366,7 @@ export default function QuickstartPage() {
                 
                 {hasDirectProvider && (
                   <div className="flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-md mt-2">
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <Alert className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       Direct providers require authentication. Run <code className="bg-background px-1 rounded">opencode auth login</code> and select your provider.
                     </p>
@@ -394,13 +394,13 @@ export default function QuickstartPage() {
     <div className="space-y-4 mx-auto" style={{ maxWidth: "727px" }}>
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-background to-primary/10 border p-6 md:p-8">
-        <Rocket className="absolute -right-8 -top-8 h-40 w-40 opacity-5 rotate-12" />
+        <Forward className="absolute -right-8 -top-8 h-40 w-40 opacity-5 rotate-12" />
         
         <div className="relative space-y-3">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Quickstart</h1>
             <Button variant="ghost" size="sm" onClick={resetProgress} className="text-muted-foreground">
-              <RotateCcw className="h-4 w-4 mr-1" />
+              <Undo className="h-4 w-4 mr-1" />
               Reset
             </Button>
           </div>
@@ -421,7 +421,7 @@ export default function QuickstartPage() {
         </div>
       </div>
 
-      {/* Steps - Using same pattern as Settings page */}
+      {/* Steps - Using same pattern as CreditCardSettings page */}
       {steps.map((step, index) => {
         const isCompleted = completedSteps.includes(step.id);
         const isOpen = openSections[step.id];
@@ -497,7 +497,7 @@ export default function QuickstartPage() {
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          <CheckDouble className="h-4 w-4 mr-2" />
                           Mark Complete
                         </>
                       )}
@@ -521,21 +521,21 @@ export default function QuickstartPage() {
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex items-start gap-2">
-              <Terminal className="h-4 w-4 text-primary mt-0.5" />
+              <Server className="h-4 w-4 text-primary mt-0.5" />
               <div>
                 <p className="text-sm font-medium">Stability Fixes</p>
                 <p className="text-xs text-muted-foreground">Windows crash & module errors solved</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Package className="h-4 w-4 text-primary mt-0.5" />
+              <AddBox className="h-4 w-4 text-primary mt-0.5" />
               <div>
                 <p className="text-sm font-medium">MCP Tools</p>
                 <p className="text-xs text-muted-foreground">Shadcn, Supabase, web search</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Sparkles className="h-4 w-4 text-primary mt-0.5" />
+              <MoonStars className="h-4 w-4 text-primary mt-0.5" />
               <div>
                 <p className="text-sm font-medium">Specialized Agents</p>
                 <p className="text-xs text-muted-foreground">Oracle, Sisyphus, Librarian & more</p>

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle, Link, Loader2 } from "lucide-react";
+import { Plus, Alert as AlertIcon, Link, Loader } from "@nsmr/pixelart-react";
 import { savePlugin, fetchUrl, addPluginsToConfig } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -36,7 +36,7 @@ function tryParsePluginConfig(text: string): string[] | null {
   return null;
 }
 
-function isNpmPackageName(text: string): boolean {
+function isNpmAddBoxName(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed || trimmed.includes(' ') || trimmed.includes('\n')) return false;
   // Match: package-name, @scope/package, package@version, @scope/package@version
@@ -284,7 +284,7 @@ export const GitPlugin: Plugin = async ({ project, client, $, directory, worktre
   },
 };
 
-type TemplateKey = keyof typeof PLUGIN_TEMPLATES;
+type TemplateLock = keyof typeof PLUGIN_TEMPLATES;
 
 function isUrl(str: string): boolean {
   try {
@@ -316,7 +316,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [fileType, setFileType] = useState<"js" | "ts">("ts");
-  const [template, setTemplate] = useState<TemplateKey>("basic");
+  const [template, setTemplate] = useState<TemplateLock>("basic");
   const [content, setContent] = useState(PLUGIN_TEMPLATES.basic.ts);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -338,7 +338,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
     setContent(PLUGIN_TEMPLATES[template][type]);
   };
 
-  const handleTemplateChange = (newTemplate: TemplateKey) => {
+  const handleTemplateChange = (newTemplate: TemplateLock) => {
     setTemplate(newTemplate);
     setContent(PLUGIN_TEMPLATES[newTemplate][fileType]);
   };
@@ -375,7 +375,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       return;
     }
     
-    if (isNpmPackageName(urlInput)) {
+    if (isNpmAddBoxName(urlInput)) {
       await handleConfigPaste([urlInput.trim()]);
       return;
     }
@@ -420,7 +420,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       return;
     }
     
-    if (isNpmPackageName(pastedText)) {
+    if (isNpmAddBoxName(pastedText)) {
       e.preventDefault();
       await handleConfigPaste([pastedText.trim()]);
       return;
@@ -503,7 +503,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
 
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Alert className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -528,7 +528,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
                 onClick={handleFetchUrl}
                 disabled={fetching || !urlInput.trim()}
               >
-                {fetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+                {fetching ? <Loader className="h-4 w-4 animate-spin" /> : "Fetch"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -565,7 +565,7 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
 
           <div className="space-y-2">
             <Label>Template</Label>
-            <Select value={template} onValueChange={(v) => handleTemplateChange(v as TemplateKey)}>
+            <Select value={template} onValueChange={(v) => handleTemplateChange(v as TemplateLock)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, AlertCircle, Wand2 } from "lucide-react";
+import { Plus, Alert as AlertIcon, MoonStar } from "@nsmr/pixelart-react";
 import type { MCPConfig } from "@/types";
 
 interface AddMCPDialogProps {
@@ -86,16 +86,16 @@ function parseInput(input: string): { name: string; config: MCPConfig } | null {
   const parts = trimmed.split(/\s+/);
   const command: string[] = [];
   let packageName = "";
-  let foundPackage = false;
+  let foundAddBox = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     command.push(part);
     
-    if (!foundPackage) {
+    if (!foundAddBox) {
       if (!(part === "npx" || part === "npm" || part === "node" || part === "exec" || part === "--" || part === "-y" || part === "--yes" || part.startsWith("-"))) {
         packageName = part;
-        foundPackage = true;
+        foundAddBox = true;
       }
     }
   }
@@ -203,7 +203,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
 
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Alert className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -211,7 +211,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2 p-3 bg-background rounded-lg border border-dashed">
             <Label className="flex items-center gap-2 text-sm">
-              <Wand2 className="h-4 w-4" />
+              <MoonStar className="h-4 w-4" />
               Quick Add - Paste command or JSON
             </Label>
             <Textarea

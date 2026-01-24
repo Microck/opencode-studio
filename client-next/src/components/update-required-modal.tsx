@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Terminal, Copy, Check, RefreshCw, Power } from "lucide-react";
+import { WarningBox, Server, Copy, Check, Reload, Power } from "@nsmr/pixelart-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { shutdownBackend } from "@/lib/api";
@@ -38,7 +38,7 @@ export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequir
       <div className="max-w-md w-full mx-4 p-8 rounded-xl border bg-card shadow-2xl">
         <div className="flex flex-col items-center text-center">
           <div className="p-4 rounded-full bg-destructive/10 mb-6">
-            <AlertTriangle className="h-12 w-12 text-destructive" />
+            <WarningBox className="h-12 w-12 text-destructive" />
           </div>
           
           <h1 className="text-2xl font-bold mb-2">Update Required</h1>
@@ -61,7 +61,7 @@ export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequir
           <div className="w-full space-y-3">
             <p className="text-sm text-muted-foreground">Run this command to update:</p>
             <div className="flex items-center gap-2 p-3 rounded-lg bg-background border font-mono text-sm">
-              <Terminal className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Server className="h-4 w-4 text-muted-foreground shrink-0" />
               <code className="flex-1 text-left truncate">{updateCommand}</code>
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleCopy}>
                 {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
@@ -86,7 +86,7 @@ export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequir
               </div>
             )}
             <Button className="flex-1" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <Reload className="h-4 w-4 mr-2" />
               Check Again
             </Button>
           </div>

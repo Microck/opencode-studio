@@ -3,11 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsageStats, UsageStats } from "@/lib/api";
-import { 
-  Loader2, DollarSign, MessageSquare, Calendar, Download, 
-  TrendingUp, Filter, Users, Image as ImageIcon,
-  BarChart3, PieChart as PieChartIcon, Activity
-} from "lucide-react";
+import { Loader, Dollar, Message, Calendar, Download, TrendingUp, Sliders, Users, Image as ImageIcon, ChartBar, Chart as PieChartIcon, Trending } from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
@@ -292,7 +288,7 @@ export default function UsagePage() {
   if (loading && !stats) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -373,7 +369,7 @@ export default function UsagePage() {
           <Select value={projectId || "all"} onValueChange={(v) => setProjectId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[160px] h-9 text-xs">
               <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                <Sliders className="h-3.5 w-3.5 text-muted-foreground" />
                 <SelectValue placeholder="All Projects" />
               </div>
             </SelectTrigger>
@@ -411,7 +407,7 @@ export default function UsagePage() {
         <Card className="hover-lift border-primary/10 shadow-sm bg-muted/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Cost</CardTitle>
-            <DollarSign className="h-3 w-3 text-primary" />
+            <Dollar className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold tracking-tighter text-foreground">{formatCurrency(stats.totalCost)}</div>
@@ -422,7 +418,7 @@ export default function UsagePage() {
         <Card className="hover-lift border-primary/10 shadow-sm bg-muted/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Input Volume</CardTitle>
-            <MessageSquare className="h-3 w-3 text-primary" />
+            <Message className="h-3 w-3 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold tracking-tighter text-foreground">{formatTokens(totalInputTokens)}</div>
@@ -446,7 +442,7 @@ export default function UsagePage() {
         <Card className="col-span-2 border-primary/10 bg-muted/5 overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 pb-3 mb-4 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <BarChart3 className="h-3.5 w-3.5 text-primary" />
+              <ChartBar className="h-3.5 w-3.5 text-primary" />
               Usage Timeline
             </CardTitle>
           </CardHeader>
@@ -708,7 +704,7 @@ export default function UsagePage() {
         <Card className="col-span-2 border-primary/10 shadow-sm overflow-hidden flex flex-col bg-muted/5 gap-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10 py-3 px-6">
             <CardTitle className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5 text-primary" />
+              <Trending className="h-3.5 w-3.5 text-primary" />
               Model Performance Analysis
             </CardTitle>
           </CardHeader>

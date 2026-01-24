@@ -3,11 +3,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Puzzle, Trash2, Pencil } from "lucide-react";
-import type { SkillInfo } from "@/types";
+import { Gamepad, Trash, Edit } from "@nsmr/pixelart-react";
+import type { SkillInfoAddBox} from "@/types";
 
 interface SkillCardProps {
-  skill: SkillInfo;
+  skill: SkillInfoAddBox
   onToggle: () => void;
   onDelete: () => void;
   onClick: () => void;
@@ -23,7 +23,7 @@ export function SkillCard({ skill, onToggle, onDelete, onClick }: SkillCardProps
             onClick={onClick}
           >
             <div className="flex items-center gap-2">
-              <Puzzle className="h-5 w-5 text-yellow-500 shrink-0" />
+              <Gamepad className="h-5 w-5 text-yellow-500 shrink-0" />
               <span className="font-mono text-sm truncate">{skill.name}</span>
             </div>
             {skill.description && (
@@ -42,7 +42,7 @@ export function SkillCard({ skill, onToggle, onDelete, onClick }: SkillCardProps
               }}
               className="h-8 w-8 text-muted-foreground"
             >
-              <Pencil className="h-4 w-4" />
+              <Edit className="h-4 w-4" />
             </Button>
             <Switch
               checked={skill.enabled}
@@ -59,7 +59,7 @@ export function SkillCard({ skill, onToggle, onDelete, onClick }: SkillCardProps
               }}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash className="h-4 w-4" />
             </Button>
           </div>
         </div>

@@ -4,11 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Trash2, Package, AlertCircle, Pencil, Lock } from "lucide-react";
-import type { PluginInfo } from "@/types";
+import { CreditCardSettings, Trash, AddBox, Alert as AlertIcon, Edit, Lock } from "@nsmr/pixelart-react";
+import type { PluginInfoAddBox} from "@/types";
 
 interface PluginCardProps {
-  plugin: PluginInfo;
+  plugin: PluginInfoAddBox
   onToggle: () => void;
   onDelete: () => void;
   onClick?: () => void;
@@ -17,7 +17,7 @@ interface PluginCardProps {
 
 export function PluginCard({ plugin, onToggle, onDelete, onClick, locked }: PluginCardProps) {
   const isNpm = plugin.type === 'npm';
-  const Icon = isNpm ? Package : Settings;
+  const Icon = isNpm ? AddBox : CreditCardSettings;
   const isIncompatible = plugin.name.includes('opencode-skills');
   
   return (
@@ -52,13 +52,13 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick, locked }: Plug
               }}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash className="h-4 w-4" />
             </Button>
           </div>
         </div>
         {isIncompatible && (
           <div className="mt-2 text-[10px] text-destructive flex items-center gap-1 font-medium bg-destructive/10 p-1 rounded">
-            <AlertCircle className="h-3 w-3" />
+            <Alert className="h-3 w-3" />
             Incompatible with Antigravity. Use openskills instead.
           </div>
         )}

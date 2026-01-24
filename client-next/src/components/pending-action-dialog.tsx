@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Terminal, Puzzle, FileCode, Loader2 } from "lucide-react";
+import { WarningBox, Server, Gamepad, Code, Loader } from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 
 interface PendingActionDialogProps {
@@ -28,7 +28,7 @@ function InstallMCPContent({ action }: { action: PendingAction }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Terminal className="h-5 w-5 text-primary" />
+        <Server className="h-5 w-5 text-primary" />
         <span className="font-medium">{action.name || "MCP Server"}</span>
       </div>
       
@@ -57,7 +57,7 @@ function InstallMCPContent({ action }: { action: PendingAction }) {
       )}
       
       <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
-        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+        <WarningBox className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
         <p className="text-xs text-amber-600 dark:text-amber-400">
           This will add an MCP server to your OpenCode configuration. Only proceed if you trust the source.
         </p>
@@ -70,7 +70,7 @@ function ImportSkillContent({ action }: { action: PendingAction }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Puzzle className="h-5 w-5 text-primary" />
+        <Gamepad className="h-5 w-5 text-primary" />
         <span className="font-medium">{action.name || "Skill"}</span>
       </div>
       
@@ -94,7 +94,7 @@ function ImportPluginContent({ action }: { action: PendingAction }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <FileCode className="h-5 w-5 text-primary" />
+        <Code className="h-5 w-5 text-primary" />
         <span className="font-medium">{action.name || "Plugin"}</span>
       </div>
       
@@ -108,7 +108,7 @@ function ImportPluginContent({ action }: { action: PendingAction }) {
       )}
       
       <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
-        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+        <WarningBox className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
         <p className="text-xs text-amber-600 dark:text-amber-400">
           Plugins can execute code. Only import from trusted sources.
         </p>
@@ -167,7 +167,7 @@ function PendingActionDialogInner({ action, onConfirm, onCancel }: PendingAction
           <AlertDialogAction onClick={handleConfirm} disabled={loading}>
             {loading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader className="h-4 w-4 mr-2 animate-spin" />
                 Processing...
               </>
             ) : (

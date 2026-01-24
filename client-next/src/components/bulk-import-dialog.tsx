@@ -13,12 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Download,
-  AlertCircle,
-  Loader2,
+  Alert as AlertIcon,
+  Loader,
   Check,
-  X,
-  AlertTriangle,
-} from "lucide-react";
+  Close,
+  WarningBox,
+} from "@nsmr/pixelart-react";
 import { bulkFetchUrls, saveSkill, savePlugin, type BulkFetchResult } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -223,7 +223,7 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
 
         {error && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <AlertIcon className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -253,7 +253,7 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
         {phase === "fetching" && (
           <div className="space-y-4 py-8">
             <div className="flex items-center justify-center gap-3">
-              <Loader2 className="h-6 w-6 animate-spin" />
+              <Loader className="h-6 w-6 animate-spin" />
               <span>Fetching {items.length} URLs...</span>
             </div>
           </div>
@@ -322,12 +322,12 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
                         )}
                         {item.status === "success" && item.isExisting && (
                           <span className="flex items-center gap-1 text-yellow-600">
-                            <AlertTriangle className="h-4 w-4" /> Exists
+                            <WarningBox className="h-4 w-4" /> Exists
                           </span>
                         )}
                         {item.status === "error" && (
                           <span className="flex items-center gap-1 text-red-600">
-                            <X className="h-4 w-4" /> {item.error}
+                            <Close className="h-4 w-4" /> {item.error}
                           </span>
                         )}
                       </td>
@@ -351,7 +351,7 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
         {phase === "importing" && (
           <div className="space-y-4 py-8">
             <div className="flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-6 w-6 animate-spin" />
+              <Loader className="h-6 w-6 animate-spin" />
               <span>
                 Importing {importProgress.current}/{importProgress.total}...
               </span>

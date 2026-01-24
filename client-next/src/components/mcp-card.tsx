@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Pencil, Server, AlertCircle } from "lucide-react";
+import { Trash, Edit, Server, Alert as AlertIcon } from "@nsmr/pixelart-react";
 import {
   Dialog,
   DialogContent,
@@ -90,7 +90,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
                 }}
                 className="h-8 w-8 text-muted-foreground"
               >
-                <Pencil className="h-4 w-4" />
+                <Edit className="h-4 w-4" />
               </Button>
               <Switch
                 checked={config.enabled}
@@ -107,7 +107,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
                 }}
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -125,7 +125,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
 
           {error && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <Alert className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

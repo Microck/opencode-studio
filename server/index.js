@@ -341,7 +341,8 @@ function loadStudioConfig() {
                     "variants": {
                         "low": { "options": { "thinkingConfig": { "thinkingLevel": "low", "includeThoughts": true } } },
                         "medium": { "options": { "thinkingConfig": { "thinkingLevel": "medium", "includeThoughts": true } } },
-                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } }
+                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } },
+                        "xhigh": { "options": { "thinkingConfig": { "thinkingLevel": "xhigh", "includeThoughts": true } } }
                     }
                 },
                 "gemini-3-flash": {
@@ -359,7 +360,8 @@ function loadStudioConfig() {
                         "minimal": { "options": { "thinkingConfig": { "thinkingLevel": "minimal", "includeThoughts": true } } },
                         "low": { "options": { "thinkingConfig": { "thinkingLevel": "low", "includeThoughts": true } } },
                         "medium": { "options": { "thinkingConfig": { "thinkingLevel": "medium", "includeThoughts": true } } },
-                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } }
+                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } },
+                        "xhigh": { "options": { "thinkingConfig": { "thinkingLevel": "xhigh", "includeThoughts": true } } }
                     }
                 },
                 "gemini-2.5-flash-lite": {
@@ -381,7 +383,8 @@ function loadStudioConfig() {
                         "minimal": { "options": { "thinkingConfig": { "thinkingLevel": "minimal", "includeThoughts": true } } },
                         "low": { "options": { "thinkingConfig": { "thinkingLevel": "low", "includeThoughts": true } } },
                         "medium": { "options": { "thinkingConfig": { "thinkingLevel": "medium", "includeThoughts": true } } },
-                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } }
+                        "high": { "options": { "thinkingConfig": { "thinkingLevel": "high", "includeThoughts": true } } },
+                        "xhigh": { "options": { "thinkingConfig": { "thinkingLevel": "xhigh", "includeThoughts": true } } }
                     }
                 },
                 "opencode/glm-4.7-free": {
@@ -408,7 +411,8 @@ function loadStudioConfig() {
                         "none": { "reasoning": false, "options": { "thinkingConfig": { "includeThoughts": false } } },
                         "low": { "options": { "thinkingConfig": { "thinkingBudget": 4000, "includeThoughts": true } } },
                         "medium": { "options": { "thinkingConfig": { "thinkingBudget": 16000, "includeThoughts": true } } },
-                        "high": { "options": { "thinkingConfig": { "thinkingBudget": 32000, "includeThoughts": true } } }
+                        "high": { "options": { "thinkingConfig": { "thinkingBudget": 32000, "includeThoughts": true } } },
+                        "xhigh": { "options": { "thinkingConfig": { "thinkingBudget": 64000, "includeThoughts": true } } }
                     }
                 },
                 "gemini-claude-opus-4-5-thinking": {
@@ -424,7 +428,8 @@ function loadStudioConfig() {
                     "variants": {
                         "low": { "options": { "thinkingConfig": { "thinkingBudget": 4000, "includeThoughts": true } } },
                         "medium": { "options": { "thinkingConfig": { "thinkingBudget": 16000, "includeThoughts": true } } },
-                        "high": { "options": { "thinkingConfig": { "thinkingBudget": 32000, "includeThoughts": true } } }
+                        "high": { "options": { "thinkingConfig": { "thinkingBudget": 32000, "includeThoughts": true } } },
+                        "xhigh": { "options": { "thinkingConfig": { "thinkingBudget": 64000, "includeThoughts": true } } }
                     }
                 }
             }

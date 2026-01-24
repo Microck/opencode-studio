@@ -7,14 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import {
-  LogIn,
-  LogOut,
-  CheckCircle2,
-  User,
-  ChevronRight,
-  RefreshCw
-} from "lucide-react";
+import { Login, Logout, CheckDouble, User, ChevronRight, Reload } from "@nsmr/pixelart-react"
 import { getAuthInfo, getAuthProviders, authLogin, authLogout, getAuthProfiles, saveAuthProfile, activateAuthProfile, deleteAuthProfile } from "@/lib/api";
 import type { AuthCredential, AuthProfilesInfo, AuthInfo, AuthProvider } from "@/types";
 
@@ -132,7 +125,7 @@ export default function AuthPage() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={loadAuthData}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <Reload className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </header>
@@ -150,7 +143,7 @@ export default function AuthPage() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       {provider.name}
-                      {isLoggedIn && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                      {isLoggedIn && <CheckDouble className="h-4 w-4 text-green-500" />}
                     </CardTitle>
                     <CardDescription>{provider.type === 'oauth' ? 'OAuth Login' : 'API Key'}</CardDescription>
                   </div>
@@ -178,7 +171,7 @@ export default function AuthPage() {
                         className="flex-1"
                         onClick={() => handleLogout(provider.id)}
                       >
-                        <LogOut className="h-4 w-4 mr-2" />
+                        <Logout className="h-4 w-4 mr-2" />
                         Logout
                       </Button>
                     </>
@@ -192,7 +185,7 @@ export default function AuthPage() {
                         <>Loading...</>
                       ) : (
                         <>
-                          <LogIn className="h-4 w-4 mr-2" />
+                          <Login className="h-4 w-4 mr-2" />
                           Login
                         </>
                       )}
@@ -241,7 +234,7 @@ export default function AuthPage() {
                                 onClick={() => handleDeleteProfile(provider.id, profile)}
                                 title="Delete profile"
                               >
-                                <LogOut className="h-3 w-3" />
+                                <Logout className="h-3 w-3" />
                               </Button>
                             </div>
                           </div>

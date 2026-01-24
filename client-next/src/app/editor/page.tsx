@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft } from "@nsmr/pixelart-react"
 import { getSkill, saveSkill, getPlugin, savePlugin, deleteSkill, getCommand, saveCommand, deleteCommand } from "@/lib/api";
 import { toast } from "sonner";
 import type { SkillInfo, PluginInfo } from "@/types";

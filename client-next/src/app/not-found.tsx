@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Home, ArrowLeft } from "lucide-react";
+import { Home, ArrowLeft } from "@nsmr/pixelart-react";
 import Link from "next/link";
 
 export default function NotFound() {

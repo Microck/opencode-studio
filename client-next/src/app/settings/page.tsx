@@ -22,18 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  Settings,
-  Bot,
-  Download,
-  Upload,
-  Save,
-  ChevronDown,
-  Loader2,
-  FileCode,
-  Github,
-  Info,
-} from "lucide-react";
+import { CreditCardSettings as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github, InfoBox, Bot } from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
@@ -52,7 +41,7 @@ const OHMY_AGENTS = [
   { id: "multimodal-looker", name: "Multimodal Looker", desc: "Image/PDF analysis and visual content interpretation" },
 ] as const;
 
-const REASONING_EFFORTS = ["low", "medium", "high"] as const;
+const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
 
 const ESSENTIAL_KEYBINDS = [
   ["leader", "Leader key"],
@@ -71,7 +60,7 @@ const ESSENTIAL_KEYBINDS = [
 
 export default function SettingsPage() {
   const { config, loading, saveConfig, refreshData } = useApp();
-  const [pathsInfo, setPathsInfo] = useState<PathsInfo | null>(null);
+  const [pathsInfoBox, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -455,7 +444,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <FileCode className="h-5 w-5" />
+                  <Code className="h-5 w-5" />
                   <CardTitle>System Prompt</CardTitle>
                 </div>
                 <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.prompts ? "rotate-180" : ""}`} />
@@ -468,7 +457,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
               <div className="border rounded-md overflow-hidden h-[400px]">
                 {loadingPrompt ? (
                   <div className="flex items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <Editor
@@ -489,7 +478,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
               </div>
               <div className="flex justify-end">
                 <Button onClick={handleSaveSystemPrompt} disabled={savingPrompt}>
-                  {savingPrompt && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {savingPrompt && <Loader className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
                 </Button>
               </div>
@@ -616,11 +605,11 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                     
                     <div className="grid grid-cols-2 gap-3">
                       <Button onClick={handleGitHubBackup} disabled={backingUp || restoring}>
-                        {backingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {backingUp ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                         {backingUp ? "Pushing..." : "Push to GitHub"}
                       </Button>
                       <Button variant="outline" onClick={handleGitHubRestore} disabled={backingUp || restoring}>
-                        {restoring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        {restoring ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                         {restoring ? "Pulling..." : "Pull from GitHub"}
                       </Button>
                     </div>
@@ -693,7 +682,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-1 cursor-help">
                                     <Label className="text-[10px] text-muted-foreground">Thinking</Label>
-                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                    <InfoBox className="h-3 w-3 text-muted-foreground" />
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="top" className="max-w-xs">
@@ -718,7 +707,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                                 <TooltipTrigger asChild>
                                   <div className="flex items-center gap-1 cursor-help">
                                     <Label className="text-[10px] text-muted-foreground">Reasoning</Label>
-                                    <Info className="h-3 w-3 text-muted-foreground" />
+                                    <InfoBox className="h-3 w-3 text-muted-foreground" />
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="top" className="max-w-xs">
@@ -750,7 +739,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
               })}
               <div className="flex justify-end">
                 <Button onClick={handleSaveOhMy} disabled={savingOhMy}>
-                  {savingOhMy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {savingOhMy && <Loader className="mr-2 h-4 w-4 animate-spin" />}
                   Save Model Preferences
                 </Button>
               </div>
