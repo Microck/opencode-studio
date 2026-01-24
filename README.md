@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="client-next/public/og.jpg" alt="preview" width="800">
+  <img src="https://github.com/user-attachments/assets/487bba2b-a9ea-455b-a2ac-ccc5c3b95af7" alt="preview" width="1000">
 </p>
 
 ---
