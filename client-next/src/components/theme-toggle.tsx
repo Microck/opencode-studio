@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoonStars as Moon, Sun, Monitor } from "@nsmr/pixelart-react";
+import { Moon, Sun, Monitor } from "@nsmr/pixelart-react";
 
 export function ThemeToggle() {
   const { setTheme, theme } = useTheme();
