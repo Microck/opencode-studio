@@ -3,10 +3,10 @@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Clock } from "@nsmr/pixelart-react";
-import type { QuotaInfoAddBox} from "@/types";
+import type { QuotaInfo } from "@/types";
 
 interface QuotaBarProps {
-  quota: QuotaInfoAddBox
+  quota: QuotaInfo
   compact?: boolean;
 }
 
