@@ -101,7 +101,7 @@ return (
       
       <div className={`flex flex-col items-center gap-8 max-w-md text-center px-4 mt-48 ${contentClass}`}>
         <div className="space-y-2">
-          <img src="/opencode-studio-text.png" alt="" className={`h-auto w-64 ${isFirstLoad ? "landing-delay-1" : "landing-delay-fast-1"}`} />
+          <img src="/OpencodeStudioText1line.png" alt="" className={`h-auto w-64 ${isFirstLoad ? "landing-delay-1" : "landing-delay-fast-1"}`} />
           <p className={`text-muted-foreground text-lg ${isFirstLoad ? "landing-delay-2" : "landing-delay-fast-2"}`}>
             Manage your OpenCode configuration with a visual interface
           </p>
