@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Close, Reload } from "@nsmr/pixelart-react"
+import { Close, Reload, Close as X } from "@nsmr/pixelart-react"
 import { getDebugPaths } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
