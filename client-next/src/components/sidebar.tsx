@@ -60,29 +60,39 @@ export function Sidebar() {
 
   return (
     <TooltipProvider>
-      <div className="w-64 bg-card border-r border-border flex flex-col h-screen">
-        <div className="p-4 border-b border-border flex items-center gap-2">
+      <div className="w-64 bg-background flex flex-col h-screen" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
+        <div className="p-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
           <Logo className="w-6 h-6" />
-          <h1 className="text-xl font-bold">Opencode Studio</h1>
+          <h1 className="text-lg font-medium" style={{ color: 'var(--oc-text-strong)' }}>OpenCode Studio</h1>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 py-4 space-y-0.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Tooltip key={item.href}>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={isActive ? "secondary" : "ghost"}
+                    variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-3",
-                      isActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                      "w-full justify-start gap-3 rounded-none px-6 h-9",
+                      isActive 
+                        ? "font-medium" 
+                        : "font-normal"
                     )}
+                    style={isActive ? {
+                      borderLeft: '2px solid var(--oc-background-strong)',
+                      background: 'var(--oc-background-weak)',
+                      color: 'var(--oc-text-strong)',
+                    } : {
+                      borderLeft: '2px solid transparent',
+                      color: 'var(--oc-text)',
+                    }}
                     asChild
                   >
                     <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sm font-medium">{item.label}</span>
+                      <item.icon className="h-4 w-4" style={{ color: isActive ? 'var(--oc-text-strong)' : 'var(--oc-icon)' }} />
+                      <span className="text-sm">{item.label}</span>
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -94,23 +104,33 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="p-4 space-y-1">
+        <div className="py-4 space-y-0.5">
           {bottomNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Tooltip key={item.href}>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={isActive ? "secondary" : "ghost"}
+                    variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-3",
-                      isActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                      "w-full justify-start gap-3 rounded-none px-6 h-9",
+                      isActive 
+                        ? "font-medium" 
+                        : "font-normal"
                     )}
+                    style={isActive ? {
+                      borderLeft: '2px solid var(--oc-background-strong)',
+                      background: 'var(--oc-background-weak)',
+                      color: 'var(--oc-text-strong)',
+                    } : {
+                      borderLeft: '2px solid transparent',
+                      color: 'var(--oc-text)',
+                    }}
                     asChild
                   >
                     <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sm font-medium">{item.label}</span>
+                      <item.icon className="h-4 w-4" style={{ color: isActive ? 'var(--oc-text-strong)' : 'var(--oc-icon)' }} />
+                      <span className="text-sm">{item.label}</span>
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -122,7 +142,7 @@ export function Sidebar() {
           })}
         </div>
 
-        <div className="p-4 border-t border-border flex items-center justify-between">
+        <div className="p-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--oc-border-weak)' }}>
           <div className="flex items-center gap-2">
             <Circle className={cn("h-2 w-2 fill-current", connected ? "text-green-500" : "text-red-500")} />
             <span className="text-xs text-muted-foreground">

@@ -1,14 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist);
-  --font-display: var(--font-rethink-sans);
-  --font-mono: var(--font-commit-mono);
+  --font-sans: "IBM Plex Mono", monospace;
+  --font-display: "IBM Plex Mono", monospace;
+  --font-mono: "IBM Plex Mono", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -136,81 +139,240 @@
   }
 }
 
+/* ============================================
+   OpenCode Design System - Light Mode
+   ============================================ */
 :root {
-  --radius: 0.625rem;
-  --background: #F5F2F2;
-  --foreground: #131010;
-  --card: #FFFFFF;
-  --card-foreground: #131010;
-  --popover: #FFFFFF;
-  --popover-foreground: #131010;
-  --primary: #131010;
-  --primary-foreground: #F5F2F2;
-  --secondary: #EBE7E7;
-  --secondary-foreground: #131010;
-  --muted: #E0DCDC;
-  --muted-foreground: #5C5757;
-  --accent: #D6D1D1;
-  --accent-foreground: #131010;
-  --destructive: #DC2626;
-  --border: #D6D1D1;
-  --input: #EBE7E7;
-  --ring: #131010;
-  --chart-1: #131010;
-  --chart-2: #3D3838;
-  --chart-3: #6E6969;
-  --chart-4: #9C9696;
-  --chart-5: #B7B1B1;
-  --sidebar: #F5F2F2;
-  --sidebar-foreground: #131010;
-  --sidebar-primary: #131010;
-  --sidebar-primary-foreground: #F5F2F2;
-  --sidebar-accent: #EBE7E7;
-  --sidebar-accent-foreground: #131010;
-  --sidebar-border: #E0DCDC;
-  --sidebar-ring: #131010;
+  --radius: 0.375rem;
+  
+  /* OpenCode palette - Light */
+  --background: hsl(0, 20%, 99%);
+  --foreground: hsl(0, 1%, 39%);
+  
+  --card: hsl(0, 8%, 97%);
+  --card-foreground: hsl(0, 5%, 12%);
+  
+  --popover: hsl(0, 20%, 99%);
+  --popover-foreground: hsl(0, 5%, 12%);
+  
+  --primary: hsl(0, 5%, 12%);
+  --primary-foreground: hsl(0, 20%, 99%);
+  
+  --secondary: hsl(0, 8%, 97%);
+  --secondary-foreground: hsl(0, 5%, 12%);
+  
+  --muted: hsl(0, 8%, 94%);
+  --muted-foreground: hsl(0, 1%, 60%);
+  
+  --accent: hsl(62, 84%, 88%);
+  --accent-foreground: hsl(0, 5%, 12%);
+  
+  --destructive: hsl(0, 84%, 60%);
+  
+  --border: hsl(30, 2%, 81%);
+  --input: hsl(0, 1%, 85%);
+  --ring: hsl(0, 5%, 12%);
+  
+  /* Charts */
+  --chart-1: hsl(0, 5%, 12%);
+  --chart-2: hsl(0, 3%, 24%);
+  --chart-3: hsl(0, 2%, 42%);
+  --chart-4: hsl(0, 2%, 60%);
+  --chart-5: hsl(0, 2%, 71%);
+  
+  /* Sidebar */
+  --sidebar: hsl(0, 20%, 99%);
+  --sidebar-foreground: hsl(0, 1%, 39%);
+  --sidebar-primary: hsl(0, 5%, 12%);
+  --sidebar-primary-foreground: hsl(0, 20%, 99%);
+  --sidebar-accent: hsl(0, 8%, 97%);
+  --sidebar-accent-foreground: hsl(0, 5%, 12%);
+  --sidebar-border: hsl(0, 1%, 85%);
+  --sidebar-ring: hsl(0, 5%, 12%);
+  
+  /* OpenCode extended tokens */
+  --oc-background-weak: hsl(0, 8%, 97%);
+  --oc-background-weak-hover: hsl(0, 8%, 94%);
+  --oc-background-strong: hsl(0, 5%, 12%);
+  --oc-background-strong-hover: hsl(0, 5%, 18%);
+  --oc-background-interactive: hsl(62, 84%, 88%);
+  --oc-background-interactive-weaker: hsl(64, 74%, 95%);
+  
+  --oc-text: hsl(0, 1%, 39%);
+  --oc-text-weak: hsl(0, 1%, 60%);
+  --oc-text-weaker: hsl(0, 3%, 88%);
+  --oc-text-strong: hsl(0, 5%, 12%);
+  --oc-text-inverted: hsl(0, 20%, 99%);
+  
+  --oc-border: hsl(30, 2%, 81%);
+  --oc-border-weak: hsl(0, 1%, 85%);
+  
+  --oc-icon: hsl(0, 1%, 55%);
 }
 
+/* ============================================
+   OpenCode Design System - Dark Mode
+   ============================================ */
 .dark {
-  --background: #0F0D0D;
-  --foreground: #F5F2F2;
-  --card: #1A1717;
-  --card-foreground: #F5F2F2;
-  --popover: #1A1717;
-  --popover-foreground: #F5F2F2;
-  --primary: #F5F2F2;
-  --primary-foreground: #131010;
-  --secondary: #252121;
-  --secondary-foreground: #F5F2F2;
-  --muted: #302B2B;
-  --muted-foreground: #A8A2A2;
-  --accent: #3D3838;
-  --accent-foreground: #F5F2F2;
-  --destructive: #EF4444;
-  --border: #3D3838;
-  --input: #252121;
-  --ring: #D6D1D1;
-  --chart-1: #F5F2F2;
-  --chart-2: #B7B1B1;
-  --chart-3: #9C9696;
-  --chart-4: #6E6969;
-  --chart-5: #3D3838;
-  --sidebar: #0F0D0D;
-  --sidebar-foreground: #F5F2F2;
-  --sidebar-primary: #F5F2F2;
-  --sidebar-primary-foreground: #131010;
-  --sidebar-accent: #1A1717;
-  --sidebar-accent-foreground: #F5F2F2;
-  --sidebar-border: #302B2B;
-  --sidebar-ring: #D6D1D1;
+  --background: hsl(0, 9%, 7%);
+  --foreground: hsl(0, 4%, 71%);
+  
+  --card: hsl(0, 6%, 10%);
+  --card-foreground: hsl(0, 15%, 94%);
+  
+  --popover: hsl(0, 6%, 10%);
+  --popover-foreground: hsl(0, 15%, 94%);
+  
+  --primary: hsl(0, 15%, 94%);
+  --primary-foreground: hsl(0, 9%, 7%);
+  
+  --secondary: hsl(0, 6%, 10%);
+  --secondary-foreground: hsl(0, 15%, 94%);
+  
+  --muted: hsl(0, 4%, 14%);
+  --muted-foreground: hsl(0, 2%, 49%);
+  
+  --accent: hsl(62, 100%, 90%);
+  --accent-foreground: hsl(0, 9%, 7%);
+  
+  --destructive: hsl(0, 84%, 60%);
+  
+  --border: hsl(0, 3%, 28%);
+  --input: hsl(0, 4%, 23%);
+  --ring: hsl(0, 15%, 94%);
+  
+  /* Charts */
+  --chart-1: hsl(0, 15%, 94%);
+  --chart-2: hsl(0, 2%, 71%);
+  --chart-3: hsl(0, 2%, 60%);
+  --chart-4: hsl(0, 2%, 42%);
+  --chart-5: hsl(0, 3%, 24%);
+  
+  /* Sidebar */
+  --sidebar: hsl(0, 9%, 7%);
+  --sidebar-foreground: hsl(0, 4%, 71%);
+  --sidebar-primary: hsl(0, 15%, 94%);
+  --sidebar-primary-foreground: hsl(0, 9%, 7%);
+  --sidebar-accent: hsl(0, 6%, 10%);
+  --sidebar-accent-foreground: hsl(0, 15%, 94%);
+  --sidebar-border: hsl(0, 4%, 23%);
+  --sidebar-ring: hsl(0, 15%, 94%);
+  
+  /* OpenCode extended tokens */
+  --oc-background-weak: hsl(0, 6%, 10%);
+  --oc-background-weak-hover: hsl(0, 5%, 14%);
+  --oc-background-strong: hsl(0, 15%, 94%);
+  --oc-background-strong-hover: hsl(0, 15%, 97%);
+  --oc-background-interactive: hsl(62, 100%, 90%);
+  --oc-background-interactive-weaker: hsl(60, 20%, 8%);
+  
+  --oc-text: hsl(0, 4%, 71%);
+  --oc-text-weak: hsl(0, 2%, 49%);
+  --oc-text-weaker: hsl(0, 3%, 28%);
+  --oc-text-strong: hsl(0, 15%, 94%);
+  --oc-text-inverted: hsl(0, 9%, 7%);
+  
+  --oc-border: hsl(0, 3%, 28%);
+  --oc-border-weak: hsl(0, 4%, 23%);
+  
+  --oc-icon: hsl(10, 3%, 43%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  
+  html {
+    font-size: 14px;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Typography - OpenCode style */
+  h1 {
+    font-size: 1.857rem; /* 26px at 14px base */
+    font-weight: 500;
+    color: var(--oc-text-strong);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  
+  h2 {
+    font-size: 1.571rem; /* 22px at 14px base */
+    font-weight: 500;
+    color: var(--oc-text-strong);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  
+  h3 {
+    font-size: 1.286rem; /* 18px at 14px base */
+    font-weight: 500;
+    color: var(--oc-text-strong);
+    line-height: 1.4;
+  }
+  
+  h4 {
+    font-size: 1.143rem; /* 16px at 14px base */
+    font-weight: 500;
+    color: var(--oc-text-strong);
+    line-height: 1.4;
+  }
+  
+  h5, h6 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--oc-text-strong);
+  }
+  
+  strong, b {
+    font-weight: 500;
+  }
+  
+  a {
+    color: var(--oc-text-strong);
+    text-decoration: none;
+  }
+  
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+  
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.929em;
+    background: var(--oc-background-weak);
+    padding: 0.125em 0.375em;
+    border-radius: 0.25rem;
+    border: 1px solid var(--oc-border-weak);
+  }
+  
+  pre code {
+    background: none;
+    padding: 0;
+    border: none;
+  }
+  
+  /* Remove default list styles */
+  ul, ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  hr {
+    border: none;
+    border-bottom: 1px solid var(--oc-border-weak);
+    margin: 1.5rem 0;
   }
 }
 
@@ -247,7 +409,7 @@
     @apply transition-all duration-200 ease-out;
   }
   .hover-lift:hover {
-    @apply -translate-y-1 shadow-xl;
+    @apply -translate-y-0.5;
   }
   .hover-lift-container {
     @apply p-1 -m-1;
@@ -320,4 +482,70 @@
     animation: fade-in-up 0.3s ease-out forwards;
     animation-delay: 1.15s; 
   }
+  
+  /* OpenCode border patterns */
+  .oc-border {
+    border: 2px solid var(--oc-border);
+  }
+  
+  .oc-border-weak {
+    border: 1px solid var(--oc-border-weak);
+  }
+  
+  /* OpenCode interactive states */
+  .oc-interactive {
+    background: var(--oc-background-interactive);
+    color: var(--oc-text-strong);
+  }
+  
+  .oc-interactive:hover {
+    background: var(--oc-background-interactive-weaker);
+  }
+}
+
+/* ============================================
+   Component-specific overrides
+   ============================================ */
+
+/* Cards - OpenCode style */
+.card, [data-slot="card"] {
+  background: var(--oc-background-weak);
+  border: 1px solid var(--oc-border-weak);
+  border-radius: var(--radius);
+}
+
+/* Sidebar styling */
+.sidebar, [data-sidebar] {
+  border-right: 1px solid var(--oc-border-weak);
+}
+
+/* Active nav item - OpenCode style with left border accent */
+.nav-item-active {
+  border-left: 2px solid var(--oc-background-strong);
+  background: var(--oc-background-weak);
+}
+
+/* Scrollbar styling for OpenCode look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--oc-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-text-weak);
+}
+
+/* Selection styling */
+::selection {
+  background: var(--oc-background-interactive);
+  color: var(--oc-text-strong);
 }
