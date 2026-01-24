@@ -166,7 +166,7 @@ export function Sidebar() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={() => setShowDisconnectDialog(true)}>
-                    <Power className="h-4 w-4" />
+                    <Power className="h-4 w-4 text-destructive" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
