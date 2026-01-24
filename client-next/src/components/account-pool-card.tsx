@@ -47,7 +47,7 @@ import {
   CreditCardSettings,
 } from "@nsmr/pixelart-react";
 
-import type { AccountPool, AccountPoolEntry, QuotaInfoAddBox} from "@/types";
+import type { AccountPool, AccountPoolEntry } from "@/types";
 
 import { savePoolLimit, type CooldownRule } from "@/lib/api";
 
@@ -384,7 +384,7 @@ export function AccountPoolCard({
               value={newName} 
               onChange={(e) => setNewName(e.target.value)} 
               placeholder={renameTarget?.current}
-              onLockDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
             />
           </div>
           <DialogFooter>
