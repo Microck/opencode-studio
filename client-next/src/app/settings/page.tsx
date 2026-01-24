@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CreditCardSettings as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github, InfoBox, Bot } from "@nsmr/pixelart-react";
+import { CreditCardSettings as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github, InfoBox, Android as Bot } from "@nsmr/pixelart-react";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
