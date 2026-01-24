@@ -99,15 +99,15 @@ return (
         </div>
       </div>
       
-      <div className={`flex flex-col items-center gap-8 max-w-lg text-center px-4 mt-48 ${contentClass}`}>
+      <div className={`flex flex-col items-center gap-8 max-w-md text-center px-4 mt-48 ${contentClass}`}>
         <div className="space-y-2">
-          <img src="/OpencodeStudioText1line.png" alt="" className={`h-auto w-96 ${isFirstLoad ? "landing-delay-1" : "landing-delay-fast-1"}`} />
+          <img src="/OpencodeStudioText1line.png" alt="" className={`h-auto w-full ${isFirstLoad ? "landing-delay-1" : "landing-delay-fast-1"}`} />
           <p className={`text-muted-foreground text-lg ${isFirstLoad ? "landing-delay-2" : "landing-delay-fast-2"}`}>
             Manage your OpenCode configuration with a visual interface
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 w-full max-w-lg">
+        <div className="flex flex-col gap-3 w-full max-w-md">
           <div className={isFirstLoad ? "landing-delay-3" : "landing-delay-fast-3"}>
             <Button size="lg" className="w-full gap-2" onClick={handleLaunch}>
               <Play className="h-5 w-5" />
