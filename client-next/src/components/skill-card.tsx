@@ -4,10 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Gamepad, Trash, Edit } from "@nsmr/pixelart-react";
-import type { SkillInfoAddBox} from "@/types";
+import type { SkillInfo } from "@/types";
 
 interface SkillCardProps {
-  skill: SkillInfoAddBox
+  skill: SkillInfo
   onToggle: () => void;
   onDelete: () => void;
   onClick: () => void;
