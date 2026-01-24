@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-01-24
+
+### Added
+- **OG Image**: dedicated social sharing image for twitter/opengraph.
+- **Error Pages**: error.tsx, not-found.tsx, loading.tsx for better ux.
+- **Security Headers**: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy.
+- **Accessibility**: skip to main content link, focus-visible styles.
+- **PWA**: updated manifest with name, description, theme colors.
+- **SEO**: JSON-LD structured data, theme-color meta tag.
+- **Website Checklist**: tracking file for launch readiness.
+
+### Changed
+- **README**: complete rewrite following microck-writing style.
+- **Metadata**: proper favicon config (ico, 16x16, 32x32), apple-touch-icon.
+
 ## [1.14.5] - 2026-01-17
 
 ### Fixed
