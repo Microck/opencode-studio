@@ -283,6 +283,16 @@
     @apply border-border outline-ring/50;
   }
   
+  /* Focus visible styles for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  
   html {
     font-size: 14px;
   }

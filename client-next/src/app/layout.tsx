@@ -50,6 +50,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Microck", url: "https://github.com/Microck" }],
   creator: "Microck",
+  manifest: "/site.webmanifest",
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -60,7 +61,7 @@ export const metadata: Metadata = {
     siteName: "OpenCode Studio",
     images: [
       {
-        url: "/logo-dark.png", // Fallback to logo if no OG image
+        url: "/og.jpg",
         width: 1200,
         height: 630,
         alt: "OpenCode Studio",
@@ -72,12 +73,16 @@ export const metadata: Metadata = {
     title: "OpenCode Studio - AI Configuration Manager",
     description:
       "Visual interface for managing your OpenCode configuration. Configure MCP servers, skills, plugins, and AI agents with a modern dashboard.",
-    images: ["/logo-dark.png"],
+    images: ["/og.jpg"],
     creator: "@microck",
   },
   icons: {
-    icon: "/logo-dark.png",
-    apple: "/logo-dark.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   robots: {
     index: true,
@@ -90,6 +95,10 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  other: {
+    "theme-color": "#111111",
+    "color-scheme": "dark light",
+  },
 };
 
 export default function RootLayout({
@@ -97,12 +106,45 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "OpenCode Studio",
+    description:
+      "Visual interface for managing OpenCode configuration. Configure MCP servers, skills, plugins, and AI agents.",
+    url: "https://opencode.micr.dev",
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Web",
+    author: {
+      "@type": "Person",
+      name: "Microck",
+      url: "https://github.com/Microck",
+    },
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+  };
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${rethinkSans.variable} ${geist.variable} ${commitMono.variable} antialiased`}
         suppressHydrationWarning
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:border-border focus:rounded"
+        >
+          Skip to main content
+        </a>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
