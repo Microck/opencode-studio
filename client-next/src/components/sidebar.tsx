@@ -63,7 +63,7 @@ export function Sidebar() {
       <div className="w-64 bg-background flex flex-col h-screen" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
         <div className="p-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
           <Logo className="w-6 h-6" />
-          <img src="/OpencodeStudioText1line.png" alt="OpenCode Studio" className="h-6 w-auto" />
+          <img src="/OpencodeStudioText.png" alt="OpenCode Studio" className="h-6 w-auto" />
         </div>
 
         <nav className="flex-1 py-4 space-y-0.5">
