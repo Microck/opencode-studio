@@ -496,7 +496,14 @@ const getPaths = () => {
     }
 
     const studioConfig = loadStudioConfig();
-    const manualPath = studioConfig.configPath;
+    let manualPath = studioConfig.configPath;
+
+    if (manualPath && fs.existsSync(manualPath) && fs.statSync(manualPath).isDirectory()) {
+        const potentialFile = path.join(manualPath, 'opencode.json');
+        if (fs.existsSync(potentialFile)) {
+            manualPath = potentialFile;
+        }
+    }
 
     let detected = null;
     for (const p of candidates) {
@@ -605,7 +612,14 @@ app.get('/api/debug/auth', (req, res) => {
 app.post('/api/paths', (req, res) => {
     const { configPath } = req.body;
     const studioConfig = loadStudioConfig();
-    studioConfig.configPath = configPath;
+    
+    if (configPath && fs.existsSync(configPath) && fs.statSync(configPath).isDirectory()) {
+        const potentialFile = path.join(configPath, 'opencode.json');
+        studioConfig.configPath = potentialFile;
+    } else {
+        studioConfig.configPath = configPath;
+    }
+    
     saveStudioConfig(studioConfig);
     res.json({ success: true, current: getConfigPath() });
 });
@@ -619,6 +633,7 @@ app.get('/api/config', (req, res) => {
 app.post('/api/config', (req, res) => {
     try {
         saveConfig(req.body);
+        triggerGitHubAutoSync();
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1080,9 +1095,10 @@ app.post('/api/ohmyopencode', (req, res) => {
         saveOhMyOpenCodeConfig(currentConfig);
         
         const ohMyPath = getOhMyOpenCodeConfigPath();
+        triggerGitHubAutoSync();
         res.json({ 
             success: true, 
-            path: ohMyPath, 
+            path: ohMyPath,
             exists: true, 
             config: currentConfig, 
             preferences, 
@@ -1186,6 +1202,107 @@ function execPromise(cmd, opts = {}) {
     });
 }
 
+
+let autoSyncTimer = null;
+
+async function performGitHubBackup(options = {}) {
+    const { owner, repo, branch } = options;
+    let tempDir = null;
+    try {
+        const token = await getGitHubToken();
+        if (!token) throw new Error('Not logged in to gh CLI. Run: gh auth login');
+        
+        const user = await getGitHubUser(token);
+        if (!user) throw new Error('Failed to get GitHub user');
+        
+        const studio = loadStudioConfig();
+        
+        const finalOwner = owner || studio.githubBackup?.owner || user.login;
+        const finalRepo = repo || studio.githubBackup?.repo;
+        const finalBranch = branch || studio.githubBackup?.branch || 'main';
+        
+        if (!finalRepo) throw new Error('No repo name provided');
+        
+        const repoName = `${finalOwner}/${finalRepo}`;
+        
+        await ensureGitHubRepo(token, repoName);
+        
+        const opencodeConfig = getConfigPath();
+        if (!opencodeConfig) throw new Error('No opencode config path found');
+        
+        const opencodeDir = path.dirname(opencodeConfig);
+        const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
+        
+        tempDir = path.join(os.tmpdir(), `opencode-backup-${Date.now()}`);
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        // Clone or init
+        try {
+            await execPromise(`git clone --depth 1 https://x-access-token:${token}@github.com/${repoName}.git .`, { cwd: tempDir });
+        } catch (e) {
+            // If clone fails (empty repo?), try init
+            await execPromise('git init', { cwd: tempDir });
+            await execPromise(`git remote add origin https://x-access-token:${token}@github.com/${repoName}.git`, { cwd: tempDir });
+            await execPromise(`git checkout -b ${finalBranch}`, { cwd: tempDir });
+        }
+        
+        const backupOpencodeDir = path.join(tempDir, 'opencode');
+        const backupStudioDir = path.join(tempDir, 'opencode-studio');
+        
+        if (fs.existsSync(backupOpencodeDir)) fs.rmSync(backupOpencodeDir, { recursive: true });
+        if (fs.existsSync(backupStudioDir)) fs.rmSync(backupStudioDir, { recursive: true });
+        
+        copyDirContents(opencodeDir, backupOpencodeDir);
+        copyDirContents(studioDir, backupStudioDir);
+        
+        await execPromise('git add -A', { cwd: tempDir });
+        
+        const timestamp = new Date().toISOString();
+        const commitMessage = `OpenCode Studio backup ${timestamp}`;
+        
+        let result = { success: true, timestamp, url: `https://github.com/${repoName}` };
+        
+        try {
+            await execPromise(`git commit -m "${commitMessage}"`, { cwd: tempDir });
+            await execPromise(`git push origin ${finalBranch}`, { cwd: tempDir });
+        } catch (e) {
+            if (e.message.includes('nothing to commit')) {
+                result.message = 'No changes to backup';
+            } else {
+                throw e;
+            }
+        }
+        
+        studio.githubBackup = { owner: finalOwner, repo: finalRepo, branch: finalBranch };
+        studio.lastGithubBackup = timestamp;
+        saveStudioConfig(studio);
+        
+        return result;
+    } finally {
+        if (tempDir && fs.existsSync(tempDir)) {
+            try { fs.rmSync(tempDir, { recursive: true }); } catch (e) {}
+        }
+    }
+}
+
+function triggerGitHubAutoSync() {
+    const studio = loadStudioConfig();
+    if (!studio.githubAutoSync) return;
+
+    if (autoSyncTimer) clearTimeout(autoSyncTimer);
+    
+    console.log('[AutoSync] Change detected, scheduling GitHub backup in 15s...');
+    autoSyncTimer = setTimeout(async () => {
+        console.log('[AutoSync] Starting GitHub backup...');
+        try {
+            const result = await performGitHubBackup();
+            console.log(`[AutoSync] Backup completed: ${result.message || 'Pushed to GitHub'}`);
+        } catch (err) {
+            console.error('[AutoSync] Backup failed:', err.message);
+        }
+    }, 15000); // 15s debounce
+}
+
 app.get('/api/github/backup/status', async (req, res) => {
     try {
         const token = await getGitHubToken();
@@ -1218,72 +1335,10 @@ app.get('/api/github/backup/status', async (req, res) => {
 });
 
 app.post('/api/github/backup', async (req, res) => {
-    let tempDir = null;
     try {
-        const token = await getGitHubToken();
-        if (!token) return res.status(400).json({ error: 'Not logged in to gh CLI. Run: gh auth login' });
-        
-        const user = await getGitHubUser(token);
-        if (!user) return res.status(400).json({ error: 'Failed to get GitHub user' });
-        
-        const { owner, repo, branch } = req.body;
-        const studio = loadStudioConfig();
-        
-        const finalOwner = owner || studio.githubBackup?.owner || user.login;
-        const finalRepo = repo || studio.githubBackup?.repo;
-        const finalBranch = branch || studio.githubBackup?.branch || 'main';
-        
-        if (!finalRepo) return res.status(400).json({ error: 'No repo name provided' });
-        
-        const repoName = `${finalOwner}/${finalRepo}`;
-        
-        await ensureGitHubRepo(token, repoName);
-        
-        const opencodeConfig = getConfigPath();
-        if (!opencodeConfig) return res.status(400).json({ error: 'No opencode config path found' });
-        
-        const opencodeDir = path.dirname(opencodeConfig);
-        const studioDir = path.join(HOME_DIR, '.config', 'opencode-studio');
-        
-        tempDir = path.join(os.tmpdir(), `opencode-backup-${Date.now()}`);
-        fs.mkdirSync(tempDir, { recursive: true });
-        
-        await execPromise(`git clone --depth 1 https://x-access-token:${token}@github.com/${repoName}.git .`, { cwd: tempDir });
-        
-        const backupOpencodeDir = path.join(tempDir, 'opencode');
-        const backupStudioDir = path.join(tempDir, 'opencode-studio');
-        
-        if (fs.existsSync(backupOpencodeDir)) fs.rmSync(backupOpencodeDir, { recursive: true });
-        if (fs.existsSync(backupStudioDir)) fs.rmSync(backupStudioDir, { recursive: true });
-        
-        copyDirContents(opencodeDir, backupOpencodeDir);
-        copyDirContents(studioDir, backupStudioDir);
-        
-        await execPromise('git add -A', { cwd: tempDir });
-        
-        const timestamp = new Date().toISOString();
-        const commitMessage = `OpenCode Studio backup ${timestamp}`;
-        
-        try {
-            await execPromise(`git commit -m "${commitMessage}"`, { cwd: tempDir });
-            await execPromise(`git push origin ${finalBranch}`, { cwd: tempDir });
-        } catch (e) {
-            if (e.message.includes('nothing to commit')) {
-                fs.rmSync(tempDir, { recursive: true });
-                return res.json({ success: true, timestamp, message: 'No changes to backup', url: `https://github.com/${repoName}` });
-            }
-            throw e;
-        }
-        
-        fs.rmSync(tempDir, { recursive: true });
-        
-        studio.githubBackup = { owner: finalOwner, repo: finalRepo, branch: finalBranch };
-        studio.lastGithubBackup = timestamp;
-        saveStudioConfig(studio);
-        
-        res.json({ success: true, timestamp, url: `https://github.com/${repoName}` });
+        const result = await performGitHubBackup(req.body);
+        res.json(result);
     } catch (err) {
-        if (tempDir && fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true });
         console.error('GitHub backup error:', err);
         res.status(500).json({ error: err.message });
     }
@@ -1348,6 +1403,7 @@ app.post('/api/github/autosync', async (req, res) => {
     const enabled = req.body.enabled;
     studio.githubAutoSync = enabled;
     saveStudioConfig(studio);
+    if (enabled) triggerGitHubAutoSync();
     res.json({ success: true, enabled });
 });
 
@@ -1386,6 +1442,7 @@ app.post('/api/skills/:name', (req, res) => {
     const dp = path.join(sd, req.params.name);
     if (!fs.existsSync(dp)) fs.mkdirSync(dp, { recursive: true });
     fs.writeFileSync(path.join(dp, 'SKILL.md'), req.body.content, 'utf8');
+    triggerGitHubAutoSync();
     res.json({ success: true });
 });
 
@@ -1396,6 +1453,7 @@ app.delete('/api/skills/:name', (req, res) => {
     const sd = getSkillDir();
     const dp = sd ? path.join(sd, req.params.name) : null;
     if (dp && fs.existsSync(dp)) fs.rmSync(dp, { recursive: true, force: true });
+    triggerGitHubAutoSync();
     res.json({ success: true });
 });
 
@@ -1411,6 +1469,7 @@ app.post('/api/skills/:name/toggle', (req, res) => {
     }
     
     saveStudioConfig(studio);
+    triggerGitHubAutoSync();
     res.json({ success: true, enabled: !studio.disabledSkills.includes(name) });
 });
 
@@ -1490,6 +1549,7 @@ app.post('/api/plugins/:name', (req, res) => {
     // Default to .js if new
     const filePath = path.join(pd, name.endsWith('.js') || name.endsWith('.ts') ? name : name + '.js');
     atomicWriteFileSync(filePath, content);
+    triggerGitHubAutoSync();
     res.json({ success: true });
 });
 
@@ -1515,8 +1575,10 @@ app.delete('/api/plugins/:name', (req, res) => {
         }
     }
     
-    if (deleted) res.json({ success: true });
-    else res.status(404).json({ error: 'Plugin not found' });
+    if (deleted) {
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } else res.status(404).json({ error: 'Plugin not found' });
 });
 
 app.post('/api/plugins/:name/toggle', (req, res) => {
@@ -1531,6 +1593,7 @@ app.post('/api/plugins/:name/toggle', (req, res) => {
     }
     
     saveStudioConfig(studio);
+    triggerGitHubAutoSync();
     res.json({ success: true, enabled: !studio.disabledPlugins.includes(name) });
 });
 
@@ -3428,7 +3491,17 @@ app.post('/api/presets/:id/apply', (req, res) => {
 // Start watcher on server start
 function startServer() {
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
-    app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+        // Initial sync on startup if enabled
+        setTimeout(() => {
+            const studio = loadStudioConfig();
+            if (studio.githubAutoSync) {
+                console.log('[AutoSync] Triggering initial sync...');
+                triggerGitHubAutoSync();
+            }
+        }, 5000);
+    });
 }
 
 if (require.main === module) {
