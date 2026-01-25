@@ -112,6 +112,26 @@ export async function getPaths(): Promise<PathsInfo> {
   return data;
 }
 
+export async function getDebugInfo() {
+  try {
+    const paths = await getPaths();
+    const auth = await api.get('/debug/auth').then(res => res.data);
+    const sync = await getSyncStatus();
+    const health = await checkHealth();
+    
+    return {
+      paths,
+      auth,
+      sync,
+      serverHealthy: health,
+      clientVersion: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
+    };
+  } catch (error) {
+    console.error('Failed to fetch debug info:', error);
+    return { error: 'Failed to fetch debug info' };
+  }
+}
+
 export async function getDebugPaths(): Promise<any> {
   const { data } = await api.get('/paths');
   return data;

@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Close, Reload, Close as X } from "@nsmr/pixelart-react"
-import { getDebugPaths } from "@/lib/api";
+import { Close, Reload, Close as X, Copy } from "@nsmr/pixelart-react"
+import { getDebugInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function DebugMenu() {
@@ -32,17 +32,24 @@ export function DebugMenu() {
   const fetchDebugInfo = async () => {
     setLoading(true);
     try {
-      const info = await getDebugPaths();
+      const info = await getDebugInfo();
       setDebugInfo({
         ...info,
         userAgent: navigator.userAgent,
         timestamp: new Date().toISOString(),
+        windowSize: `${window.innerWidth}x${window.innerHeight}`,
       });
     } catch (err) {
       console.error("Failed to fetch debug info", err);
       setDebugInfo({ error: "Failed to fetch debug info from backend" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    if (debugInfo) {
+      navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
     }
   };
 
@@ -84,10 +91,14 @@ export function DebugMenu() {
                 <Reload className={cn("h-3 w-3", loading && "animate-spin")} />
                 Refresh Data
               </Button>
-              <Button onClick={() => window.location.reload()} variant="secondary" size="sm">
-                Hard Reload Page
+              <Button onClick={copyToClipboard} variant="outline" size="sm" className="gap-2">
+                <Copy className="h-3 w-3" />
+                Copy JSON
               </Button>
             </div>
+            <Button onClick={() => window.location.reload()} variant="secondary" size="sm" className="w-full">
+              Hard Reload Page
+            </Button>
           </div>
 
           <div className="pt-4 border-t border-border/50">
