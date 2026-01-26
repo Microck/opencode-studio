@@ -13,14 +13,14 @@ Web GUI for managing [Opencode](https://github.com/opencode-ai/opencode) configu
 ## Quick Start
 
 ```bash
-# Start backend (port 3001)
+# Start backend (auto-detects port, starting at 1920)
 cd server && node index.js
 
-# Start frontend (port 3000)
+# Start frontend (auto-detects port, starting at 1080)
 cd client-next && npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:1080
 
 ## Tech Stack
 

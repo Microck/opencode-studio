@@ -4,8 +4,26 @@ const path = require('path');
 const { exec } = require('child_process');
 const os = require('os');
 const fs = require('fs');
+const net = require('net');
 
 const args = process.argv.slice(2);
+
+async function findAvailablePort(startPort, maxTries = 10) {
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(startPort, () => {
+            server.once('close', () => resolve(startPort));
+            server.close();
+        });
+        server.on('error', () => {
+            if (maxTries > 1) {
+                findAvailablePort(startPort + 1, maxTries - 1).then(resolve);
+            } else {
+                resolve(startPort);
+            }
+        });
+    });
+}
 
 // Handle --register flag
 if (args.includes('--register')) {
@@ -103,27 +121,29 @@ if (pendingAction) {
 
 // Open browser if requested (only for fully local mode)
 if (shouldOpenBrowser) {
-    const openUrl = 'http://localhost:3000';
-    const platform = os.platform();
-    
-    setTimeout(() => {
-        let cmd;
-        if (platform === 'win32') {
-            cmd = `start "" "${openUrl}"`;
-        } else if (platform === 'darwin') {
-            cmd = `open "${openUrl}"`;
-        } else {
-            cmd = `xdg-open "${openUrl}"`;
-        }
-        
-        exec(cmd, (err) => {
-            if (err) {
-                console.log(`Open ${openUrl} in your browser`);
+    findAvailablePort(1080).then(port => {
+        const openUrl = `http://localhost:${port}`;
+        const platform = os.platform();
+
+        setTimeout(() => {
+            let cmd;
+            if (platform === 'win32') {
+                cmd = `start "" "${openUrl}"`;
+            } else if (platform === 'darwin') {
+                cmd = `open "${openUrl}"`;
             } else {
-                console.log(`Opened ${openUrl}`);
+                cmd = `xdg-open "${openUrl}"`;
             }
-        });
-    }, 1500); // Give server time to start
+
+            exec(cmd, (err) => {
+                if (err) {
+                    console.log(`Open ${openUrl} in your browser`);
+                } else {
+                    console.log(`Opened ${openUrl}`);
+                }
+            });
+        }, 2000);
+    });
 }
 
 // Start the server

@@ -44,7 +44,7 @@ quickstart.bat
 chmod +x quickstart.sh && ./quickstart.sh
 ```
 
-open http://localhost:3000
+open http://localhost:1080
 
 ---
 
@@ -67,7 +67,7 @@ open http://localhost:3000
 
 ```mermaid
 flowchart LR
-    A[Browser] -->|HTTP| B(Express API :3001)
+    A[Browser] -->|HTTP| B(Express API :1920+)
     B -->|Read/Write| C[~/.config/opencode/]
     C --> D[opencode.json]
     C --> E[skill/]
@@ -119,7 +119,7 @@ opencode studio supports deep links for one-click installs from external sites.
 | protocol | description |
 |:---|:---|
 | `opencodestudio://launch` | start backend only |
-| `opencodestudio://launch?open=local` | start backend + open localhost:3000 |
+| `opencodestudio://launch?open=local` | start backend + open localhost:1080+ |
 | `opencodestudio://install-mcp?name=NAME&cmd=COMMAND` | install mcp server |
 | `opencodestudio://import-skill?url=URL` | import skill from url |
 | `opencodestudio://import-plugin?url=URL` | import plugin from url |
@@ -187,7 +187,7 @@ config locations:
 | problem | fix |
 |:---|:---|
 | "opencode not found" | ensure `~/.config/opencode/opencode.json` exists |
-| port 3000/3001 in use | kill existing processes or change ports |
+| port conflicts | both services auto-detect available ports (backend 1920+, frontend 1080+) |
 | skills not showing | check `~/.config/opencode/skill/` has SKILL.md files |
 | bulk import fails | ensure urls are raw github links |
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |

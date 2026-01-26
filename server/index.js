@@ -41,8 +41,22 @@ const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
 };
 
 const app = express();
-const PORT = 3001;
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; 
+const DEFAULT_PORT = 1920;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+function findAvailablePort(startPort) {
+    const net = require('net');
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(startPort, () => {
+            server.once('close', () => resolve(startPort));
+            server.close();
+        });
+        server.on('error', () => {
+            findAvailablePort(startPort + 1).then(resolve);
+        });
+    });
+}
 
 let idleTimer = null;
 
@@ -62,8 +76,10 @@ app.use((req, res, next) => {
 });
 
 const ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
+    'http://localhost:1080',
+    'http://127.0.0.1:1080',
+    /^http:\/\/localhost:108\d$/,
+    /^http:\/\/127\.0\.0\.1:108\d$/,
     'https://opencode-studio.vercel.app',
     'https://opencode.micr.dev',
     'https://opencode-studio.micr.dev',
@@ -3489,10 +3505,12 @@ app.post('/api/presets/:id/apply', (req, res) => {
 });
 
 // Start watcher on server start
-function startServer() {
+async function startServer() {
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
-    app.listen(PORT, () => {
-        console.log(`Server running at http://localhost:${PORT}`);
+
+    const port = await findAvailablePort(DEFAULT_PORT);
+    app.listen(port, () => {
+        console.log(`Server running at http://localhost:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
             const studio = loadStudioConfig();

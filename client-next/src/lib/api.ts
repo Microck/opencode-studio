@@ -1,18 +1,46 @@
 import axios from 'axios';
 import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001/api';
+const BACKEND_BASE_PORT = 1920;
+const MAX_PORT_TRIES = 10;
+
+let cachedApiUrl: string | null = null;
+
+async function discoverBackendPort(): Promise<string> {
+    if (cachedApiUrl) return cachedApiUrl;
+
+    for (let i = 0; i < MAX_PORT_TRIES; i++) {
+        const port = BACKEND_BASE_PORT + i;
+        const testUrl = `http://127.0.0.1:${port}/api`;
+
+        try {
+            const response = await axios.get(`${testUrl}/health`, { timeout: 500 });
+            cachedApiUrl = testUrl;
+            return testUrl;
+        } catch {}
+    }
+
+    throw new Error(`Cannot find backend server on ports ${BACKEND_BASE_PORT}-${BACKEND_BASE_PORT + MAX_PORT_TRIES - 1}`);
+}
+
+const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: envApiUrl || 'http://127.0.0.1:1920/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+if (!envApiUrl) {
+    discoverBackendPort().then((url) => {
+        api.defaults.baseURL = url;
+    }).catch(() => {});
+}
+
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '1.28.3';
+export const MIN_SERVER_VERSION = '2.0.0';
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);

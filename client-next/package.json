@@ -3,7 +3,8 @@
   "version": "1.5.12",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node dev-with-port.js",
+    "dev:plain": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
