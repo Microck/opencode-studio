@@ -31,6 +31,6 @@
 
 ## Architecture
 - **Monorepo**: Single repository with client-next/ and server/ subdirectories
-- **Separate Processes**: Frontend (port 3000) and backend (port 3001) run independently
+- **Separate Processes**: Frontend (port 1080+) and backend (port 1920+) run independently with auto-port detection
 - **File-based Storage**: No database, uses JSON and markdown files in ~/.config/
 - **Protocol Handler**: Custom opencodestudio:// URLs for deep linking

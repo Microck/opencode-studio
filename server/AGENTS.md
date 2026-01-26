@@ -1,6 +1,6 @@
 # SERVER LAYER
 
-Express API backend (port 3001). Single-file architecture.
+Express API backend (port 1920). Single-file architecture.
 
 ## STRUCTURE
 

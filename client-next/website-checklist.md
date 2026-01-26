@@ -52,7 +52,7 @@
 - [x] X-Content-Type-Options (nosniff)
 - [x] Referrer-Policy (strict-origin-when-cross-origin)
 - [x] Permissions-Policy (camera, mic, geo disabled)
-- [ ] CSP headers - N/A (requires localhost:3001 + inline styles)
+- [ ] CSP headers - N/A (requires localhost:1920 + inline styles)
 
 ## Legal
 - [ ] Privacy policy (if collecting data) - N/A for local app

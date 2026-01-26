@@ -46,7 +46,7 @@ const { refreshData, saveConfig, toggleMCP, deleteMCP, addMCP, updateMCP, toggle
 
 ## CONVENTIONS
 
-- **API base:** `NEXT_PUBLIC_API_URL` env or `http://127.0.0.1:3001/api`
+- **API base:** `NEXT_PUBLIC_API_URL` env or `http://127.0.0.1:1920/api` (auto-detects 1920-1929)
 - **axios instance:** Pre-configured, exported as default + named methods
 - **Context pattern:** Must wrap app in `<AppProvider>`, access via `useApp()`
 - **MCP sanitization:** `sanitizeMCPConfig()` normalizes args→command, env→environment

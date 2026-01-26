@@ -12,8 +12,8 @@ GUI for managing OpenCode CLI configs. Next.js 16 frontend + Express backend. Re
 
 ```
 opencode-studio/
-├── client-next/         # Next.js 16 frontend (port 3000) - See client-next/AGENTS.md
-├── server/              # Express API (port 3001) - See server/AGENTS.md
+├── client-next/         # Next.js 16 frontend (port 1080) - See client-next/AGENTS.md
+├── server/              # Express API (port 1920) - See server/AGENTS.md
 │   └── index.js         # 808 LOC - all backend logic
 ├── quickstart.bat/.sh   # One-click installers
 └── package.json         # Monorepo runner (concurrently)

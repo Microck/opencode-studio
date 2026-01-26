@@ -24,7 +24,7 @@ Start the server manually:
 opencode-studio-server
 ```
 
-The server runs on port **3001** and provides an API for managing your local OpenCode configuration.
+The server runs on port **1920** (auto-detects next available) and provides an API for managing your local OpenCode configuration.
 
 ## Features
 
