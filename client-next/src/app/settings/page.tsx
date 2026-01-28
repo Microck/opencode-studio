@@ -326,7 +326,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
   if (loading) {
     return (
       <div className="space-y-4 animate-fade-in">
-        <PageHelp title="Settings" docUrl="https://opencode.ai/docs" docTitle="Settings" />
+        <PageHelp title="Settings" docUrl="https://opencode.ai/docs/settings" docTitle="Settings" />
         <Skeleton className="h-96" />
       </div>
     );
@@ -334,7 +334,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHelp title="Settings" docUrl="https://opencode.ai/docs" docTitle="Settings" />
+      <PageHelp title="Settings" docUrl="https://opencode.ai/docs/settings" docTitle="Settings" />
 
       <Collapsible open={openSections.general} onOpenChange={() => toggleSection("general")}>
         <Card className="hover-lift">

@@ -88,7 +88,7 @@ export default function ConfigPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <PageHelp title="Raw Config" docUrl="https://opencode.ai/docs" docTitle="Config" />
+        <PageHelp title="Raw Config" docUrl="https://opencode.ai/docs/config" docTitle="Config" />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleFormat}>
             Format

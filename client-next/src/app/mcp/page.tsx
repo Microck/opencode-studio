@@ -98,9 +98,9 @@ export default function MCPPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs" docTitle="MCP Servers" />
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs/mcp" docTitle="MCP Servers" />
         <div className="flex gap-2">
           <PresetsManager />
           <AddMCPDialog onAdd={handleAdd} />

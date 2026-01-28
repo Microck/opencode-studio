@@ -399,7 +399,7 @@ export default function QuickstartPage() {
         
         <div className="relative space-y-3">
           <div className="flex items-center justify-between">
-            <PageHelp title="Quickstart" docUrl="https://opencode.ai/docs" docTitle="Quickstart" />
+            <PageHelp title="Quickstart" docUrl="https://opencode.ai/docs/quickstart" docTitle="Quickstart" />
             <Button variant="ghost" size="sm" onClick={resetProgress} className="text-muted-foreground">
               <Undo className="h-4 w-4 mr-1" />
               Reset

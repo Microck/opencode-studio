@@ -122,7 +122,7 @@ export default function AuthPage() {
         <div>
           <PageHelp
             title="Authentication"
-            docUrl="https://opencode.ai/docs"
+            docUrl="https://opencode.ai/docs/auth"
             docTitle="Authentication Documentation"
           />
           <p className="text-muted-foreground mt-1">

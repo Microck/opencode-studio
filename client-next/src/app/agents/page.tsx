@@ -176,7 +176,7 @@ export default function AgentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <PageHelp title="Agents" docUrl="https://opencode.ai/docs" docTitle="Agent Builder & Manager" />
+        <PageHelp title="Agents" docUrl="https://opencode.ai/docs/agents" docTitle="Agent Builder & Manager" />
         <Button onClick={() => openEditor()}>
           <Plus className="h-4 w-4" />
           New Agent

@@ -117,7 +117,7 @@ export default function ProfilesPage() {
           <div className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <PageHelp
               title="Profiles"
-              docUrl="https://opencode.ai/docs"
+              docUrl="https://opencode.ai/docs/profiles"
               docTitle="Profiles Documentation"
             />
             <Badge variant="outline" className="font-mono text-xs font-normal">

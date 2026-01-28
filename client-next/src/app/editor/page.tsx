@@ -149,14 +149,14 @@ function EditorContent() {
               />
               <PageHelp
                 title={type === "skills" ? "Edit Skill" : "Edit Command"}
-                docUrl="https://opencode.ai/docs"
+                docUrl={type === "skills" ? "https://opencode.ai/docs/skills" : "https://opencode.ai/docs/commands"}
                 docTitle={`${type === "skills" ? "Skill" : "Command"} Documentation`}
               />
             </div>
           ) : (
             <PageHelp
               title={name}
-              docUrl="https://opencode.ai/docs"
+              docUrl="https://opencode.ai/docs/plugins"
               docTitle="Plugin Documentation"
             />
           )}

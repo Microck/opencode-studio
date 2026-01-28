@@ -160,7 +160,7 @@ export default function CommandsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <PageHelp title="Commands" docUrl="https://opencode.ai/docs" docTitle="Commands" />
+        <PageHelp title="Commands" docUrl="https://opencode.ai/docs/commands" docTitle="Commands" />
         </div>
         <div className="grid grid-cols-1 gap-4">
           {[1, 2, 3].map((i) => (
@@ -174,7 +174,7 @@ export default function CommandsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <PageHelp title="Commands" docUrl="https://opencode.ai/docs" docTitle="Commands" />
+          <PageHelp title="Commands" docUrl="https://opencode.ai/docs/commands" docTitle="Commands" />
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
