@@ -11,11 +11,14 @@ import { useRouter } from "next/navigation";
 import { deleteSkill } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
+import { Button } from "@/components/ui/button";
 import { PageHelp } from "@/components/page-help";
+import { PageHelpDialog } from "@/components/page-help-dialog";
 import { PresetsManager } from "@/components/presets-manager";
 
 export default function SkillsPage() {
   const { skills, loading, refreshData, toggleSkill } = useApp();
+  const [helpOpen, setHelpOpen] = useState(false);
   const router = useRouter();
   const [search, setSearch] = useState("");
 
