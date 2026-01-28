@@ -11,7 +11,9 @@ import { useRouter } from "next/navigation";
 import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
+import { Button } from "@/components/ui/button";
 import { PageHelp } from "@/components/page-help";
+import { PageHelpDialog } from "@/components/page-help-dialog";
 import { PresetsManager } from "@/components/presets-manager";
 
 export default function PluginsPage() {
