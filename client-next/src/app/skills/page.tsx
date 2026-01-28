@@ -11,14 +11,11 @@ import { useRouter } from "next/navigation";
 import { deleteSkill } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
-import { Button } from "@/components/ui/button";
 import { PageHelp } from "@/components/page-help";
-import { PageHelpDialog } from "@/components/page-help-dialog";
 import { PresetsManager } from "@/components/presets-manager";
 
 export default function SkillsPage() {
   const { skills, loading, refreshData, toggleSkill } = useApp();
-  const [helpOpen, setHelpOpen] = useState(false);
   const router = useRouter();
   const [search, setSearch] = useState("");
 
@@ -62,7 +59,7 @@ export default function SkillsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <PageHelp title="Skills" docUrl="https://opencode.ai/docs/skills" docTitle="Skills" />
+          <PageHelp title="Skills" docUrl="https://opencode.ai/docs" docTitle="Skills" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -74,13 +71,10 @@ export default function SkillsPage() {
   }
 
   return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <PageHelp title="Skills" docUrl="https://opencode.ai/docs/skills" docTitle="Skills" />
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Page help">
-              ?
-            </Button>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <PageHelp title="Skills" docUrl="https://opencode.ai/docs" docTitle="Skills" />
+        <div className="flex gap-2">
           <PresetsManager />
           <BulkImportDialog 
             type="skills"
@@ -107,10 +101,19 @@ export default function SkillsPage() {
         <p className="text-muted-foreground italic">No skills found.</p>
       ) : filteredSkills.length === 0 ? (
         <p className="text-muted-foreground italic">No skills match "{search}"</p>
-        ) : (
-      </div>
-
-      <PageHelpDialog open={helpOpen} onOpenChange={setHelpOpen} page="skills" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {filteredSkills.map((skill) => (
+            <SkillCard
+              key={skill.name}
+              skill={skill}
+              onToggle={() => handleToggle(skill.name)}
+              onDelete={() => handleDelete(skill.name)}
+              onClick={() => handleOpen(skill.name)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

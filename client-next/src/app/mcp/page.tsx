@@ -5,7 +5,6 @@ import { useApp } from "@/lib/context";
 import { MCPCard } from "@/components/mcp-card";
 import { AddMCPDialog } from "@/components/add-mcp-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -20,7 +19,6 @@ import {
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
-import { PageHelpDialog } from "@/components/page-help-dialog";
 import { PresetsManager } from "@/components/presets-manager";
 import type { MCPConfig } from "@/types";
 
@@ -28,7 +26,6 @@ export default function MCPPage() {
   const { config, loading, toggleMCP, deleteMCP, addMCP, updateMCP } = useApp();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [helpOpen, setHelpOpen] = useState(false);
 
   const mcpEntries = Object.entries(config?.mcp || {});
   
@@ -87,25 +84,24 @@ export default function MCPPage() {
     }
   };
 
-   if (loading) {
-     return (
-       <div className="space-y-4">
-         <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs/mcp" docTitle="MCP Servers" />
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-           {[1, 2, 3].map((i) => (
-             <Skeleton key={i} className="h-32" />
-           ))}
-         </div>
-       </div>
-     );
-   }
+  if (loading) {
+    return (
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
-        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs/mcp" docTitle="MCP Servers" />
+        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs" docTitle="MCP Servers" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs" docTitle="MCP Servers" />
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Page help">
-            ?
-          </Button>
           <PresetsManager />
           <AddMCPDialog onAdd={handleAdd} />
         </div>
@@ -153,11 +149,9 @@ export default function MCPPage() {
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-      <PageHelpDialog open={helpOpen} onOpenChange={setHelpOpen} page="mcp" />
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
