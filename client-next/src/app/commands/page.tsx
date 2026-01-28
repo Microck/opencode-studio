@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Trash, Edit, Command, Logout } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 
 interface CommandEntry {
@@ -159,7 +160,7 @@ export default function CommandsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Commands</h1>
+          <PageHelp title="Commands" docUrl="https://opencode.ai/docs" docTitle="Commands" />
         </div>
         <div className="grid grid-cols-1 gap-4">
           {[1, 2, 3].map((i) => (
@@ -173,7 +174,7 @@ export default function CommandsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Commands</h1>
+        <PageHelp title="Commands" docUrl="https://opencode.ai/docs" docTitle="Commands" />
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button size="sm">

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse } from '@/types';
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
@@ -41,6 +41,17 @@ if (!envApiUrl) {
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
 export const MIN_SERVER_VERSION = '2.0.0';
+
+export async function getApiBaseUrl(): Promise<string> {
+  if (api.defaults.baseURL) return api.defaults.baseURL;
+  try {
+    const url = await discoverBackendPort();
+    api.defaults.baseURL = url;
+    return url;
+  } catch {
+    return api.defaults.baseURL || envApiUrl || 'http://127.0.0.1:1920/api';
+  }
+}
 
 function compareVersions(current: string, minimum: string): boolean {
   const c = current.split('.').map(Number);
@@ -191,6 +202,46 @@ export async function getConfig(): Promise<OpencodeConfig> {
 
 export async function saveConfig(config: OpencodeConfig): Promise<void> {
   await api.post('/config', config);
+}
+
+export async function getAgents(): Promise<AgentInfo[]> {
+  const { data } = await api.get<AgentsResponse>('/agents');
+  return data.agents;
+}
+
+export async function saveAgent(name: string, config: AgentConfig, source: 'json' | 'markdown' | 'builtin' = 'markdown', scope?: 'project' | 'global') {
+  const { data } = await api.post('/agents', { name, config, source, scope });
+  return data;
+}
+
+export async function updateAgent(name: string, config: AgentConfig) {
+  const { data } = await api.put(`/agents/${encodeURIComponent(name)}`, { config });
+  return data;
+}
+
+export async function deleteAgent(name: string) {
+  const { data } = await api.delete(`/agents/${encodeURIComponent(name)}`);
+  return data;
+}
+
+export async function toggleAgent(name: string) {
+  const { data } = await api.post(`/agents/${encodeURIComponent(name)}/toggle`);
+  return data;
+}
+
+export async function getSystemTools(): Promise<SystemToolInfo[]> {
+  const { data } = await api.get<SystemToolInfo[]>('/system/tools');
+  return data;
+}
+
+export async function getProjectRules(): Promise<RulesResponse> {
+  const { data } = await api.get<RulesResponse>('/project/rules');
+  return data;
+}
+
+export async function saveProjectRules(content: string, source: 'AGENTS.md' | 'CLAUDE.md') {
+  const { data } = await api.post('/project/rules', { content, source });
+  return data;
 }
 
 export async function getSkills(): Promise<SkillInfo[]> {

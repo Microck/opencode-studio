@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { PresetsManager } from "@/components/presets-manager";
 import type { MCPConfig } from "@/types";
 
@@ -86,7 +87,7 @@ export default function MCPPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">MCP Servers</h1>
+        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs" docTitle="MCP Servers" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-32" />
@@ -99,7 +100,7 @@ export default function MCPPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">MCP Servers</h1>
+        <PageHelp title="MCP Servers" docUrl="https://opencode.ai/docs" docTitle="MCP Servers" />
         <div className="flex gap-2">
           <PresetsManager />
           <AddMCPDialog onAdd={handleAdd} />

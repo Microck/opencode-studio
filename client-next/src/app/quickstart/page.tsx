@@ -39,6 +39,7 @@ import {
   Circle,
   CheckDouble,
 } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -398,7 +399,7 @@ export default function QuickstartPage() {
         
         <div className="relative space-y-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Quickstart</h1>
+            <PageHelp title="Quickstart" docUrl="https://opencode.ai/docs" docTitle="Quickstart" />
             <Button variant="ghost" size="sm" onClick={resetProgress} className="text-muted-foreground">
               <Undo className="h-4 w-4 mr-1" />
               Reset

@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Save, Undo, Alert as AlertIcon, Check } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 
 export default function ConfigPage() {
@@ -78,7 +79,7 @@ export default function ConfigPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Raw Config</h1>
+        <PageHelp title="Raw Config" docUrl="https://opencode.ai/docs" docTitle="Config" />
         <Skeleton className="h-[500px]" />
       </div>
     );
@@ -87,7 +88,7 @@ export default function ConfigPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Raw Config</h1>
+        <PageHelp title="Raw Config" docUrl="https://opencode.ai/docs" docTitle="Config" />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleFormat}>
             Format

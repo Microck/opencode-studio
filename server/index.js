@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
+const yaml = require('js-yaml');
 
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
@@ -107,9 +108,41 @@ const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'p
 const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
 const LOG_DIR = path.join(HOME_DIR, '.local', 'share', 'opencode', 'log');
 
+const LOG_BUFFER_SIZE = 100;
+const logBuffer = [];
+const logSubscribers = new Set();
+
 let logWatcher = null;
 let currentLogFile = null;
 let logReadStream = null;
+
+function enqueueLogLine(line) {
+    const entry = { timestamp: Date.now(), line };
+    logBuffer.push(entry);
+    if (logBuffer.length > LOG_BUFFER_SIZE) logBuffer.shift();
+
+    for (const sub of logSubscribers) {
+        sub.queue.push(`data: ${JSON.stringify(entry)}\n\n`);
+        flushSubscriber(sub);
+    }
+}
+
+function flushSubscriber(sub) {
+    if (sub.draining || sub.closed) return;
+    while (sub.queue.length > 0) {
+        const chunk = sub.queue[0];
+        const ok = sub.res.write(chunk);
+        if (!ok) {
+            sub.draining = true;
+            sub.res.once('drain', () => {
+                sub.draining = false;
+                flushSubscriber(sub);
+            });
+            return;
+        }
+        sub.queue.shift();
+    }
+}
 
 function setupLogWatcher() {
     if (!fs.existsSync(LOG_DIR)) return;
@@ -189,6 +222,7 @@ function setupLogWatcher() {
 }
 
 function processLogLine(line) {
+    enqueueLogLine(line);
     // Detect LLM usage: service=llm providerID=... modelID=...
     // Example: service=llm providerID=openai modelID=gpt-5.2-codex sessionID=...
     const isUsage = line.includes('service=llm') && line.includes('stream');
@@ -308,6 +342,7 @@ function loadStudioConfig() {
     const defaultConfig = {
         disabledSkills: [],
         disabledPlugins: [],
+        disabledAgents: [],
         activeProfiles: {},
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
@@ -545,6 +580,100 @@ const getOhMyOpenCodeConfigPath = () => {
 
 const getConfigPath = () => getPaths().current;
 
+const getAgentDirs = () => {
+    const dirs = [];
+    const configPath = getConfigPath();
+    const configDir = configPath ? path.dirname(configPath) : null;
+
+    if (configDir) {
+        dirs.push(path.join(configDir, '.opencode', 'agents'));
+        dirs.push(path.join(configDir, '.opencode', 'agent'));
+    }
+
+    const xdg = process.env.XDG_CONFIG_HOME;
+    if (xdg) {
+        dirs.push(path.join(xdg, 'opencode', 'agents'));
+        dirs.push(path.join(xdg, 'opencode', 'agent'));
+    }
+
+    dirs.push(path.join(HOME_DIR, '.config', 'opencode', 'agents'));
+    dirs.push(path.join(HOME_DIR, '.config', 'opencode', 'agent'));
+
+    return [...new Set(dirs)];
+};
+
+const parseAgentMarkdown = (content) => {
+    const match = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/);
+    if (!match) return { data: {}, body: content };
+    let data = {};
+    try {
+        data = yaml.load(match[1]) || {};
+    } catch {
+        data = {};
+    }
+    return { data, body: match[2] || '' };
+};
+
+const buildAgentMarkdown = (frontmatter, body) => {
+    const yamlText = yaml.dump(frontmatter, { lineWidth: 120, noRefs: true, quotingType: '"' });
+    const content = body || '';
+    return `---\n${yamlText}---\n\n${content}`;
+};
+
+const validatePermissionValue = (value) => {
+    const allowed = ['ask', 'allow', 'deny'];
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'string') return allowed.includes(value);
+    if (typeof value !== 'object') return false;
+
+    const keys = Object.keys(value);
+    const isAllowDeny = keys.every((k) => k === 'allow' || k === 'deny');
+    if (isAllowDeny) {
+        return (!value.allow || Array.isArray(value.allow)) && (!value.deny || Array.isArray(value.deny));
+    }
+
+    for (const v of Object.values(value)) {
+        if (typeof v === 'string') {
+            if (!allowed.includes(v)) return false;
+        } else if (typeof v === 'object') {
+            if (!validatePermissionValue(v)) return false;
+        } else if (v !== undefined && v !== null) {
+            return false;
+        }
+    }
+    return true;
+};
+
+const findRulesFile = () => {
+    const configPath = getConfigPath();
+    if (!configPath) return { path: null, source: 'none' };
+
+    let dir = path.dirname(configPath);
+    let last = null;
+    while (dir && dir !== last) {
+        const agentsPath = path.join(dir, 'AGENTS.md');
+        if (fs.existsSync(agentsPath)) return { path: agentsPath, source: 'AGENTS.md' };
+        const claudePath = path.join(dir, 'CLAUDE.md');
+        if (fs.existsSync(claudePath)) return { path: claudePath, source: 'CLAUDE.md' };
+        last = dir;
+        dir = path.dirname(dir);
+    }
+
+    return { path: null, source: 'none' };
+};
+
+const detectTool = (tool) => {
+    const command = process.platform === 'win32' ? `where ${tool}` : `which ${tool}`;
+    try {
+        const output = execSync(command, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+        if (!output) return { name: tool, available: false };
+        const first = output.split(/\r?\n/)[0];
+        return { name: tool, available: true, path: first };
+    } catch {
+        return { name: tool, available: false };
+    }
+};
+
 const loadConfig = () => {
     const configPath = getConfigPath();
     if (!configPath || !fs.existsSync(configPath)) return null;
@@ -648,9 +777,292 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/config', (req, res) => {
     try {
+        if (!validatePermissionValue(req.body?.permission)) {
+            return res.status(400).json({ error: 'Invalid permission value. Must be ask, allow, or deny.' });
+        }
         saveConfig(req.body);
         triggerGitHubAutoSync();
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/agents', (req, res) => {
+    try {
+        const config = loadConfig() || {};
+        const studio = loadStudioConfig();
+        const disabledAgents = studio.disabledAgents || [];
+        const agentMap = new Map();
+
+        const configAgents = config.agent || {};
+        for (const [name, agentConfig] of Object.entries(configAgents)) {
+            agentMap.set(name, {
+                name,
+                source: 'json',
+                disabled: disabledAgents.includes(name),
+                ...agentConfig,
+                permission: agentConfig.permission || agentConfig.permissions,
+                permissions: agentConfig.permission || agentConfig.permissions
+            });
+        }
+
+        for (const dir of getAgentDirs()) {
+            if (!fs.existsSync(dir)) continue;
+            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+            files.forEach((file) => {
+                const fp = path.join(dir, file);
+                const content = fs.readFileSync(fp, 'utf8');
+                const { data, body } = parseAgentMarkdown(content);
+                const name = path.basename(file, '.md');
+                agentMap.set(name, {
+                    name,
+                    source: 'markdown',
+                    disabled: disabledAgents.includes(name),
+                    description: data.description,
+                    mode: data.mode,
+                    model: data.model,
+                    temperature: data.temperature,
+                    tools: data.tools,
+                    permission: data.permission,
+                    permissions: data.permission,
+                    maxSteps: data.maxSteps,
+                    disable: data.disable,
+                    hidden: data.hidden,
+                    prompt: body
+                });
+            });
+        }
+
+        ['build', 'plan'].forEach((name) => {
+            if (!agentMap.has(name)) {
+                agentMap.set(name, { name, source: 'builtin', mode: 'primary', disabled: disabledAgents.includes(name) });
+            }
+        });
+
+        res.json({ agents: Array.from(agentMap.values()) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/agents', (req, res) => {
+    try {
+        const { name, config: agentConfig, source, scope } = req.body || {};
+        if (!name || typeof name !== 'string') return res.status(400).json({ error: 'Missing agent name' });
+        if (!/^[a-zA-Z0-9 _-]+$/.test(name)) return res.status(400).json({ error: 'Invalid agent name' });
+
+        const config = loadConfig() || {};
+        if (!config.agent) config.agent = {};
+
+        const normalizedConfig = { ...(agentConfig || {}) };
+        if (normalizedConfig.permissions && !normalizedConfig.permission) {
+            normalizedConfig.permission = normalizedConfig.permissions;
+            delete normalizedConfig.permissions;
+        }
+
+        const shouldWriteMarkdown = source === 'markdown' || !!normalizedConfig?.mode;
+        if (shouldWriteMarkdown) {
+            const configPath = getConfigPath();
+            const baseDir = configPath ? path.dirname(configPath) : HOME_DIR;
+            const projectDir = path.join(baseDir, '.opencode', 'agents');
+            const globalDir = path.join(HOME_DIR, '.config', 'opencode', 'agents');
+            const targetDir = scope === 'project' ? projectDir : globalDir;
+            if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+            const frontmatter = {
+                description: normalizedConfig?.description,
+                mode: normalizedConfig?.mode,
+                model: normalizedConfig?.model,
+                temperature: normalizedConfig?.temperature,
+                tools: normalizedConfig?.tools,
+                permission: normalizedConfig?.permission,
+                maxSteps: normalizedConfig?.maxSteps,
+                disable: normalizedConfig?.disable,
+                hidden: normalizedConfig?.hidden
+            };
+
+            const markdown = buildAgentMarkdown(frontmatter, normalizedConfig?.prompt || '');
+            atomicWriteFileSync(path.join(targetDir, `${name}.md`), markdown);
+
+            if (config.agent[name]) {
+                delete config.agent[name];
+                saveConfig(config);
+            }
+        } else {
+            config.agent[name] = normalizedConfig;
+            saveConfig(config);
+        }
+
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/agents/:name', (req, res) => {
+    try {
+        const { name } = req.params;
+        const { config: agentConfig } = req.body || {};
+
+        const normalizedConfig = { ...(agentConfig || {}) };
+        if (normalizedConfig.permissions && !normalizedConfig.permission) {
+            normalizedConfig.permission = normalizedConfig.permissions;
+            delete normalizedConfig.permissions;
+        }
+
+        const config = loadConfig() || {};
+        if (!config.agent) config.agent = {};
+
+        const markdownDirs = getAgentDirs().filter((d) => fs.existsSync(d));
+        const markdownPath = markdownDirs
+            .map((d) => path.join(d, `${name}.md`))
+            .find((p) => fs.existsSync(p));
+
+        if (markdownPath) {
+            const frontmatter = {
+                description: normalizedConfig?.description,
+                mode: normalizedConfig?.mode,
+                model: normalizedConfig?.model,
+                temperature: normalizedConfig?.temperature,
+                tools: normalizedConfig?.tools,
+                permission: normalizedConfig?.permission,
+                maxSteps: normalizedConfig?.maxSteps,
+                disable: normalizedConfig?.disable,
+                hidden: normalizedConfig?.hidden
+            };
+            const markdown = buildAgentMarkdown(frontmatter, normalizedConfig?.prompt || '');
+            atomicWriteFileSync(markdownPath, markdown);
+        } else {
+            config.agent[name] = normalizedConfig;
+            saveConfig(config);
+        }
+
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/agents/:name', (req, res) => {
+    try {
+        const { name } = req.params;
+        const config = loadConfig() || {};
+
+        if (config.agent && config.agent[name]) {
+            delete config.agent[name];
+            saveConfig(config);
+        }
+
+        for (const dir of getAgentDirs()) {
+            const fp = path.join(dir, `${name}.md`);
+            if (fs.existsSync(fp)) fs.unlinkSync(fp);
+        }
+
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/agents/:name/toggle', (req, res) => {
+    try {
+        const { name } = req.params;
+        const studio = loadStudioConfig();
+        const disabled = new Set(studio.disabledAgents || []);
+        if (disabled.has(name)) disabled.delete(name); else disabled.add(name);
+        studio.disabledAgents = Array.from(disabled);
+        saveStudioConfig(studio);
+        res.json({ success: true, disabled: studio.disabledAgents.includes(name) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/logs/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (res.flushHeaders) res.flushHeaders();
+
+    setupLogWatcher();
+
+    const sub = { res, queue: [], draining: false, closed: false };
+    logSubscribers.add(sub);
+
+    logBuffer.forEach((entry) => {
+        sub.queue.push(`data: ${JSON.stringify(entry)}\n\n`);
+    });
+    flushSubscriber(sub);
+
+    const keepalive = setInterval(() => {
+        if (sub.closed) return;
+        res.write(': keepalive\n\n');
+    }, 20000);
+
+    req.on('close', () => {
+        sub.closed = true;
+        clearInterval(keepalive);
+        logSubscribers.delete(sub);
+        try { res.end(); } catch {}
+    });
+});
+
+app.get('/api/system/tools', (req, res) => {
+    const knownTools = [
+        'go', 'gofmt', 'gopls',
+        'rust-analyzer', 'rustfmt',
+        'prettier', 'eslint',
+        'typescript-language-server', 'tsserver',
+        'pyright', 'ruff', 'python',
+        'clangd', 'clang-format',
+        'dart', 'jdtls',
+        'kotlin-language-server', 'ktlint',
+        'deno', 'lua-language-server',
+        'ocamllsp', 'nixd',
+        'swift', 'sourcekit-lsp'
+    ];
+
+    const tools = knownTools.map((tool) => detectTool(tool));
+    res.json(tools);
+});
+
+app.get('/api/project/rules', (req, res) => {
+    try {
+        const found = findRulesFile();
+        if (!found.path) return res.json({ content: '', source: 'none', path: null });
+        const content = fs.readFileSync(found.path, 'utf8');
+        res.json({ content, source: found.source, path: found.path });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/project/rules', (req, res) => {
+    try {
+        const { content, source } = req.body || {};
+        const configPath = getConfigPath();
+        if (!configPath) return res.status(400).json({ error: 'No config path found' });
+
+        const targetName = source === 'CLAUDE.md' ? 'CLAUDE.md' : 'AGENTS.md';
+        const found = findRulesFile();
+
+        let targetPath = null;
+        if (found.path && path.basename(found.path) === targetName) {
+            targetPath = found.path;
+        }
+
+        if (!targetPath) {
+            const baseDir = path.dirname(configPath);
+            targetPath = path.join(baseDir, targetName);
+        }
+
+        atomicWriteFileSync(targetPath, content || '');
+        res.json({ success: true, path: targetPath, source: targetName });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

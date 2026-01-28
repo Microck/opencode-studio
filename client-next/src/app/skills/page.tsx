@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { deleteSkill } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { PresetsManager } from "@/components/presets-manager";
 
 export default function SkillsPage() {
@@ -58,7 +59,7 @@ export default function SkillsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Skills</h1>
+          <PageHelp title="Skills" docUrl="https://opencode.ai/docs" docTitle="Skills" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -72,7 +73,7 @@ export default function SkillsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Skills</h1>
+        <PageHelp title="Skills" docUrl="https://opencode.ai/docs" docTitle="Skills" />
         <div className="flex gap-2">
           <PresetsManager />
           <BulkImportDialog 

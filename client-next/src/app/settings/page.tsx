@@ -22,7 +22,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PermissionEditor } from "@/components/permission-editor";
 import { Sliders as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github, InfoBox, Android as Bot } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
@@ -63,8 +65,9 @@ export default function SettingsPage() {
   const [pathsInfoBox, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     general: true,
+    permissions: false,
     prompts: false,
     backup: false,
     ohmy: false,
@@ -323,7 +326,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
   if (loading) {
     return (
       <div className="space-y-4 animate-fade-in">
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <PageHelp title="Settings" docUrl="https://opencode.ai/docs" docTitle="Settings" />
         <Skeleton className="h-96" />
       </div>
     );
@@ -331,7 +334,7 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <PageHelp title="Settings" docUrl="https://opencode.ai/docs" docTitle="Settings" />
 
       <Collapsible open={openSections.general} onOpenChange={() => toggleSection("general")}>
         <Card className="hover-lift">
@@ -433,6 +436,31 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
                   onCheckedChange={(v) => updateConfig({ snapshot: v })}
                 />
               </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Collapsible open={openSections.permissions} onOpenChange={() => toggleSection("permissions")}>
+        <Card className="hover-lift">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  <CardTitle>Permissions</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.permissions ? "rotate-180" : ""}`} />
+              </div>
+              <CardDescription>Manage tool permissions and patterns</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-scale-in">
+            <CardContent className="space-y-4 pt-0">
+              <PermissionEditor
+                value={config?.permission || {}}
+                onChange={(next) => updateConfig({ permission: next })}
+              />
             </CardContent>
           </CollapsibleContent>
         </Card>

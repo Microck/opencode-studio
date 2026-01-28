@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Server, Gamepad, Code, Sliders, File, Lock, Command, Forward, Circle, Play, Power, ChartBar, Github, CardStack } from "@nsmr/pixelart-react";
+import { Server, Gamepad, Code, Sliders, File, Lock, Command, Forward, Circle, Play, Power, ChartBar, Github, CardStack, List } from "@nsmr/pixelart-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -33,7 +33,10 @@ const navItems = [
   { href: "/skills", label: "Skills", icon: Gamepad },
   { href: "/plugins", label: "Plugins", icon: Code },
   { href: "/commands", label: "Commands", icon: Command },
-
+  { href: "/agents", label: "Agents", icon: List },
+  { href: "/logs", label: "Logs", icon: File },
+  { href: "/rules", label: "Rules", icon: Sliders },
+  { href: "/settings/code", label: "Code Settings", icon: Code },
   { href: "/usage", label: "Usage", icon: ChartBar },
   { href: "/auth", label: "Auth", icon: Lock },
   { href: "/settings", label: "Settings", icon: Sliders },
