@@ -9,6 +9,7 @@ import { getAgents, saveAgent, deleteAgent, toggleAgent } from "@/lib/api";
 import { AgentCard } from "@/components/agent-card";
 import { PermissionEditor } from "@/components/permission-editor";
 import { PageHelp } from "@/components/page-help";
+import { PageHelpDialog } from "@/components/page-help-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -73,6 +74,7 @@ export default function AgentsPage() {
   const [editing, setEditing] = useState<AgentInfo | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<AgentFormState>(emptyForm());
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const filteredAgents = useMemo(() => agents, [agents]);
 
@@ -177,10 +179,15 @@ export default function AgentsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHelp title="Agents" docUrl="https://opencode.ai/docs/agents" docTitle="Agent Builder & Manager" />
-        <Button onClick={() => openEditor()}>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Page help">
+            ?
+          </Button>
+          <Button onClick={() => openEditor()}>
           <Plus className="h-4 w-4" />
           New Agent
         </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -355,6 +362,8 @@ export default function AgentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PageHelpDialog open={helpOpen} onOpenChange={setHelpOpen} page="agents" />
     </div>
   );
 }
