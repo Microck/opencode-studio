@@ -24,21 +24,24 @@ export interface ModelAlias {
 export type PermissionValue = 'ask' | 'allow' | 'deny';
 
 export interface PermissionConfig {
+  '*'?: PermissionValue;
   read?: PermissionValue | { allow?: string[]; deny?: string[] };
   edit?: PermissionValue | { allow?: string[]; deny?: string[] };
   glob?: PermissionValue | { allow?: string[]; deny?: string[] };
   grep?: PermissionValue | { allow?: string[]; deny?: string[] };
-  list?: PermissionValue | { allow?: string[]; deny?: string[] };
-  bash?: PermissionValue | { allow?: string[]; deny?: string[] };
-  task?: PermissionValue | { allow?: string[]; deny?: string[] };
+  list?: { allow?: string[]; deny?: string[] };
+  bash?: { allow?: string[]; deny?: string[] };
+  task?: { allow?: string[]; deny?: string[] };
   skill?: PermissionValue;
   lsp?: PermissionValue;
   todoread?: PermissionValue;
   todowrite?: PermissionValue;
-  webfetch?: PermissionValue | { allow?: string[]; deny?: string[] };
-  external_directory?: PermissionValue | { allow?: string[]; deny?: string[] };
+  webfetch?: { allow?: string[]; deny?: string[] };
+  external_directory?: { allow?: string[]; deny?: string[] };
   doom_loop?: PermissionValue;
 }
+
+export type PermissionToolKey = keyof PermissionConfig;
 
 export interface AgentConfig {
   model?: string;
@@ -47,10 +50,25 @@ export interface AgentConfig {
   prompt?: string;
   tools?: Record<string, boolean>;
   permissions?: PermissionConfig;
+  permission?: PermissionConfig;
+  description?: string;
   color?: string;
   maxSteps?: number;
   mode?: 'subagent' | 'primary' | 'all';
   disable?: boolean;
+  hidden?: boolean;
+}
+
+export type AgentSource = 'json' | 'markdown' | 'builtin';
+
+export interface AgentInfo extends AgentConfig {
+  name: string;
+  source: AgentSource;
+  disabled?: boolean;
+}
+
+export interface AgentsResponse {
+  agents: AgentInfo[];
 }
 
 export interface AgentsConfig {
@@ -172,15 +190,22 @@ export interface WatcherConfig {
 
 export interface LSPConfig {
   [language: string]: {
-    command: string[];
+    disabled?: boolean;
+    command?: string[];
     args?: string[];
+    extensions?: string[];
+    env?: Record<string, string>;
+    initialization?: Record<string, any>;
   };
 }
 
 export interface FormatterConfig {
   [language: string]: {
-    command: string[];
+    disabled?: boolean;
+    command?: string[];
     args?: string[];
+    extensions?: string[];
+    environment?: Record<string, string>;
   };
 }
 
@@ -313,6 +338,18 @@ export interface Preset {
   config: PresetConfig;
 }
 
+export interface SystemToolInfo {
+  name: string;
+  path?: string;
+  available: boolean;
+}
+
+export interface RulesResponse {
+  content: string;
+  source: 'AGENTS.md' | 'CLAUDE.md' | 'none';
+  path: string | null;
+}
+
 
 export interface AuthProvider {
   id: string;
@@ -427,4 +464,30 @@ export interface GitHubBackupResult {
   commit?: string;
   url?: string;
   error?: string;
+}
+
+export interface AgentInfo {
+  name: string;
+  description?: string;
+  enabled: boolean;
+  config?: AgentConfig;
+}
+
+export interface RulesResponse {
+  content: string;
+  activeFile?: string;
+  files?: string[];
+}
+
+export interface SystemToolInfo {
+  name: string;
+  description?: string;
+}
+
+export interface LogEntry {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  source: 'mcp' | 'agent' | 'system';
+  message: string;
+  metadata?: Record<string, unknown>;
 }

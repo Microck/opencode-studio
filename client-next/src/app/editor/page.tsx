@@ -11,6 +11,7 @@ import { Save, ArrowLeft } from "@nsmr/pixelart-react"
 import { getSkill, saveSkill, getPlugin, savePlugin, deleteSkill, getCommand, saveCommand, deleteCommand } from "@/lib/api";
 import { toast } from "sonner";
 import type { SkillInfo, PluginInfo } from "@/types";
+import { PageHelp } from "@/components/page-help";
 
 function EditorContent() {
   const searchParams = useSearchParams();
@@ -134,19 +135,32 @@ function EditorContent() {
 
   return (
     <div className="h-full flex flex-col space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        {type === "skills" || type === "commands" ? (
-            <Input 
-                value={currentName} 
-                onChange={(e) => setCurrentName(e.target.value)} 
-                className="max-w-md font-mono font-bold h-9"
+        <div className="flex-1 flex justify-center">
+          {type === "skills" || type === "commands" ? (
+            <div className="flex items-center gap-2 w-full max-w-md">
+              <Input
+                value={currentName}
+                onChange={(e) => setCurrentName(e.target.value)}
+                className="font-mono font-bold h-9"
+              />
+              <PageHelp
+                title={type === "skills" ? "Edit Skill" : "Edit Command"}
+                docUrl="https://opencode.ai/docs"
+                docTitle={`${type === "skills" ? "Skill" : "Command"} Documentation`}
+              />
+            </div>
+          ) : (
+            <PageHelp
+              title={name}
+              docUrl="https://opencode.ai/docs"
+              docTitle="Plugin Documentation"
             />
-        ) : (
-            <h1 className="text-xl font-bold font-mono">{name}</h1>
-        )}
+          )}
+        </div>
         <Button onClick={handleSave} disabled={saving}>
           <Save className="h-4 w-4 mr-2" />
           {saving ? "Saving..." : "Save"}

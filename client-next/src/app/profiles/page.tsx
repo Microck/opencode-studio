@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash, Check, User, CardStack, Play } from "@nsmr/pixelart-react"
 import { getProfiles, createProfile, deleteProfile, activateProfile, type ProfileList } from "@/lib/api";
+import { PageHelp } from "@/components/page-help";
 
 export default function ProfilesPage() {
   const [data, setData] = useState<ProfileList | null>(null);
@@ -113,12 +114,16 @@ export default function ProfilesPage() {
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12 p-8">
       <header className="flex justify-between items-end border-b pb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            Profiles
+          <div className="text-3xl font-bold tracking-tight flex items-center gap-3">
+            <PageHelp
+              title="Profiles"
+              docUrl="https://opencode.ai/docs"
+              docTitle="Profiles Documentation"
+            />
             <Badge variant="outline" className="font-mono text-xs font-normal">
               {data?.active ? `Active: ${data.active}` : "No active profile"}
             </Badge>
-          </h1>
+          </div>
           <p className="text-muted-foreground mt-1">
             Manage isolated OpenCode environments (configs, history, sessions).
           </p>
@@ -138,8 +143,8 @@ export default function ProfilesPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Input 
-                placeholder="Profile Name (e.g. work)" 
+              <Input
+                placeholder="Profile Name (e.g. work)"
                 value={newProfileName}
                 onChange={(e) => setNewProfileName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}

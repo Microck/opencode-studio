@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsageStats, UsageStats } from "@/lib/api";
 import { Loader, Dollar, Message, Calendar, Download, TrendingUp, Sliders, Users, Image as ImageIcon, ChartBar, Chart as PieChartIcon, Trending } from "@nsmr/pixelart-react";
+import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
 import { formatCurrency, formatTokens, cn } from "@/lib/utils";
@@ -302,8 +303,12 @@ export default function UsagePage() {
     <div ref={dashboardRef} className="flex flex-col gap-6 p-6 pb-8 bg-background">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Token Usage</h1>
-          <p className="text-muted-foreground text-sm">
+          <PageHelp
+            title="Token Usage"
+            docUrl="https://opencode.ai/docs"
+            docTitle="Usage Documentation"
+          />
+          <p className="text-muted-foreground text-sm mt-1">
             Analysis of spending and token consumption across your projects.
           </p>
         </div>

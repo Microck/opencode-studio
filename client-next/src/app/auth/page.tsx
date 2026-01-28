@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Login, Logout, CheckDouble, User, ChevronRight, Reload } from "@nsmr/pixelart-react"
 import { getAuthInfo, getAuthProviders, authLogin, authLogout, getAuthProfiles, saveAuthProfile, activateAuthProfile, deleteAuthProfile } from "@/lib/api";
 import type { AuthCredential, AuthProfilesInfo, AuthInfo, AuthProvider } from "@/types";
+import { PageHelp } from "@/components/page-help";
 
 export default function AuthPage() {
   const [loading, setLoading] = useState(true);
@@ -119,7 +120,11 @@ export default function AuthPage() {
     <div className="max-w-6xl mx-auto space-y-6 p-6">
       <header className="flex justify-between items-start border-b pb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Authentication</h1>
+          <PageHelp
+            title="Authentication"
+            docUrl="https://opencode.ai/docs"
+            docTitle="Authentication Documentation"
+          />
           <p className="text-muted-foreground mt-1">
             Manage your API credentials and switch between accounts.
           </p>
