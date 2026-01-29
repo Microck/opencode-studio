@@ -2732,7 +2732,7 @@ function importCurrentAuthToPool(provider) {
         }
     }
 
-    const name = email || creds.accountId || creds.id || `profile-${Date.now()}`;
+    const name = email || creds.accountId || creds.id || 'primary';
     const profileDir = path.join(AUTH_PROFILES_DIR, provider);
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
