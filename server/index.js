@@ -580,24 +580,61 @@ const getOhMyOpenCodeConfigPath = () => {
 
 const getConfigPath = () => getPaths().current;
 
-const getAgentDirs = () => {
-    const dirs = [];
+const getSearchRoots = () => {
+    const roots = [];
+    
+    // 1. Directory of the currently active config
     const configPath = getConfigPath();
-    const configDir = configPath ? path.dirname(configPath) : null;
+    if (configPath) roots.push(path.dirname(configPath));
 
-    if (configDir) {
-        dirs.push(path.join(configDir, '.opencode', 'agents'));
-        dirs.push(path.join(configDir, '.opencode', 'agent'));
-    }
+    // 2. Current Working Directory
+    roots.push(process.cwd());
 
+    // 3. XDG Config Home
     const xdg = process.env.XDG_CONFIG_HOME;
-    if (xdg) {
-        dirs.push(path.join(xdg, 'opencode', 'agents'));
-        dirs.push(path.join(xdg, 'opencode', 'agent'));
+    if (xdg) roots.push(path.join(xdg, 'opencode'));
+
+    // 4. Home config
+    roots.push(path.join(HOME_DIR, '.config', 'opencode'));
+
+    // 5. Home dotfile
+    roots.push(path.join(HOME_DIR, '.opencode'));
+
+    // 6. Local share
+    roots.push(path.join(HOME_DIR, '.local', 'share', 'opencode'));
+
+    // 7. Windows AppData
+    if (process.platform === 'win32' && process.env.APPDATA) {
+        roots.push(path.join(process.env.APPDATA, 'opencode'));
     }
 
-    dirs.push(path.join(HOME_DIR, '.config', 'opencode', 'agents'));
-    dirs.push(path.join(HOME_DIR, '.config', 'opencode', 'agent'));
+    // Filter nulls, duplicates and normalize
+    const unique = [...new Set(roots.filter(Boolean).map(p => path.resolve(p)))];
+    return unique;
+};
+
+const getSkillDirs = () => {
+    return getSearchRoots()
+        .map(root => path.join(root, 'skill'))
+        .filter(dir => fs.existsSync(dir));
+};
+
+const getPluginDirs = () => {
+    return getSearchRoots()
+        .map(root => path.join(root, 'plugin'))
+        .filter(dir => fs.existsSync(dir));
+};
+
+const getAgentDirs = () => {
+    const roots = getSearchRoots();
+    const dirs = [];
+    
+    for (const root of roots) {
+        dirs.push(path.join(root, 'agents'));
+        dirs.push(path.join(root, 'agent'));
+        dirs.push(path.join(root, '.opencode', 'agents'));
+        dirs.push(path.join(root, '.opencode', 'agent'));
+    }
 
     return [...new Set(dirs)];
 };
@@ -815,22 +852,25 @@ app.get('/api/agents', (req, res) => {
                 const content = fs.readFileSync(fp, 'utf8');
                 const { data, body } = parseAgentMarkdown(content);
                 const name = path.basename(file, '.md');
-                agentMap.set(name, {
-                    name,
-                    source: 'markdown',
-                    disabled: disabledAgents.includes(name),
-                    description: data.description,
-                    mode: data.mode,
-                    model: data.model,
-                    temperature: data.temperature,
-                    tools: data.tools,
-                    permission: data.permission,
-                    permissions: data.permission,
-                    maxSteps: data.maxSteps,
-                    disable: data.disable,
-                    hidden: data.hidden,
-                    prompt: body
-                });
+                
+                if (!agentMap.has(name)) {
+                    agentMap.set(name, {
+                        name,
+                        source: 'markdown',
+                        disabled: disabledAgents.includes(name),
+                        description: data.description,
+                        mode: data.mode,
+                        model: data.model,
+                        temperature: data.temperature,
+                        tools: data.tools,
+                        permission: data.permission,
+                        permissions: data.permission,
+                        maxSteps: data.maxSteps,
+                        disable: data.disable,
+                        hidden: data.hidden,
+                        prompt: body
+                    });
+                }
             });
         }
 
@@ -1075,7 +1115,7 @@ app.get('/api/backup', (req, res) => {
         const skills = [];
         const plugins = [];
         
-        const sd = getSkillDir();
+        const sd = getActiveSkillDir();
         if (sd && fs.existsSync(sd)) {
             fs.readdirSync(sd, { withFileTypes: true })
                 .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
@@ -1085,7 +1125,7 @@ app.get('/api/backup', (req, res) => {
                 });
         }
         
-        const pd = getPluginDir();
+        const pd = getActivePluginDir();
         if (pd && fs.existsSync(pd)) {
             fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
                 const fp = path.join(pd, e.name);
@@ -1115,7 +1155,7 @@ app.post('/api/restore', (req, res) => {
         if (studioConfig) saveStudioConfig(studioConfig);
         if (opencodeConfig) saveConfig(opencodeConfig);
         
-        const sd = getSkillDir();
+        const sd = getActiveSkillDir();
         if (sd && skills && Array.isArray(skills)) {
             if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
             skills.forEach(s => {
@@ -1125,7 +1165,7 @@ app.post('/api/restore', (req, res) => {
             });
         }
         
-        const pd = getPluginDir();
+        const pd = getActivePluginDir();
         if (pd && plugins && Array.isArray(plugins)) {
             if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
             plugins.forEach(p => {
@@ -1177,7 +1217,7 @@ function buildBackupData() {
     const skills = [];
     const plugins = [];
     
-    const sd = getSkillDir();
+    const sd = getActiveSkillDir();
     if (sd && fs.existsSync(sd)) {
         fs.readdirSync(sd, { withFileTypes: true })
             .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
@@ -1186,7 +1226,7 @@ function buildBackupData() {
             });
     }
     
-    const pd = getPluginDir();
+    const pd = getActivePluginDir();
     if (pd && fs.existsSync(pd)) {
         fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
             if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
@@ -1220,7 +1260,7 @@ function restoreFromBackup(backup, studio) {
     }
     if (backup.opencodeConfig) saveConfig(backup.opencodeConfig);
     
-    const sd = getSkillDir();
+    const sd = getActiveSkillDir();
     if (sd && backup.skills && Array.isArray(backup.skills)) {
         if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
         backup.skills.forEach(s => {
@@ -1230,7 +1270,7 @@ function restoreFromBackup(backup, studio) {
         });
     }
     
-    const pd = getPluginDir();
+    const pd = getActivePluginDir();
     if (pd && backup.plugins && Array.isArray(backup.plugins)) {
         if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
         backup.plugins.forEach(p => {
@@ -1843,54 +1883,119 @@ app.post('/api/github/autosync', async (req, res) => {
     res.json({ success: true, enabled });
 });
 
-const getSkillDir = () => {
+const getActiveSkillDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'skill') : null;
 };
 
 app.get('/api/skills', (req, res) => {
-    const sd = getSkillDir();
-    if (!sd || !fs.existsSync(sd)) return res.json([]);
     const studio = loadStudioConfig();
     const disabledSkills = studio.disabledSkills || [];
-    const skills = fs.readdirSync(sd, { withFileTypes: true })
-        .filter(e => e.isDirectory() && fs.existsSync(path.join(sd, e.name, 'SKILL.md')))
-        .map(e => ({ name: e.name, path: path.join(sd, e.name, 'SKILL.md'), enabled: !disabledSkills.includes(e.name) }));
-    res.json(skills);
+    const skillMap = new Map();
+    
+    getSkillDirs().forEach(dir => {
+        if (!fs.existsSync(dir)) return;
+        try {
+            fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
+                if (e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'SKILL.md'))) {
+                    if (!skillMap.has(e.name)) {
+                        skillMap.set(e.name, {
+                            name: e.name,
+                            path: path.join(dir, e.name, 'SKILL.md'),
+                            enabled: !disabledSkills.includes(e.name)
+                        });
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn(`Failed to read skills from ${dir}: ${e.message}`);
+        }
+    });
+    
+    res.json(Array.from(skillMap.values()));
 });
 
 app.get('/api/skills/:name', (req, res) => {
-    if (!/^[a-zA-Z0-9_\-\s]+$/.test(req.params.name)) {
+    const { name } = req.params;
+    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
         return res.status(400).json({ error: 'Invalid skill name' });
     }
-    const sd = getSkillDir();
-    const p = sd ? path.join(sd, req.params.name, 'SKILL.md') : null;
-    if (!p || !fs.existsSync(p)) return res.status(404).json({ error: 'Not found' });
-    res.json({ name: req.params.name, content: fs.readFileSync(p, 'utf8') });
+    
+    for (const dir of getSkillDirs()) {
+        const p = path.join(dir, name, 'SKILL.md');
+        if (fs.existsSync(p)) {
+            return res.json({ name, content: fs.readFileSync(p, 'utf8') });
+        }
+    }
+    res.status(404).json({ error: 'Not found' });
 });
 
 app.post('/api/skills/:name', (req, res) => {
-    if (!/^[a-zA-Z0-9_\-\s]+$/.test(req.params.name)) {
+    const { name } = req.params;
+    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
         return res.status(400).json({ error: 'Invalid skill name' });
     }
-    const sd = getSkillDir();
-    if (!sd) return res.status(404).json({ error: 'No config' });
-    const dp = path.join(sd, req.params.name);
-    if (!fs.existsSync(dp)) fs.mkdirSync(dp, { recursive: true });
-    fs.writeFileSync(path.join(dp, 'SKILL.md'), req.body.content, 'utf8');
-    triggerGitHubAutoSync();
-    res.json({ success: true });
+
+    let targetDir = null;
+    
+    // Check if editing existing
+    for (const dir of getSkillDirs()) {
+        if (fs.existsSync(path.join(dir, name, 'SKILL.md'))) {
+            targetDir = path.join(dir, name);
+            break;
+        }
+    }
+    
+    // If not found, create in active dir
+    if (!targetDir) {
+        const activeDir = getActiveSkillDir();
+        if (!activeDir) {
+             // Fallback to first available global dir if no active config
+             const roots = getSearchRoots();
+             const globalRoot = roots.find(r => r.includes('.config') || r.includes('opencode'));
+             if (globalRoot) targetDir = path.join(globalRoot, 'skill', name);
+             else return res.status(404).json({ error: 'No active config or global location to create skill' });
+        } else {
+            targetDir = path.join(activeDir, name);
+        }
+    }
+
+    try {
+        if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+        fs.writeFileSync(path.join(targetDir, 'SKILL.md'), req.body.content, 'utf8');
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.delete('/api/skills/:name', (req, res) => {
-    if (!/^[a-zA-Z0-9_\-\s]+$/.test(req.params.name)) {
+    const { name } = req.params;
+    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
         return res.status(400).json({ error: 'Invalid skill name' });
     }
-    const sd = getSkillDir();
-    const dp = sd ? path.join(sd, req.params.name) : null;
-    if (dp && fs.existsSync(dp)) fs.rmSync(dp, { recursive: true, force: true });
-    triggerGitHubAutoSync();
-    res.json({ success: true });
+
+    let deleted = false;
+    for (const dir of getSkillDirs()) {
+        const skillDir = path.join(dir, name);
+        if (fs.existsSync(path.join(skillDir, 'SKILL.md'))) {
+            try {
+                fs.rmSync(skillDir, { recursive: true, force: true });
+                deleted = true;
+                break; 
+            } catch (e) {
+                return res.status(500).json({ error: e.message });
+            }
+        }
+    }
+    
+    if (deleted) {
+        triggerGitHubAutoSync();
+        res.json({ success: true });
+    } else {
+        res.json({ success: false, message: 'Skill not found' });
+    }
 });
 
 app.post('/api/skills/:name/toggle', (req, res) => {
@@ -1909,37 +2014,41 @@ app.post('/api/skills/:name/toggle', (req, res) => {
     res.json({ success: true, enabled: !studio.disabledSkills.includes(name) });
 });
 
-const getPluginDir = () => {
+const getActivePluginDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'plugin') : null;
 };
 
 app.get('/api/plugins', (req, res) => {
-    const pd = getPluginDir();
-    const cp = getConfigPath();
-    const cr = cp ? path.dirname(cp) : null;
     const studio = loadStudioConfig();
     const disabledPlugins = studio.disabledPlugins || [];
     const plugins = [];
+    const pluginMap = new Map();
     const add = (name, p, type = 'file') => {
-        if (!plugins.some(pl => pl.name === name)) {
+        if (!pluginMap.has(name)) {
+            pluginMap.set(name, true);
             plugins.push({ name, path: p, type, enabled: !disabledPlugins.includes(name) });
         }
     };
 
-    if (pd && fs.existsSync(pd)) {
-        fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
-            const fp = path.join(pd, e.name);
-            const st = fs.lstatSync(fp);
-            if (st.isDirectory()) {
-                const j = path.join(fp, 'index.js'), t = path.join(fp, 'index.ts');
-                if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file');
-            } else if ((st.isFile() || st.isSymbolicLink()) && /\.(js|ts)$/.test(e.name)) {
-                add(e.name.replace(/\.(js|ts)$/, ''), fp, 'file');
-            }
-        });
-    }
+    getPluginDirs().forEach(pd => {
+        if (!fs.existsSync(pd)) return;
+        try {
+            fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
+                const fp = path.join(pd, e.name);
+                const st = fs.lstatSync(fp);
+                if (st.isDirectory()) {
+                    const j = path.join(fp, 'index.js'), t = path.join(fp, 'index.ts');
+                    if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file');
+                } else if ((st.isFile() || st.isSymbolicLink()) && /.(js|ts)$/.test(e.name)) {
+                    add(e.name.replace(/.(js|ts)$/, ''), fp, 'file');
+                }
+            });
+        } catch (e) {}
+    });
 
+    const cp = getConfigPath();
+    const cr = cp ? path.dirname(cp) : null;
     if (cr && fs.existsSync(cr)) {
         ['oh-my-opencode', 'superpowers', 'opencode-gemini-auth'].forEach(n => {
             const fp = path.join(cr, n);
@@ -1958,19 +2067,21 @@ app.get('/api/plugins', (req, res) => {
 
 app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
-    const pd = getPluginDir();
     
-    const possiblePaths = [
-        path.join(pd, name + '.js'),
-        path.join(pd, name + '.ts'),
-        path.join(pd, name, 'index.js'),
-        path.join(pd, name, 'index.ts')
-    ];
-    
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            const content = fs.readFileSync(p, 'utf8');
-            return res.json({ name, content });
+    // Search in all plugin dirs
+    for (const pd of getPluginDirs()) {
+        const possiblePaths = [
+            path.join(pd, name + '.js'),
+            path.join(pd, name + '.ts'),
+            path.join(pd, name, 'index.js'),
+            path.join(pd, name, 'index.ts')
+        ];
+        
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                const content = fs.readFileSync(p, 'utf8');
+                return res.json({ name, content });
+            }
         }
     }
     res.status(404).json({ error: 'Plugin not found' });
@@ -1979,10 +2090,36 @@ app.get('/api/plugins/:name', (req, res) => {
 app.post('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     const { content } = req.body;
-    const pd = getPluginDir();
-    if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
     
-    // Default to .js if new
+    // Check if exists to overwrite
+    for (const pd of getPluginDirs()) {
+        const possiblePaths = [
+            path.join(pd, name + '.js'),
+            path.join(pd, name + '.ts'),
+            path.join(pd, name, 'index.js'),
+            path.join(pd, name, 'index.ts')
+        ];
+        
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                atomicWriteFileSync(p, content);
+                triggerGitHubAutoSync();
+                return res.json({ success: true });
+            }
+        }
+    }
+
+    // Create new in active dir or first available
+    let pd = getActivePluginDir();
+    if (!pd) {
+        const roots = getSearchRoots();
+        const globalRoot = roots.find(r => r.includes('.config') || r.includes('opencode'));
+        if (globalRoot) pd = path.join(globalRoot, 'plugin');
+    }
+
+    if (!pd) return res.status(404).json({ error: 'No active config to create plugin' });
+    
+    if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
     const filePath = path.join(pd, name.endsWith('.js') || name.endsWith('.ts') ? name : name + '.js');
     atomicWriteFileSync(filePath, content);
     triggerGitHubAutoSync();
@@ -1991,24 +2128,27 @@ app.post('/api/plugins/:name', (req, res) => {
 
 app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
-    const pd = getPluginDir();
-    
-    const possiblePaths = [
-        path.join(pd, name),
-        path.join(pd, name + '.js'),
-        path.join(pd, name + '.ts')
-    ];
     
     let deleted = false;
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            if (fs.statSync(p).isDirectory()) {
-                fs.rmSync(p, { recursive: true, force: true });
-            } else {
-                fs.unlinkSync(p);
+    for (const pd of getPluginDirs()) {
+        const possiblePaths = [
+            path.join(pd, name),
+            path.join(pd, name + '.js'),
+            path.join(pd, name + '.ts')
+        ];
+        
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                if (fs.statSync(p).isDirectory()) {
+                    fs.rmSync(p, { recursive: true, force: true });
+                } else {
+                    fs.unlinkSync(p);
+                }
+                deleted = true;
+                break; 
             }
-            deleted = true;
         }
+        if (deleted) break;
     }
     
     if (deleted) {
