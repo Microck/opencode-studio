@@ -12,11 +12,13 @@ import { PageHelp } from "@/components/page-help";
 import { PageHelpDialog } from "@/components/page-help-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus } from "@nsmr/pixelart-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, ChevronDown, Sliders as Settings } from "@nsmr/pixelart-react";
 
 const TOOL_OPTIONS = [
   "read",
@@ -73,6 +75,7 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<AgentInfo | null>(null);
   const [open, setOpen] = useState(false);
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [form, setForm] = useState<AgentFormState>(emptyForm());
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -207,14 +210,16 @@ export default function AgentsPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-6xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Agent" : "New Agent"}</DialogTitle>
-            <DialogDescription>Manage agent identity, prompt, tools, and permissions.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-none w-screen h-screen rounded-none border-none overflow-hidden p-0">
+          <div className="flex h-full flex-col">
+            <DialogHeader className="border-b p-6">
+              <DialogTitle>{editing ? "Edit Agent" : "New Agent"}</DialogTitle>
+              <DialogDescription>Manage agent identity, prompt, tools, and permissions.</DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-            <div className="space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
+              <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] h-full">
+                <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Name</Label>
@@ -227,16 +232,17 @@ export default function AgentsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
-                  <Input
+                  <Textarea
                     value={form.description}
                     onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                     placeholder="What does this agent do?"
+                    className="min-h-[88px] resize-none"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Mode</Label>
                   <Select value={form.mode || "subagent"} onValueChange={(v) => setForm((prev) => ({ ...prev, mode: v as AgentConfig["mode"] }))}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -280,7 +286,7 @@ export default function AgentsPage() {
                     <div className="space-y-2">
                       <Label>Source</Label>
                       <Select value={form.source} onValueChange={(v) => setForm((prev) => ({ ...prev, source: v as AgentFormState["source"] }))}>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -292,7 +298,7 @@ export default function AgentsPage() {
                     <div className="space-y-2">
                       <Label>Scope</Label>
                       <Select value={form.scope} onValueChange={(v) => setForm((prev) => ({ ...prev, scope: v as AgentFormState["scope"] }))}>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -306,17 +312,43 @@ export default function AgentsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Tools</Label>
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="flex items-center justify-between">
+                  <Label>Tools</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => {
+                        const all: Record<string, boolean> = {};
+                        TOOL_OPTIONS.forEach(t => all[t] = true);
+                        setForm(prev => ({ ...prev, tools: all }));
+                      }}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => {
+                        setForm(prev => ({ ...prev, tools: {} }));
+                      }}
+                    >
+                      None
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 border rounded-md p-3 bg-muted/20">
                   {TOOL_OPTIONS.map((tool) => (
-                    <label key={tool} className="flex items-center gap-2 text-sm">
+                    <label key={tool} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/50 p-1 rounded transition-colors">
                       <Switch
                         checked={!!form.tools[tool]}
                         onCheckedChange={(checked) =>
                           setForm((prev) => ({ ...prev, tools: { ...prev.tools, [tool]: checked } }))
                         }
                       />
-                      <span className="font-mono text-xs text-muted-foreground">{tool}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground truncate">{tool}</span>
                     </label>
                   ))}
                 </div>
@@ -332,33 +364,71 @@ export default function AgentsPage() {
                   Hidden
                 </label>
               </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>System Prompt</Label>
+                    <Editor
+                      height="40vh"
+                      language="markdown"
+                      theme={theme === "dark" ? "vs-dark" : "light"}
+                      value={form.prompt}
+                      onChange={(value) => setForm((prev) => ({ ...prev, prompt: value || "" }))}
+                      options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: "on" }}
+                    />
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Tool Permissions</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Fine-grained control over what tools this agent can use and where.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setPermissionsModalOpen(true)}
+                        className="gap-2"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Configure
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>System Prompt</Label>
-                <Editor
-                  height="280px"
-                  language="markdown"
-                  theme={theme === "dark" ? "vs-dark" : "light"}
-                  value={form.prompt}
-                  onChange={(value) => setForm((prev) => ({ ...prev, prompt: value || "" }))}
-                  options={{ minimap: { enabled: false }, fontSize: 13 }}
-                />
-              </div>
-
-              <PermissionEditor
-                value={form.permission}
-                onChange={(next) => setForm((prev) => ({ ...prev, permission: next }))}
-              />
+            <div className="border-t p-4">
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave}>Save Agent</Button>
+              </DialogFooter>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save</Button>
+      <Dialog open={permissionsModalOpen} onOpenChange={setPermissionsModalOpen}>
+        <DialogContent className="max-w-4xl h-[85vh] !flex !flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 border-b shrink-0">
+            <DialogTitle>Configure Permissions</DialogTitle>
+            <DialogDescription>
+              Define allow/deny patterns and access levels for each tool.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 p-6 flex flex-col">
+            <PermissionEditor
+              value={form.permission}
+              onChange={(next) => setForm((prev) => ({ ...prev, permission: next }))}
+            />
+          </div>
+          <DialogFooter className="p-4 border-t bg-muted/20 shrink-0">
+            <Button onClick={() => setPermissionsModalOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
