@@ -14,6 +14,12 @@ interface PageHelpProps {
   docTitle: string;
 }
 
+export interface PageHelpDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  page: string;
+}
+
 export function PageHelp({ title, docUrl, docTitle }: PageHelpProps) {
   return (
     <div className="inline-flex items-center gap-2">

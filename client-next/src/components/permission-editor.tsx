@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import type { PermissionConfig, PermissionValue } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,8 +54,20 @@ interface PermissionEditorProps {
 
 export function PermissionEditor({ value, onChange, className }: PermissionEditorProps) {
   const [patternDrafts, setPatternDrafts] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [onlyEnabled, setOnlyEnabled] = useState(false);
 
-  const tools = useMemo(() => TOOL_LIST, []);
+  const tools = useMemo(() => {
+    return TOOL_LIST.filter((t) => {
+      const matchesSearch = t.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+      if (onlyEnabled) {
+        const current = value[t as keyof PermissionConfig];
+        return !!current && current !== "ask";
+      }
+      return true;
+    });
+  }, [search, onlyEnabled, value]);
 
   const updateTool = (tool: keyof PermissionConfig, next: any) => {
     onChange({
@@ -66,30 +77,56 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
   };
 
   return (
-    <Card className={cn("border-muted-foreground/30", className)}>
-      <CardHeader>
-        <CardTitle className="text-base">Permissions</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className={cn("flex flex-col h-full", className)}>
+      <div className="flex flex-col gap-4 mb-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Search tools..."
+            className="h-8 w-[150px] lg:w-[240px]"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("h-8 gap-2", onlyEnabled && "bg-accent text-accent-foreground")}
+            onClick={() => setOnlyEnabled(!onlyEnabled)}
+          >
+            Enabled Only
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground font-mono">
+          {tools.length} tools found
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-3">
         {tools.map((tool) => {
           const current = value[tool as keyof PermissionConfig];
           const mode = getMode(current);
           const draft = patternDrafts[tool] || "";
 
           return (
-            <div key={tool} className="rounded-md border border-border/60 p-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="font-mono text-xs text-muted-foreground">{tool}</div>
-                <div className="flex gap-2">
+            <div key={tool} className="rounded-md border bg-muted/20 border-border/60 p-4 transition-colors hover:border-border">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-primary/40" />
+                  <div className="font-mono text-sm font-medium">{tool}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <Select
                     value={mode}
                     onValueChange={(next) => {
                       if (next === "simple") updateTool(tool as keyof PermissionConfig, "ask");
                       if (next === "map") updateTool(tool as keyof PermissionConfig, { "*": "ask" } as PermissionConfig);
-                      if (next === "list") updateTool(tool as keyof PermissionConfig, { allow: [], deny: [] } as unknown as PermissionConfig[keyof PermissionConfig]);
+                      if (next === "list")
+                        updateTool(
+                          tool as keyof PermissionConfig,
+                          { allow: [], deny: [] } as unknown as PermissionConfig[keyof PermissionConfig]
+                        );
                     }}
                   >
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-[140px] h-8 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -104,7 +141,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                       value={typeof current === "string" ? current : "ask"}
                       onValueChange={(next) => updateTool(tool as keyof PermissionConfig, next as PermissionValue)}
                     >
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-[100px] h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -117,66 +154,76 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                 </div>
               </div>
 
-              {mode === "map" && typeof current === "object" && current && !Array.isArray(current) && !("allow" in current || "deny" in current) && (
-                <div className="mt-3 space-y-2">
-                  {Object.entries(current as Record<string, PermissionValue>).map(([pattern, rule]) => (
-                    <div key={pattern} className="flex flex-col gap-2 md:flex-row md:items-center">
-                      <Input className="font-mono" value={pattern} readOnly />
-                      <Select
-                        value={rule as string}
-                        onValueChange={(next) => {
-                          updateTool(tool as keyof PermissionConfig, { ...current, [pattern]: next });
-                        }}
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="allow">Allow</SelectItem>
-                          <SelectItem value="ask">Ask</SelectItem>
-                          <SelectItem value="deny">Deny</SelectItem>
-                        </SelectContent>
-                      </Select>
+              {mode === "map" &&
+                typeof current === "object" &&
+                current &&
+                !Array.isArray(current) &&
+                !("allow" in current || "deny" in current) && (
+                  <div className="mt-4 space-y-3 border-t pt-4">
+                    {Object.entries(current as Record<string, PermissionValue>).map(([pattern, rule]) => (
+                      <div key={pattern} className="flex flex-col gap-2 md:flex-row md:items-center">
+                        <Input className="font-mono h-8 text-xs flex-1" value={pattern} readOnly />
+                        <Select
+                          value={rule as string}
+                          onValueChange={(next) => {
+                            updateTool(tool as keyof PermissionConfig, { ...current, [pattern]: next });
+                          }}
+                        >
+                          <SelectTrigger className="w-[100px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="allow">Allow</SelectItem>
+                            <SelectItem value="ask">Ask</SelectItem>
+                            <SelectItem value="deny">Deny</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            const { [pattern]: _removed, ...rest } = current as any;
+                            updateTool(tool as keyof PermissionConfig, Object.keys(rest).length ? rest : "ask");
+                          }}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center pt-2">
+                      <Input
+                        className="font-mono h-8 text-xs flex-1"
+                        placeholder='Add pattern, e.g. "git *"'
+                        value={draft}
+                        onChange={(e) => setPatternDrafts((prev) => ({ ...prev, [tool]: e.target.value }))}
+                      />
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-2 text-xs"
                         onClick={() => {
-                          const { [pattern]: _removed, ...rest } = current as any;
-                          updateTool(tool as keyof PermissionConfig, Object.keys(rest).length ? rest : "ask");
+                          if (!draft.trim()) return;
+                          updateTool(tool as keyof PermissionConfig, { ...current, [draft.trim()]: "ask" });
+                          setPatternDrafts((prev) => ({ ...prev, [tool]: "" }));
                         }}
                       >
-                        <Trash className="h-4 w-4" />
+                        <Plus className="h-3 w-3" />
+                        Add
                       </Button>
                     </div>
-                  ))}
-
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                    <Input
-                      className="font-mono"
-                      placeholder='Add pattern, e.g. "git *"'
-                      value={draft}
-                      onChange={(e) => setPatternDrafts((prev) => ({ ...prev, [tool]: e.target.value }))}
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        if (!draft.trim()) return;
-                        updateTool(tool as keyof PermissionConfig, { ...current, [draft.trim()]: "ask" });
-                        setPatternDrafts((prev) => ({ ...prev, [tool]: "" }));
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add
-                    </Button>
                   </div>
-                </div>
-              )}
+                )}
 
               {mode === "list" && typeof current === "object" && current && ("allow" in current || "deny" in current) && (
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-4 md:grid-cols-2 border-t pt-4">
                   <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">Allow</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                      Allow Patterns
+                    </div>
                     <Textarea
+                      className="min-h-[80px] text-xs font-mono resize-none"
                       value={toArrayInput((current as { allow?: string[] }).allow)}
                       onChange={(e) => {
                         updateTool(tool as keyof PermissionConfig, {
@@ -184,12 +231,15 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                           allow: fromArrayInput(e.target.value),
                         });
                       }}
-                      placeholder="comma separated patterns"
+                      placeholder="e.g. src/**/*.ts, lib/*.js"
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">Deny</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                      Deny Patterns
+                    </div>
                     <Textarea
+                      className="min-h-[80px] text-xs font-mono resize-none border-destructive/20 focus-visible:border-destructive/40"
                       value={toArrayInput((current as { deny?: string[] }).deny)}
                       onChange={(e) => {
                         updateTool(tool as keyof PermissionConfig, {
@@ -197,7 +247,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                           deny: fromArrayInput(e.target.value),
                         });
                       }}
-                      placeholder="comma separated patterns"
+                      placeholder="e.g. secrets/**, *.key"
                     />
                   </div>
                 </div>
@@ -205,7 +255,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
