@@ -40,7 +40,7 @@ if (!envApiUrl) {
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '2.0.0';
+export const MIN_SERVER_VERSION = '2.1.0';
 
 export async function getApiBaseUrl(): Promise<string> {
   if (api.defaults.baseURL) return api.defaults.baseURL;
