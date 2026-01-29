@@ -1673,6 +1673,14 @@ async function performGitHubBackup(options = {}) {
             await execPromise(`git remote add origin https://x-access-token:${token}@github.com/${repoName}.git`, { cwd: tempDir });
             await execPromise(`git checkout -b ${finalBranch}`, { cwd: tempDir });
         }
+
+        // Configure git to suppress warnings
+        try {
+            await execPromise('git config core.autocrlf false', { cwd: tempDir });
+            await execPromise('git config core.safecrlf false', { cwd: tempDir });
+        } catch (e) {
+            console.warn('Failed to set git config:', e.message);
+        }
         
         const backupOpencodeDir = path.join(tempDir, 'opencode');
         const backupStudioDir = path.join(tempDir, 'opencode-studio');
