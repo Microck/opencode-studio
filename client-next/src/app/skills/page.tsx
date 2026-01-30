@@ -59,7 +59,7 @@ export default function SkillsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <PageHelp title="Skills" docUrl="https://opencode.ai/docs" docTitle="Skills" />
+<PageHelp title="Skills" docUrl="https://opencode.ai/docs/skills" docTitle="Skills Documentation" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (

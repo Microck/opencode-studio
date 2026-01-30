@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useApp } from "@/lib/context";
-import { useRouter } from "next/navigation";
+import { getCommands, saveCommand, deleteCommand } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,26 +25,34 @@ interface CommandEntry {
 }
 
 export default function CommandsPage() {
-  const { config, loading, saveConfig, refreshData } = useApp();
-  const router = useRouter();
   const [commands, setCommands] = useState<CommandEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newTemplate, setNewTemplate] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editingCmd, setEditingCmd] = useState<{ originalName: string, name: string, template: string } | null>(null);
 
-  useEffect(() => {
-    if (config?.command) {
-      const entries = Object.entries(config.command).map(([name, value]) => ({
+  const fetchCommands = async () => {
+    try {
+      setLoading(true);
+      const data = await getCommands();
+      const entries = Object.entries(data).map(([name, value]) => ({
         name,
         template: value.template,
       }));
       setCommands(entries);
-    } else {
-      setCommands([]);
+    } catch (err: any) {
+      toast.error("Failed to load commands");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  }, [config]);
+  };
+
+  useEffect(() => {
+    fetchCommands();
+  }, []);
 
   const handleAdd = async () => {
     if (!newName.trim()) {
@@ -159,8 +166,8 @@ export default function CommandsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <PageHelp title="Commands" docUrl="https://opencode.ai/docs" docTitle="Commands" />
+         <div className="flex justify-between items-center">
+          <PageHelp title="Commands" docUrl="https://opencode.ai/docs/commands" docTitle="Commands Documentation" />
         </div>
         <div className="grid grid-cols-1 gap-4">
           {[1, 2, 3].map((i) => (

@@ -69,7 +69,7 @@ export default function RulesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="space-y-1">
-          <PageHelp title="Project Rules" docUrl="https://opencode.ai/docs/rules" docTitle="Project Rules (AGENTS.md) Editor" />
+          <PageHelp title="Project Rules" docUrl="https://opencode.ai/docs" docTitle="Project Rules (AGENTS.md) Editor" />
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline">{source === "none" ? "Not Found" : source}</Badge>
             {path && <span className="font-mono">{path}</span>}

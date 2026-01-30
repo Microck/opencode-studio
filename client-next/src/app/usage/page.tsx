@@ -305,7 +305,7 @@ export default function UsagePage() {
         <div>
           <PageHelp
             title="Token Usage"
-            docUrl="https://opencode.ai/docs/usage"
+            docUrl="https://opencode.ai/docs"
             docTitle="Usage Documentation"
           />
           <p className="text-muted-foreground text-sm mt-1">

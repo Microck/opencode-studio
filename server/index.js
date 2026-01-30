@@ -2056,6 +2056,8 @@ async function ensureGitHubRepo(token, repoName) {
     throw new Error(`Failed to check repo: ${err}`);
 }
 
+const RESERVED_WIN_NAMES = ['con', 'prn', 'aux', 'nul', 'com0', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'lpt0', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'];
+
 function copyDirContents(src, dest) {
     if (!fs.existsSync(src)) return;
     fs.mkdirSync(dest, { recursive: true });
@@ -2063,6 +2065,11 @@ function copyDirContents(src, dest) {
     const SKIP_EXT = ['.log', '.tmp', '.db', '.sqlite', '.cache', '.pack', '.idx'];
     
     for (const name of fs.readdirSync(src)) {
+        if (RESERVED_WIN_NAMES.includes(name.toLowerCase())) {
+            console.warn(`Skipping reserved Windows filename: ${name}`);
+            continue;
+        }
+        
         const srcPath = path.join(src, name);
         const destPath = path.join(dest, name);
         const stat = fs.statSync(srcPath);
@@ -2138,6 +2145,9 @@ async function performGitHubBackup(options = {}) {
             console.warn('Failed to set git config:', e.message);
         }
         
+        const gitignoreContent = RESERVED_WIN_NAMES.map(n => `**/${n}`).join('\n') + '\n';
+        fs.writeFileSync(path.join(tempDir, '.gitignore'), gitignoreContent);
+        
         const backupOpencodeDir = path.join(tempDir, 'opencode');
         const backupStudioDir = path.join(tempDir, 'opencode-studio');
         
@@ -2147,7 +2157,7 @@ async function performGitHubBackup(options = {}) {
         copyDirContents(opencodeDir, backupOpencodeDir);
         copyDirContents(studioDir, backupStudioDir);
         
-        await execPromise('git add -A', { cwd: tempDir });
+        await execPromise('git add opencode/ opencode-studio/ .gitignore', { cwd: tempDir });
         
         const timestamp = new Date().toISOString();
         const commitMessage = `OpenCode Studio backup ${timestamp}`;

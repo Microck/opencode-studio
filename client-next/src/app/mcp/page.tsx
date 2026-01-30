@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
+import { getMcpServers } from "@/lib/api";
 import { MCPCard } from "@/components/mcp-card";
 import { AddMCPDialog } from "@/components/add-mcp-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,11 +24,30 @@ import { PresetsManager } from "@/components/presets-manager";
 import type { MCPConfig } from "@/types";
 
 export default function MCPPage() {
-  const { config, loading, toggleMCP, deleteMCP, addMCP, updateMCP } = useApp();
+  const { toggleMCP, deleteMCP, addMCP, updateMCP } = useApp();
+  const [mcpData, setMcpData] = useState<Record<string, MCPConfig>>({});
+  const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const mcpEntries = Object.entries(config?.mcp || {});
+  const mcpEntries = Object.entries(mcpData);
+
+  const fetchMcpServers = async () => {
+    try {
+      setLoading(true);
+      const data = await getMcpServers();
+      setMcpData(data);
+    } catch (err: any) {
+      toast.error("Failed to load MCP servers");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMcpServers();
+  }, []);
   
   const filteredMCPs = useMemo(() => {
     if (!search.trim()) return mcpEntries;
@@ -42,7 +62,8 @@ export default function MCPPage() {
   const handleToggle = async (key: string) => {
     try {
       await toggleMCP(key);
-      toast.success(`${key} ${config?.mcp?.[key]?.enabled ? "disabled" : "enabled"}`);
+      toast.success(`${key} ${mcpData[key]?.enabled ? "disabled" : "enabled"}`);
+      await fetchMcpServers();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to toggle server: ${msg}`);
@@ -54,6 +75,7 @@ export default function MCPPage() {
     try {
       await deleteMCP(deleteTarget);
       toast.success(`${deleteTarget} deleted`);
+      await fetchMcpServers();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to delete server: ${msg}`);
@@ -66,6 +88,7 @@ export default function MCPPage() {
     try {
       await addMCP(name, mcpConfig);
       toast.success(`${name} added`);
+      await fetchMcpServers();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to add server: ${msg}`);
@@ -73,11 +96,12 @@ export default function MCPPage() {
   };
 
   const handleEdit = async (key: string) => {
-    const mcpConfig = config?.mcp?.[key];
+    const mcpConfig = mcpData[key];
     if (!mcpConfig) return;
     try {
       await updateMCP(key, mcpConfig);
       toast.success(`${key} updated`);
+      await fetchMcpServers();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || "Unknown error";
       toast.error(`Failed to update server: ${msg}`);

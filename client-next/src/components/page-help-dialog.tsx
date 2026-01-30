@@ -130,12 +130,12 @@ export function PageHelpDialog({ open, onOpenChange, page }: PageHelpDialogProps
           
           <div className="pt-2 border-t">
             <a 
-              href={`https://opencode.ai/docs/${page.toLowerCase().replace(/\s+/g, '-')}`} 
+              href="https://github.com/Microck/opencode-studio#readme" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              View full documentation →
+              View documentation on GitHub →
             </a>
           </div>
         </div>

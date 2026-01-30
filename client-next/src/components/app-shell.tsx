@@ -154,7 +154,7 @@ return (
           </a>
           <span>•</span>
           <a 
-            href="https://www.npmjs.com/package/opencode-studio-server" 
+            href="https://www.npmjs.com/package/opencode-studio" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-1 hover:text-foreground transition-colors"

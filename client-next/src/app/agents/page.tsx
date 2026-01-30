@@ -181,7 +181,7 @@ export default function AgentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <PageHelp title="Agents" docUrl="https://opencode.ai/docs/agents" docTitle="Agent Builder & Manager" />
+        <PageHelp title="Agents" docUrl="https://opencode.ai/docs/agents" docTitle="Agents Documentation" />
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Page help">
             ?

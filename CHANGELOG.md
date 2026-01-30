@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-01-30
+
+### Changed
+- **Backend Requirement**: Bumped minimum required backend version to 2.2.0.
+- **Package Updates**: Bumped all package versions.
+
+## [1.16.0] - 2026-01-30
+
+### Changed
+- **Backend Requirement**: Bumped minimum required backend version to 2.2.0.
+- **Package Updates**: Bumped all package versions.
+
 ## [1.15.0] - 2026-01-24
 
 ### Added

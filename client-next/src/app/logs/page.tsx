@@ -77,7 +77,7 @@ export default function LogsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <PageHelp title="Logs" docUrl="https://opencode.ai/docs/logs" docTitle="Live Log Viewer & Debugger" />
+        <PageHelp title="Logs" docUrl="https://opencode.ai/docs" docTitle="Live Log Viewer & Debugger" />
         <div className="flex flex-wrap items-center gap-2">
           <Select value={filter} onValueChange={(v) => setFilter(v as LogFilter)}>
             <SelectTrigger className="w-[140px]">

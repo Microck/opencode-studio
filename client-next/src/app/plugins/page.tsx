@@ -68,7 +68,7 @@ export default function PluginsPage() {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <PageHelp title="Plugins" docUrl="https://opencode.ai/docs/plugins" docTitle="Plugins" />
+<PageHelp title="Plugins" docUrl="https://opencode.ai/docs/plugins" docTitle="Plugins Documentation" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -82,7 +82,7 @@ export default function PluginsPage() {
   return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-        <PageHelp title="Plugins" docUrl="https://opencode.ai/docs/plugins" docTitle="Plugins" />
+        <PageHelp title="Plugins" docUrl="https://opencode.ai/docs" docTitle="Plugins" />
         <div className="flex gap-2">
           <PresetsManager />
           <BulkImportDialog 

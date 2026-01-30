@@ -128,7 +128,7 @@ export default function CodeSettingsPage() {
 
       <Card>
         <CardHeader>
-          <PageHelp title="Code Settings" docUrl="https://opencode.ai/docs/settings/code" docTitle="LSP & Formatter Manager" />
+          <PageHelp title="Code Settings" docUrl="https://opencode.ai/docs" docTitle="LSP & Formatter Manager" />
           <CardTitle>LSP Servers</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

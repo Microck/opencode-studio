@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse, MCPConfig } from '@/types';
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
@@ -40,7 +40,7 @@ if (!envApiUrl) {
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '2.1.0';
+export const MIN_SERVER_VERSION = '2.2.0';
 
 export async function getApiBaseUrl(): Promise<string> {
   if (api.defaults.baseURL) return api.defaults.baseURL;
@@ -288,6 +288,21 @@ export async function deletePlugin(name: string): Promise<void> {
 export async function togglePlugin(name: string): Promise<{ enabled: boolean }> {
   const { data } = await api.post<{ success: boolean; enabled: boolean }>(`/plugins/${name}/toggle`);
   return { enabled: data.enabled };
+}
+
+export async function getMcpServers(): Promise<Record<string, MCPConfig>> {
+  const { data } = await api.get<Record<string, MCPConfig>>('/mcp');
+  return data;
+}
+
+export async function getCommands(): Promise<Record<string, { template: string }>> {
+  const { data } = await api.get<Record<string, { template: string }>>('/commands');
+  return data;
+}
+
+export async function getModels(): Promise<{ providers: any[]; models: any[] }> {
+  const { data } = await api.get<{ providers: any[]; models: any[] }>('/models');
+  return data;
 }
 
 export async function getCommand(name: string): Promise<{ template: string }> {
