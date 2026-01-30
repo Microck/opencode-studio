@@ -802,6 +802,59 @@ const loadPluginsFromDir = (dirInfo) => {
     return plugins;
 };
 
+const loadSkillsFromDir = (dirInfo) => {
+    const skills = [];
+    if (!fs.existsSync(dirInfo.path)) return skills;
+
+    try {
+        if (dirInfo.isFlat) {
+            const name = dirInfo.package || path.basename(dirInfo.path);
+            const skillPath = path.join(dirInfo.path, 'SKILL.md');
+            if (!fs.existsSync(skillPath)) return skills;
+
+            const content = fs.readFileSync(skillPath, 'utf8');
+            const { data: metadata, body } = parseAgentMarkdown(content);
+
+            skills.push({
+                name,
+                content: body,
+                description: metadata.description || body.slice(0, 100).replace(/\n/g, ' '),
+                source: dirInfo.source,
+                path: skillPath,
+                root: dirInfo.root,
+                package: dirInfo.package,
+                ...metadata
+            });
+        } else {
+            const entries = fs.readdirSync(dirInfo.path, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+
+                const skillPath = path.join(dirInfo.path, entry.name, 'SKILL.md');
+                if (!fs.existsSync(skillPath)) continue;
+
+                const content = fs.readFileSync(skillPath, 'utf8');
+                const { data: metadata, body } = parseAgentMarkdown(content);
+
+                skills.push({
+                    name: entry.name,
+                    content: body,
+                    description: metadata.description || body.slice(0, 100).replace(/\n/g, ' '),
+                    source: dirInfo.source,
+                    path: skillPath,
+                    root: dirInfo.root,
+                    package: dirInfo.package,
+                    ...metadata
+                });
+            }
+        }
+    } catch (e) {
+        console.warn(`Failed to load skills from ${dirInfo.path}:`, e.message);
+    }
+
+    return skills;
+};
+
 const getAgentDirs = () => {
     const roots = getSearchRoots();
     const dirs = [];
