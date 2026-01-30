@@ -9,11 +9,11 @@ See: README.md
 
 ## Current Position
 
-Phase: Not formally phased (mature active development)
-Status: Analysis complete, awaiting user decision on next steps
-Last activity: 2026-01-30 — Multi-location discovery analysis completed (MCPs/Commands already aggregated, JSON Agents/Models not)
+Phase: 01-location-proof
+Status: Plan 01-03 complete
+Last activity: 2026-01-30 — Completed 01-03-PLAN.md (Agents API multi-location aggregation)
 
-Progress: [████████░░] N/A (no formal plan structure)
+Progress: [██░░░░░░░] 1/4 plans complete (25%)
 
 ## Performance Metrics
 
@@ -27,9 +27,9 @@ Progress: [████████░░] N/A (no formal plan structure)
 
 ### Decisions
 
-No formal decision log. Recent context from HANDOFF.md:
-- Multi-location loading analysis: MCPs ✅ aggregated, Commands ✅ aggregated, Agents ⚠️ mixed, Models ❌ not aggregated
-- Draft plan exists in `.sisyphus/plans/location-proof-discovery.md` for full location-proof refactor
+No formal decision log. Recent context:
+- Multi-location loading analysis: MCPs ✅ aggregated, Commands ✅ aggregated, Agents ✅ aggregated (01-03), Models ❌ not aggregated
+- Plan 01-03: Implemented aggregateAgents() with source tracking (json-config, markdown, builtin)
 
 ### Deferred Issues
 
@@ -57,5 +57,5 @@ None captured in .planning/todos/
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Multi-location discovery analysis completed, awaiting user decision on next steps
+Stopped at: Completed 01-03-PLAN.md (Agents API multi-location aggregation)
 Resume file: None
