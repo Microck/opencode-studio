@@ -614,15 +614,163 @@ const getSearchRoots = () => {
 };
 
 const getSkillDirs = () => {
-    return getSearchRoots()
-        .map(root => path.join(root, 'skill'))
-        .filter(dir => fs.existsSync(dir));
+    const roots = getSearchRoots();
+    const dirs = [];
+
+    for (const root of roots) {
+        const skillDir = path.join(root, 'skill');
+        if (fs.existsSync(skillDir)) {
+            dirs.push({ path: skillDir, source: 'skill-dir', root });
+        }
+
+        const skillsDir = path.join(root, 'skills');
+        if (fs.existsSync(skillsDir)) {
+            try {
+                const packages = fs.readdirSync(skillsDir, { withFileTypes: true })
+                    .filter(d => d.isDirectory());
+                for (const pkg of packages) {
+                    const nestedSkillsDir = path.join(skillsDir, pkg.name, 'skills');
+                    if (fs.existsSync(nestedSkillsDir)) {
+                        dirs.push({ path: nestedSkillsDir, source: 'skills-dir', root, package: pkg.name });
+                    }
+                    const pkgSkillFile = path.join(skillsDir, pkg.name, 'SKILL.md');
+                    if (fs.existsSync(pkgSkillFile)) {
+                        dirs.push({ path: path.join(skillsDir, pkg.name), source: 'skills-dir', root, package: pkg.name, isFlat: true });
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to read skills from ${skillsDir}:`, e.message);
+            }
+        }
+    }
+
+    return dirs;
+};
+
+const getCommandDirs = () => {
+    const roots = getSearchRoots();
+    const dirs = [];
+
+    for (const root of roots) {
+        const cmdDir = path.join(root, 'command');
+        if (fs.existsSync(cmdDir)) {
+            dirs.push({ path: cmdDir, source: 'command-dir', root });
+        }
+    }
+
+    return dirs;
+};
+
+const getMcpDirs = () => {
+    const roots = getSearchRoots();
+    const dirs = [];
+
+    for (const root of roots) {
+        const mcpDir = path.join(root, 'mcp');
+        if (fs.existsSync(mcpDir)) {
+            dirs.push({ path: mcpDir, source: 'mcp-dir', root });
+        }
+    }
+
+    return dirs;
 };
 
 const getPluginDirs = () => {
-    return getSearchRoots()
-        .map(root => path.join(root, 'plugin'))
-        .filter(dir => fs.existsSync(dir));
+    const roots = getSearchRoots();
+    const dirs = [];
+
+    for (const root of roots) {
+        const pluginDir = path.join(root, 'plugin');
+        if (fs.existsSync(pluginDir)) {
+            dirs.push({ path: pluginDir, source: 'plugin-dir', root });
+        }
+
+        const pluginsDir = path.join(root, 'plugins');
+        if (fs.existsSync(pluginsDir)) {
+            dirs.push({ path: pluginsDir, source: 'plugins-dir', root });
+        }
+    }
+
+    return dirs;
+};
+
+const loadCommandsFromDir = (dirInfo) => {
+    const commands = [];
+    if (!fs.existsSync(dirInfo.path)) return commands;
+
+    try {
+        const files = fs.readdirSync(dirInfo.path)
+            .filter(f => f.endsWith('.md'));
+
+        for (const file of files) {
+            const filePath = path.join(dirInfo.path, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const name = path.basename(file, '.md');
+
+            let metadata = {};
+            let body = content;
+            const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+            if (frontmatterMatch) {
+                try {
+                    metadata = yaml.load(frontmatterMatch[1]) || {};
+                    body = frontmatterMatch[2].trim();
+                } catch {}
+            }
+
+            commands.push({
+                name,
+                content: body,
+                description: metadata.description || metadata.prompt || body.slice(0, 100).replace(/\n/g, ' '),
+                source: dirInfo.source,
+                path: filePath,
+                root: dirInfo.root,
+                ...metadata
+            });
+        }
+    } catch (e) {
+        console.warn(`Failed to load commands from ${dirInfo.path}:`, e.message);
+    }
+
+    return commands;
+};
+
+const loadMcpsFromDir = (dirInfo) => {
+    const mcps = [];
+    if (!fs.existsSync(dirInfo.path)) return mcps;
+
+    try {
+        const files = fs.readdirSync(dirInfo.path)
+            .filter(f => f.endsWith('.json') || f.endsWith('.yaml') || f.endsWith('.yml'));
+
+        for (const file of files) {
+            const filePath = path.join(dirInfo.path, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const name = path.basename(file, path.extname(file));
+
+            let config;
+            try {
+                if (file.endsWith('.json')) {
+                    config = JSON.parse(content);
+                } else {
+                    config = yaml.load(content);
+                }
+
+                mcps.push({
+                    name,
+                    config,
+                    source: dirInfo.source,
+                    path: filePath,
+                    root: dirInfo.root
+                });
+            } catch (e) {
+                console.error(`Failed to parse MCP config ${filePath}:`, e.message);
+            }
+        }
+    } catch (e) {
+        console.warn(`Failed to load MCPs from ${dirInfo.path}:`, e.message);
+    }
+
+    return mcps;
 };
 
 const getAgentDirs = () => {
@@ -732,6 +880,102 @@ const saveConfig = (config) => {
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
 };
 
+const aggregateModels = () => {
+    const roots = getSearchRoots();
+    const activeConfigPath = getConfigPath();
+    const activeDir = activeConfigPath ? path.dirname(activeConfigPath) : null;
+    
+    const providerMap = new Map();
+    
+    for (const root of roots) {
+        const configPath = path.join(root, 'opencode.json');
+        
+        if (!fs.existsSync(configPath)) continue;
+        
+        try {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            
+            let providers = null;
+            
+            if (config.model && config.model.providers) {
+                providers = config.model.providers;
+            } else if (config.providers) {
+                providers = config.providers;
+            }
+            
+            if (providers && typeof providers === 'object') {
+                for (const [providerName, providerConfig] of Object.entries(providers)) {
+                    if (!providerMap.has(providerName)) {
+                        providerMap.set(providerName, {
+                            name: providerName,
+                            config: providerConfig,
+                            source: 'json-config',
+                            configPath: root
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn(`Failed to read config from ${configPath}:`, err.message);
+        }
+    }
+    
+    return Array.from(providerMap.values());
+};
+
+const loadAggregatedConfig = () => {
+    const roots = getSearchRoots();
+    const activeConfigPath = getConfigPath();
+    const activeDir = activeConfigPath ? path.dirname(activeConfigPath) : null;
+
+    const aggregated = {
+        mcpServers: {},
+        command: {},
+        env: {}
+    };
+
+    const configs = [];
+    for (const root of roots) {
+        const configPath = path.join(root, 'opencode.json');
+        if (fs.existsSync(configPath)) {
+            try {
+                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                configs.push({
+                    root,
+                    isHighestPriority: activeDir ? path.resolve(root) === path.resolve(activeDir) : false,
+                    config: content
+                });
+            } catch (err) {
+                console.error(`Failed to read config from ${configPath}:`, err.message);
+            }
+        }
+    }
+
+    configs.sort((a, b) => {
+        if (a.isHighestPriority) return -1;
+        if (b.isHighestPriority) return 1;
+        return 0;
+    });
+
+    [...configs].reverse().forEach(({ config }) => {
+        if (config.mcpServers && typeof config.mcpServers === 'object') {
+            for (const [key, value] of Object.entries(config.mcpServers)) {
+                aggregated.mcpServers[key] = value;
+            }
+        }
+
+        if (config.command && typeof config.command === 'object') {
+            Object.assign(aggregated.command, config.command);
+        }
+
+        if (config.env && typeof config.env === 'object') {
+            Object.assign(aggregated.env, config.env);
+        }
+    });
+
+    return aggregated;
+};
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: SERVER_VERSION }));
 
 app.post('/api/shutdown', (req, res) => {
@@ -825,62 +1069,152 @@ app.post('/api/config', (req, res) => {
     }
 });
 
-app.get('/api/agents', (req, res) => {
+app.get('/api/mcp', (req, res) => {
     try {
-        const config = loadConfig() || {};
-        const studio = loadStudioConfig();
-        const disabledAgents = studio.disabledAgents || [];
-        const agentMap = new Map();
+        const mcpMap = new Map();
 
-        const configAgents = config.agent || {};
-        for (const [name, agentConfig] of Object.entries(configAgents)) {
-            agentMap.set(name, {
-                name,
-                source: 'json',
-                disabled: disabledAgents.includes(name),
-                ...agentConfig,
-                permission: agentConfig.permission || agentConfig.permissions,
-                permissions: agentConfig.permission || agentConfig.permissions
-            });
+        for (const dirInfo of getMcpDirs()) {
+            const mcps = loadMcpsFromDir(dirInfo);
+            for (const mcp of mcps) {
+                if (!mcpMap.has(mcp.name)) {
+                    mcpMap.set(mcp.name, mcp);
+                }
+            }
         }
 
-        for (const dir of getAgentDirs()) {
-            if (!fs.existsSync(dir)) continue;
-            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
-            files.forEach((file) => {
-                const fp = path.join(dir, file);
-                const content = fs.readFileSync(fp, 'utf8');
-                const { data, body } = parseAgentMarkdown(content);
-                const name = path.basename(file, '.md');
-                
-                if (!agentMap.has(name)) {
-                    agentMap.set(name, {
+        const aggregated = loadAggregatedConfig();
+        if (aggregated.mcpServers) {
+            for (const [name, config] of Object.entries(aggregated.mcpServers)) {
+                if (!mcpMap.has(name)) {
+                    mcpMap.set(name, {
                         name,
-                        source: 'markdown',
-                        disabled: disabledAgents.includes(name),
-                        description: data.description,
-                        mode: data.mode,
-                        model: data.model,
-                        temperature: data.temperature,
-                        tools: data.tools,
-                        permission: data.permission,
-                        permissions: data.permission,
-                        maxSteps: data.maxSteps,
-                        disable: data.disable,
-                        hidden: data.hidden,
-                        prompt: body
+                        config,
+                        source: 'json-config'
                     });
                 }
-            });
+            }
         }
 
-        ['build', 'plan'].forEach((name) => {
+        res.json(Array.from(mcpMap.values()));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/commands', (req, res) => {
+    try {
+        const commandMap = new Map();
+
+        for (const dirInfo of getCommandDirs()) {
+            const commands = loadCommandsFromDir(dirInfo);
+            for (const cmd of commands) {
+                if (!commandMap.has(cmd.name)) {
+                    commandMap.set(cmd.name, cmd);
+                }
+            }
+        }
+
+        const aggregated = loadAggregatedConfig();
+        if (aggregated.command) {
+            for (const [name, cmdConfig] of Object.entries(aggregated.command)) {
+                if (!commandMap.has(name)) {
+                    commandMap.set(name, {
+                        name,
+                        content: cmdConfig.template || cmdConfig,
+                        description: cmdConfig.description || (cmdConfig.template || cmdConfig).slice(0, 100).replace(/\n/g, ' '),
+                        source: 'json-config'
+                    });
+                }
+            }
+        }
+
+        res.json(Array.from(commandMap.values()));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+const aggregateAgents = () => {
+    const agentMap = new Map();
+    const roots = getSearchRoots();
+    
+    for (const root of roots) {
+        const configPath = path.join(root, 'opencode.json');
+        if (fs.existsSync(configPath)) {
+            try {
+                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                const configAgents = content.agent || {};
+                for (const [name, agentConfig] of Object.entries(configAgents)) {
+                    if (!agentMap.has(name)) {
+                        agentMap.set(name, {
+                            name,
+                            source: 'json-config',
+                            configPath: root,
+                            ...agentConfig,
+                            permission: agentConfig.permission || agentConfig.permissions,
+                            permissions: agentConfig.permission || agentConfig.permissions
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(`Failed to read agent config from ${configPath}:`, err.message);
+            }
+        }
+    }
+    
+    for (const dir of getAgentDirs()) {
+        if (!fs.existsSync(dir)) continue;
+        const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+        files.forEach((file) => {
+            const fp = path.join(dir, file);
+            const content = fs.readFileSync(fp, 'utf8');
+            const { data, body } = parseAgentMarkdown(content);
+            const name = path.basename(file, '.md');
+            
             if (!agentMap.has(name)) {
-                agentMap.set(name, { name, source: 'builtin', mode: 'primary', disabled: disabledAgents.includes(name) });
+                agentMap.set(name, {
+                    name,
+                    source: 'markdown',
+                    path: fp,
+                    disabled: false,
+                    description: data.description,
+                    mode: data.mode,
+                    model: data.model,
+                    temperature: data.temperature,
+                    tools: data.tools,
+                    permission: data.permission,
+                    permissions: data.permission,
+                    maxSteps: data.maxSteps,
+                    disable: data.disable,
+                    hidden: data.hidden,
+                    prompt: body
+                });
             }
         });
+    }
+    
+    ['build', 'plan'].forEach((name) => {
+        if (!agentMap.has(name)) {
+            agentMap.set(name, { name, source: 'builtin', mode: 'primary', disabled: false });
+        }
+    });
+    
+    return Array.from(agentMap.values());
+};
 
-        res.json({ agents: Array.from(agentMap.values()) });
+app.get('/api/agents', (req, res) => {
+    try {
+        const studio = loadStudioConfig();
+        const disabledAgents = studio.disabledAgents || [];
+        
+        const agents = aggregateAgents();
+        
+        const agentsWithStatus = agents.map(agent => ({
+            ...agent,
+            disabled: disabledAgents.includes(agent.name)
+        }));
+        
+        res.json({ agents: agentsWithStatus });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1892,26 +2226,42 @@ app.get('/api/skills', (req, res) => {
     const studio = loadStudioConfig();
     const disabledSkills = studio.disabledSkills || [];
     const skillMap = new Map();
-    
-    getSkillDirs().forEach(dir => {
-        if (!fs.existsSync(dir)) return;
+
+    for (const dirInfo of getSkillDirs()) {
+        if (!fs.existsSync(dirInfo.path)) continue;
         try {
-            fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
-                if (e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'SKILL.md'))) {
-                    if (!skillMap.has(e.name)) {
-                        skillMap.set(e.name, {
-                            name: e.name,
-                            path: path.join(dir, e.name, 'SKILL.md'),
-                            enabled: !disabledSkills.includes(e.name)
-                        });
-                    }
+            if (dirInfo.isFlat) {
+                const name = dirInfo.package || path.basename(dirInfo.path);
+                const skillPath = path.join(dirInfo.path, 'SKILL.md');
+                if (!skillMap.has(name)) {
+                    skillMap.set(name, {
+                        name,
+                        path: skillPath,
+                        source: dirInfo.source,
+                        package: dirInfo.package,
+                        enabled: !disabledSkills.includes(name)
+                    });
                 }
-            });
+            } else {
+                fs.readdirSync(dirInfo.path, { withFileTypes: true }).forEach(e => {
+                    if (e.isDirectory() && fs.existsSync(path.join(dirInfo.path, e.name, 'SKILL.md'))) {
+                        if (!skillMap.has(e.name)) {
+                            skillMap.set(e.name, {
+                                name: e.name,
+                                path: path.join(dirInfo.path, e.name, 'SKILL.md'),
+                                source: dirInfo.source,
+                                package: dirInfo.package,
+                                enabled: !disabledSkills.includes(e.name)
+                            });
+                        }
+                    }
+                });
+            }
         } catch (e) {
-            console.warn(`Failed to read skills from ${dir}: ${e.message}`);
+            console.warn(`Failed to read skills from ${dirInfo.path}: ${e.message}`);
         }
-    });
-    
+    }
+
     res.json(Array.from(skillMap.values()));
 });
 
@@ -1920,11 +2270,17 @@ app.get('/api/skills/:name', (req, res) => {
     if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
         return res.status(400).json({ error: 'Invalid skill name' });
     }
-    
-    for (const dir of getSkillDirs()) {
-        const p = path.join(dir, name, 'SKILL.md');
-        if (fs.existsSync(p)) {
-            return res.json({ name, content: fs.readFileSync(p, 'utf8') });
+
+    for (const dirInfo of getSkillDirs()) {
+        const nestedPath = path.join(dirInfo.path, name, 'SKILL.md');
+        if (fs.existsSync(nestedPath)) {
+            return res.json({ name, content: fs.readFileSync(nestedPath, 'utf8'), source: dirInfo.source });
+        }
+        if (dirInfo.isFlat && (dirInfo.package === name || path.basename(dirInfo.path) === name)) {
+            const flatPath = path.join(dirInfo.path, 'SKILL.md');
+            if (fs.existsSync(flatPath)) {
+                return res.json({ name, content: fs.readFileSync(flatPath, 'utf8'), source: dirInfo.source });
+            }
         }
     }
     res.status(404).json({ error: 'Not found' });
@@ -1937,15 +2293,15 @@ app.post('/api/skills/:name', (req, res) => {
     }
 
     let targetDir = null;
-    
+
     // Check if editing existing
-    for (const dir of getSkillDirs()) {
-        if (fs.existsSync(path.join(dir, name, 'SKILL.md'))) {
-            targetDir = path.join(dir, name);
+    for (const dirInfo of getSkillDirs()) {
+        if (fs.existsSync(path.join(dirInfo.path, name, 'SKILL.md'))) {
+            targetDir = path.join(dirInfo.path, name);
             break;
         }
     }
-    
+
     // If not found, create in active dir
     if (!targetDir) {
         const activeDir = getActiveSkillDir();
@@ -1977,19 +2333,19 @@ app.delete('/api/skills/:name', (req, res) => {
     }
 
     let deleted = false;
-    for (const dir of getSkillDirs()) {
-        const skillDir = path.join(dir, name);
+    for (const dirInfo of getSkillDirs()) {
+        const skillDir = path.join(dirInfo.path, name);
         if (fs.existsSync(path.join(skillDir, 'SKILL.md'))) {
             try {
                 fs.rmSync(skillDir, { recursive: true, force: true });
                 deleted = true;
-                break; 
+                break;
             } catch (e) {
                 return res.status(500).json({ error: e.message });
             }
         }
     }
-    
+
     if (deleted) {
         triggerGitHubAutoSync();
         res.json({ success: true });
@@ -2024,42 +2380,42 @@ app.get('/api/plugins', (req, res) => {
     const disabledPlugins = studio.disabledPlugins || [];
     const plugins = [];
     const pluginMap = new Map();
-    const add = (name, p, type = 'file') => {
+    const add = (name, p, type = 'file', source = 'plugin-dir') => {
         if (!pluginMap.has(name)) {
             pluginMap.set(name, true);
-            plugins.push({ name, path: p, type, enabled: !disabledPlugins.includes(name) });
+            plugins.push({ name, path: p, type, source, enabled: !disabledPlugins.includes(name) });
         }
     };
 
-    getPluginDirs().forEach(pd => {
-        if (!fs.existsSync(pd)) return;
+    for (const dirInfo of getPluginDirs()) {
+        if (!fs.existsSync(dirInfo.path)) continue;
         try {
-            fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
-                const fp = path.join(pd, e.name);
+            fs.readdirSync(dirInfo.path, { withFileTypes: true }).forEach(e => {
+                const fp = path.join(dirInfo.path, e.name);
                 const st = fs.lstatSync(fp);
                 if (st.isDirectory()) {
                     const j = path.join(fp, 'index.js'), t = path.join(fp, 'index.ts');
-                    if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file');
+                    if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file', dirInfo.source);
                 } else if ((st.isFile() || st.isSymbolicLink()) && /.(js|ts)$/.test(e.name)) {
-                    add(e.name.replace(/.(js|ts)$/, ''), fp, 'file');
+                    add(e.name.replace(/.(js|ts)$/, ''), fp, 'file', dirInfo.source);
                 }
             });
         } catch (e) {}
-    });
+    }
 
     const cp = getConfigPath();
     const cr = cp ? path.dirname(cp) : null;
     if (cr && fs.existsSync(cr)) {
         ['oh-my-opencode', 'superpowers', 'opencode-gemini-auth'].forEach(n => {
             const fp = path.join(cr, n);
-            if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) add(n, fp, 'file');
+            if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) add(n, fp, 'file', 'project-dir');
         });
     }
 
     const cfg = loadConfig();
     if (cfg && Array.isArray(cfg.plugin)) {
         cfg.plugin.forEach(n => {
-            if (!n.includes('/') && !n.includes('\\') && !/\.(js|ts)$/.test(n)) add(n, 'npm', 'npm');
+            if (!n.includes('/') && !n.includes('\\') && !/\.(js|ts)$/.test(n)) add(n, 'npm', 'npm', 'json-config');
         });
     }
     res.json(plugins);
@@ -2067,16 +2423,15 @@ app.get('/api/plugins', (req, res) => {
 
 app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
-    
-    // Search in all plugin dirs
-    for (const pd of getPluginDirs()) {
+
+    for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
-            path.join(pd, name + '.js'),
-            path.join(pd, name + '.ts'),
-            path.join(pd, name, 'index.js'),
-            path.join(pd, name, 'index.ts')
+            path.join(dirInfo.path, name + '.js'),
+            path.join(dirInfo.path, name + '.ts'),
+            path.join(dirInfo.path, name, 'index.js'),
+            path.join(dirInfo.path, name, 'index.ts')
         ];
-        
+
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
                 const content = fs.readFileSync(p, 'utf8');
@@ -2090,16 +2445,15 @@ app.get('/api/plugins/:name', (req, res) => {
 app.post('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     const { content } = req.body;
-    
-    // Check if exists to overwrite
-    for (const pd of getPluginDirs()) {
+
+    for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
-            path.join(pd, name + '.js'),
-            path.join(pd, name + '.ts'),
-            path.join(pd, name, 'index.js'),
-            path.join(pd, name, 'index.ts')
+            path.join(dirInfo.path, name + '.js'),
+            path.join(dirInfo.path, name + '.ts'),
+            path.join(dirInfo.path, name, 'index.js'),
+            path.join(dirInfo.path, name, 'index.ts')
         ];
-        
+
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
                 atomicWriteFileSync(p, content);
@@ -2109,7 +2463,6 @@ app.post('/api/plugins/:name', (req, res) => {
         }
     }
 
-    // Create new in active dir or first available
     let pd = getActivePluginDir();
     if (!pd) {
         const roots = getSearchRoots();
@@ -2128,15 +2481,15 @@ app.post('/api/plugins/:name', (req, res) => {
 
 app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
-    
+
     let deleted = false;
-    for (const pd of getPluginDirs()) {
+    for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
-            path.join(pd, name),
-            path.join(pd, name + '.js'),
-            path.join(pd, name + '.ts')
+            path.join(dirInfo.path, name),
+            path.join(dirInfo.path, name + '.js'),
+            path.join(dirInfo.path, name + '.ts')
         ];
-        
+
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
                 if (fs.statSync(p).isDirectory()) {
@@ -2145,12 +2498,12 @@ app.delete('/api/plugins/:name', (req, res) => {
                     fs.unlinkSync(p);
                 }
                 deleted = true;
-                break; 
+                break;
             }
         }
         if (deleted) break;
     }
-    
+
     if (deleted) {
         triggerGitHubAutoSync();
         res.json({ success: true });
