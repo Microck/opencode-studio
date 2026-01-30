@@ -68,21 +68,13 @@ export default function CommandsPage() {
       return;
     }
 
-    const updatedConfig = {
-      ...config,
-      command: {
-        ...config?.command,
-        [newName.trim()]: { template: newTemplate },
-      },
-    };
-
     try {
-      await saveConfig(updatedConfig);
+      await saveCommand(newName.trim(), newTemplate);
       toast.success(`Command "${newName}" created`);
       setNewName("");
       setNewTemplate("");
       setAddOpen(false);
-      refreshData();
+      fetchCommands();
     } catch {
       toast.error("Failed to create command");
     }
@@ -107,27 +99,15 @@ export default function CommandsPage() {
       return;
     }
 
-    const newCommands = { ...config?.command };
-    
-    // If name changed, delete old key
-    if (editingCmd.name !== editingCmd.originalName) {
-      delete newCommands[editingCmd.originalName];
-    }
-    
-    // Set new/updated key
-    newCommands[editingCmd.name.trim()] = { template: editingCmd.template };
-
-    const updatedConfig = {
-      ...config,
-      command: newCommands,
-    };
-
     try {
-      await saveConfig(updatedConfig);
+      if (editingCmd.name !== editingCmd.originalName) {
+        await deleteCommand(editingCmd.originalName);
+      }
+      await saveCommand(editingCmd.name.trim(), editingCmd.template);
       toast.success(`Command "${editingCmd.name}" updated`);
       setEditOpen(false);
       setEditingCmd(null);
-      refreshData();
+      fetchCommands();
     } catch {
       toast.error("Failed to update command");
     }
@@ -137,18 +117,10 @@ export default function CommandsPage() {
   const handleDelete = async (name: string) => {
     if (!confirm(`Delete command "${name}"?`)) return;
 
-    const newCommands = { ...config?.command };
-    delete newCommands[name];
-
-    const updatedConfig = {
-      ...config,
-      command: newCommands,
-    };
-
     try {
-      await saveConfig(updatedConfig);
+      await deleteCommand(name);
       toast.success(`Command "${name}" deleted`);
-      refreshData();
+      fetchCommands();
     } catch {
       toast.error("Failed to delete command");
     }
