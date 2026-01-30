@@ -2498,26 +2498,6 @@ app.get('/api/plugins', (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-        } catch (e) {}
-    }
-
-    const cp = getConfigPath();
-    const cr = cp ? path.dirname(cp) : null;
-    if (cr && fs.existsSync(cr)) {
-        ['oh-my-opencode', 'superpowers', 'opencode-gemini-auth'].forEach(n => {
-            const fp = path.join(cr, n);
-            if (fs.existsSync(fp) && fs.statSync(fp).isDirectory()) add(n, fp, 'file', 'project-dir');
-        });
-    }
-
-    const cfg = loadConfig();
-    if (cfg && Array.isArray(cfg.plugin)) {
-        cfg.plugin.forEach(n => {
-            if (!n.includes('/') && !n.includes('\\') && !/\.(js|ts)$/.test(n)) add(n, 'npm', 'npm', 'json-config');
-        });
-    }
-    res.json(plugins);
-});
 
 app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
