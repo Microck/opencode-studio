@@ -2457,31 +2457,47 @@ const getActivePluginDir = () => {
     return cp ? path.join(path.dirname(cp), 'plugin') : null;
 };
 
-app.get('/api/plugins', (req, res) => {
-    const studio = loadStudioConfig();
-    const disabledPlugins = studio.disabledPlugins || [];
-    const plugins = [];
+const aggregatePlugins = () => {
     const pluginMap = new Map();
-    const add = (name, p, type = 'file', source = 'plugin-dir') => {
-        if (!pluginMap.has(name)) {
-            pluginMap.set(name, true);
-            plugins.push({ name, path: p, type, source, enabled: !disabledPlugins.includes(name) });
-        }
-    };
+    const priority = { 'plugins-dir': 3, 'plugin-dir': 2, 'json-config': 1 };
 
     for (const dirInfo of getPluginDirs()) {
-        if (!fs.existsSync(dirInfo.path)) continue;
-        try {
-            fs.readdirSync(dirInfo.path, { withFileTypes: true }).forEach(e => {
-                const fp = path.join(dirInfo.path, e.name);
-                const st = fs.lstatSync(fp);
-                if (st.isDirectory()) {
-                    const j = path.join(fp, 'index.js'), t = path.join(fp, 'index.ts');
-                    if (fs.existsSync(j) || fs.existsSync(t)) add(e.name, fs.existsSync(j) ? j : t, 'file', dirInfo.source);
-                } else if ((st.isFile() || st.isSymbolicLink()) && /.(js|ts)$/.test(e.name)) {
-                    add(e.name.replace(/.(js|ts)$/, ''), fp, 'file', dirInfo.source);
+        const plugins = loadPluginsFromDir(dirInfo);
+        for (const plugin of plugins) {
+            if (!pluginMap.has(plugin.name)) {
+                pluginMap.set(plugin.name, plugin);
+            } else {
+                const existing = pluginMap.get(plugin.name);
+                if (priority[plugin.source] > priority[existing.source]) {
+                    pluginMap.set(plugin.name, plugin);
                 }
-            });
+            }
+        }
+    }
+
+    const aggregated = loadAggregatedConfig();
+    if (aggregated.plugins) {
+        for (const plugin of aggregated.plugins) {
+            if (!pluginMap.has(plugin.name)) {
+                pluginMap.set(plugin.name, {
+                    ...plugin,
+                    source: 'json-config'
+                });
+            }
+        }
+    }
+
+    return Array.from(pluginMap.values());
+};
+
+app.get('/api/plugins', (req, res) => {
+    try {
+        const plugins = aggregatePlugins();
+        res.json(plugins);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
         } catch (e) {}
     }
 
@@ -2606,6 +2622,39 @@ app.post('/api/plugins/:name/toggle', (req, res) => {
     saveStudioConfig(studio);
     triggerGitHubAutoSync();
     res.json({ success: true, enabled: !studio.disabledPlugins.includes(name) });
+});
+
+app.get('/api/models', (req, res) => {
+    try {
+        const providers = aggregateModels();
+        
+        const allModels = [];
+        for (const provider of providers) {
+            if (provider.config.models && Array.isArray(provider.config.models)) {
+                for (const model of provider.config.models) {
+                    allModels.push({
+                        id: typeof model === 'string' ? model : model.id,
+                        provider: provider.name,
+                        providerConfig: provider.config,
+                        ...((typeof model === 'object' ? model : {}))
+                    });
+                }
+            } else {
+                allModels.push({
+                    id: `${provider.name}/default`,
+                    provider: provider.name,
+                    providerConfig: provider.config
+                });
+            }
+        }
+        
+        res.json({ 
+            providers,
+            models: allModels 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 const getActiveGooglePlugin = () => {
