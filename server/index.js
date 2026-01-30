@@ -773,10 +773,39 @@ const loadMcpsFromDir = (dirInfo) => {
     return mcps;
 };
 
+const loadPluginsFromDir = (dirInfo) => {
+    const plugins = [];
+    if (!fs.existsSync(dirInfo.path)) return plugins;
+
+    try {
+        const files = fs.readdirSync(dirInfo.path)
+            .filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+
+        for (const file of files) {
+            const filePath = path.join(dirInfo.path, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const name = path.basename(file, path.extname(file));
+
+            plugins.push({
+                name,
+                filename: file,
+                content,
+                source: dirInfo.source,
+                path: filePath,
+                root: dirInfo.root
+            });
+        }
+    } catch (e) {
+        console.warn(`Failed to load plugins from ${dirInfo.path}:`, e.message);
+    }
+
+    return plugins;
+};
+
 const getAgentDirs = () => {
     const roots = getSearchRoots();
     const dirs = [];
-    
+
     for (const root of roots) {
         dirs.push(path.join(root, 'agents'));
         dirs.push(path.join(root, 'agent'));
