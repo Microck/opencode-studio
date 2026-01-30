@@ -129,7 +129,7 @@ return (
               <div className="space-y-1">
                 <p className="text-xs font-medium">2. Install Studio Server</p>
                 <code className="text-[11px] block bg-background border border-border p-2 rounded font-mono break-all">
-                  npm install -g opencode-studio-server
+npm install -g opencode-studio-server@2.2.1
                 </code>
               </div>
 
@@ -168,7 +168,7 @@ return (
       <div className={`absolute bottom-4 text-xs text-muted-foreground ${isFirstLoad ? "landing-delay-6" : "landing-delay-fast-6"}`}>
         {showUpdateHint ? (
           <span className="animate-fade-in">
-            Not connecting? Try: <code className="bg-muted px-1.5 py-0.5 rounded">npm install -g opencode-studio-server@latest</code>
+            Not connecting? Try: <code className="bg-muted px-1.5 py-0.5 rounded">npm install -g opencode-studio-server@2.2.1</code>
           </span>
         ) : (
           "Waiting for backend connection..."
