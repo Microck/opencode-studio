@@ -25,10 +25,13 @@ async function discoverBackendPort(): Promise<string> {
 
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
+const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.16.0';
+
 const api = axios.create({
   baseURL: envApiUrl || 'http://127.0.0.1:1920/api',
   headers: {
     'Content-Type': 'application/json',
+    'X-Client-Version': CLIENT_VERSION,
   },
 });
 

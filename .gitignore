@@ -37,6 +37,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Build outputs
+*.out
+a.out
+
 # Testing
 coverage/
 

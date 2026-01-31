@@ -11,6 +11,19 @@ const yaml = require('js-yaml');
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
 const SERVER_VERSION = pkg.version;
+const MIN_CLIENT_VERSION = '1.16.0';
+
+function compareVersions(current, minimum) {
+    const c = current.split('.').map(Number);
+    const m = minimum.split('.').map(Number);
+    for (let i = 0; i < Math.max(c.length, m.length); i++) {
+        const cv = c[i] || 0;
+        const mv = m[i] || 0;
+        if (cv > mv) return 1;
+        if (cv < mv) return -1;
+    }
+    return 0;
+}
 
 // Atomic file write: write to temp file then rename to prevent corruption
 const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
@@ -91,13 +104,26 @@ const ALLOWED_ORIGINS = [
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        const allowed = ALLOWED_ORIGINS.some(o => 
+        const allowed = ALLOWED_ORIGINS.some(o =>
             o instanceof RegExp ? o.test(origin) : o === origin
         );
         callback(null, allowed);
     },
     credentials: true,
 }));
+
+app.use((req, res, next) => {
+    const clientVersion = req.headers['x-client-version'];
+    if (clientVersion && compareVersions(clientVersion, MIN_CLIENT_VERSION) < 0) {
+        return res.status(426).json({
+            error: 'Client version outdated',
+            message: `Your client version (${clientVersion}) is no longer supported. Please upgrade to ${MIN_CLIENT_VERSION} or later.`,
+            minRequired: MIN_CLIENT_VERSION,
+            current: SERVER_VERSION
+        });
+    }
+    next();
+});
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(bodyParser.text({ type: ['text/*', 'application/yaml'], limit: '50mb' }));

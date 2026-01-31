@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/lib/context";
-import api, { getPaths, setConfigPath, getBackup, restoreBackup, getOhMyConfig, saveOhMyConfig, getGitHubBackupStatus, backupToGitHub, restoreFromGitHub, setGitHubAutoSync, type PathsInfo, type BackupData } from "@/lib/api";
+import api, { getPaths, setConfigPath, getBackup, restoreBackup, getGitHubBackupStatus, backupToGitHub, restoreFromGitHub, setGitHubAutoSync, type PathsInfo, type BackupData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -23,27 +23,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PermissionEditor } from "@/components/permission-editor";
-import { Sliders as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github, InfoBox, Android as Bot } from "@nsmr/pixelart-react";
+import { Sliders as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
-import type { OpencodeConfig, OhMyPreferences, OhMyAgentPreferences, GitHubBackupStatus } from "@/types";
+import { SincronizadoCard } from "@/components/sincronizado-card";
+import type { OpencodeConfig, GitHubBackupStatus } from "@/types";
 
 const THEMES = ["dark", "light", "auto"] as const;
 const SHARE_OPTIONS = ["manual", "auto", "disabled"] as const;
-
-const OHMY_AGENTS = [
-  { id: "Sisyphus", name: "Sisyphus", desc: "Main coding agent - handles implementation, debugging, and code changes" },
-  { id: "oracle", name: "Oracle", desc: "Senior advisor for architecture decisions, code review, and complex reasoning" },
-  { id: "librarian", name: "Librarian", desc: "Documentation lookup, external code search, and library research" },
-  { id: "explore", name: "Explore", desc: "Codebase navigation, file discovery, and pattern searching" },
-  { id: "frontend-ui-ux-engineer", name: "Frontend UI/UX", desc: "Visual design, styling, and UI component implementation" },
-  { id: "document-writer", name: "Document Writer", desc: "README files, API docs, and technical documentation" },
-  { id: "multimodal-looker", name: "Multimodal Looker", desc: "Image/PDF analysis and visual content interpretation" },
-] as const;
-
-const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
 
 const ESSENTIAL_KEYBINDS = [
   ["leader", "Leader key"],
@@ -70,16 +59,13 @@ export default function SettingsPage() {
     permissions: false,
     prompts: false,
     backup: false,
-    ohmy: false,
+    sincronizado: false,
   });
   
 const [systemPrompt, setSystemPrompt] = useState("");
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const { theme } = useTheme();
-
-  const [ohMyPrefs, setOhMyPrefs] = useState<OhMyPreferences>({ agents: {} });
-  const [savingOhMy, setSavingOhMy] = useState(false);
 
   const [ghBackupStatus, setGhBackupStatus] = useState<GitHubBackupStatus | null>(null);
   const [ghOwner, setGhOwner] = useState("");
@@ -93,14 +79,10 @@ const [systemPrompt, setSystemPrompt] = useState("");
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-useEffect(() => {
+  useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
     loadSystemPrompt();
-    
-    getOhMyConfig().then(res => {
-      setOhMyPrefs(res.preferences);
-    }).catch(console.error);
-    
+
     getGitHubBackupStatus().then(status => {
       setGhBackupStatus(status);
       if (status.config) {
@@ -218,57 +200,7 @@ useEffect(() => {
       fileInputRef.current.value = "";
     }
   };
-
-const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'available', value: string | boolean) => {
-    setOhMyPrefs(prev => {
-      const agents = { ...prev.agents };
-      if (!agents[agent]) {
-        agents[agent] = { choices: [{ model: '', available: true }, { model: '', available: true }, { model: '', available: true }] };
-      }
-      const choices = [...agents[agent].choices];
-      while (choices.length < 3) choices.push({ model: '', available: true });
-      choices[index] = { ...choices[index], [field]: value };
-      agents[agent] = { ...agents[agent], choices };
-      return { agents };
-});
-  };
-
-  const updateOhMyModelConfig = (agent: string, index: number, field: 'thinking' | 'reasoning', value: { type: 'enabled' | 'disabled' } | { effort: 'low' | 'medium' | 'high' | 'xhigh' } | undefined) => {
-    setOhMyPrefs(prev => {
-      const agents = { ...prev.agents };
-      if (!agents[agent]) {
-        agents[agent] = { choices: [{ model: '', available: true }, { model: '', available: true }, { model: '', available: true }] };
-      }
-      const choices = [...agents[agent].choices];
-      while (choices.length < 3) choices.push({ model: '', available: true });
-      const updated = { ...choices[index] };
-      if (value === undefined) {
-        delete (updated as Record<string, unknown>)[field];
-      } else {
-        (updated as Record<string, unknown>)[field] = value;
-      }
-      choices[index] = updated;
-      agents[agent] = { choices };
-      return { agents };
-    });
-  };
-
-  const handleSaveOhMy = async () => {
-    setSavingOhMy(true);
-    try {
-      const result = await saveOhMyConfig(ohMyPrefs);
-      if (result.warnings && result.warnings.length > 0) {
-        result.warnings.forEach((w: string) => toast.warning(w));
-      } else {
-        toast.success("Oh My OpenCode config saved");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message);
-    } finally {
-      setSavingOhMy(false);
-    }
-  };
-
+ 
   const handleGitHubBackup = async () => {
     if (!ghOwner || !ghRepo) {
       toast.error("Owner and repo required");
@@ -656,126 +588,11 @@ const updateOhMyAgent = (agent: string, index: number, field: 'model' | 'availab
             </CardContent>
           </CollapsibleContent>
         </Card>
-      </Collapsible>
+       </Collapsible>
 
-<Collapsible open={openSections.ohmy} onOpenChange={() => toggleSection("ohmy")}>
-        <Card className="hover-lift">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-5 w-5" />
-                  <CardTitle>Oh My OpenCode Models</CardTitle>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.ohmy ? "rotate-180" : ""}`} />
-              </div>
-              <CardDescription>Configure model fallback preferences per agent</CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="animate-scale-in">
-            <CardContent className="space-y-6 pt-0">
-              {OHMY_AGENTS.map(({ id, name, desc }) => {
-                const agentPrefs = ohMyPrefs.agents[id] || { choices: [] };
-                const choices = [...agentPrefs.choices];
-                while (choices.length < 3) choices.push({ model: '', available: true });
-                return (
-                  <div key={id} className="p-4 bg-background rounded-lg space-y-4">
-                    <div>
-                      <Label className="text-base font-semibold">{name}</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <Label className="text-xs text-muted-foreground uppercase tracking-wide">Model Fallbacks</Label>
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="space-y-2 p-3 bg-muted/30 rounded-md">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                            <Input
-                              placeholder={`Model ${i + 1} (e.g. google/gemini-3-pro)`}
-                              value={choices[i]?.model || ''}
-                              onChange={(e) => updateOhMyAgent(id, i, 'model', e.target.value)}
-                              className="flex-1"
-                            />
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={choices[i]?.available ?? true}
-                                onCheckedChange={(v) => updateOhMyAgent(id, i, 'available', v)}
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 ml-7">
-                            <div className="flex items-center gap-2">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="flex items-center gap-1 cursor-help">
-                                    <Label className="text-[10px] text-muted-foreground">Thinking</Label>
-                                    <InfoBox className="h-3 w-3 text-muted-foreground" />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-xs">
-                                  <p className="text-xs">Extended thinking for Gemini models. Enables multi-step reasoning before responding.</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              <Select
-                                value={choices[i]?.thinking?.type || 'disabled'}
-                                onValueChange={(v) => updateOhMyModelConfig(id, i, 'thinking', v === 'disabled' ? undefined : { type: v as 'enabled' | 'disabled' })}
-                              >
-                                <SelectTrigger className="h-7 w-24 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="disabled">Off</SelectItem>
-                                  <SelectItem value="enabled">On</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="flex items-center gap-1 cursor-help">
-                                    <Label className="text-[10px] text-muted-foreground">Reasoning</Label>
-                                    <InfoBox className="h-3 w-3 text-muted-foreground" />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-xs">
-                                  <p className="text-xs">Reasoning effort for OpenAI o-series models. Higher = more tokens spent on chain-of-thought before answering.</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              <Select
-                                value={choices[i]?.reasoning?.effort || 'disabled'}
-                                onValueChange={(v) => updateOhMyModelConfig(id, i, 'reasoning', v === 'disabled' ? undefined : { effort: v as 'low' | 'medium' | 'high' | 'xhigh' })}
-                              >
-                                <SelectTrigger className="h-7 w-24 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="disabled">Off</SelectItem>
-                                  <SelectItem value="low">Low</SelectItem>
-                                  <SelectItem value="medium">Medium</SelectItem>
-                                  <SelectItem value="high">High</SelectItem>
-                                  <SelectItem value="xhigh">XHigh</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="flex justify-end">
-                <Button onClick={handleSaveOhMy} disabled={savingOhMy}>
-                  {savingOhMy && <Loader className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Model Preferences
-                </Button>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
+      <Collapsible open={openSections.sincronizado} onOpenChange={() => toggleSection("sincronizado")}>
+        <SincronizadoCard />
       </Collapsible>
-
 
     </div>
   );
