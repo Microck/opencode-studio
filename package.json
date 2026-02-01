@@ -1,6 +1,6 @@
 {
   "name": "opencode-studio",
-  "version": "1.0.0",
+  "version": "1.17.0",
   "private": true,
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",

@@ -1,6 +1,6 @@
 {
   "name": "client-next",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "scripts": {
     "dev": "node dev-with-port.js",

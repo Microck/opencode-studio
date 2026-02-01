@@ -25,7 +25,7 @@ async function discoverBackendPort(): Promise<string> {
 
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.16.0';
+const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.17.0';
 
 const api = axios.create({
   baseURL: envApiUrl || 'http://127.0.0.1:1920/api',
@@ -43,7 +43,7 @@ if (!envApiUrl) {
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '2.2.0';
+export const MIN_SERVER_VERSION = '2.2.2';
 
 export async function getApiBaseUrl(): Promise<string> {
   if (api.defaults.baseURL) return api.defaults.baseURL;
