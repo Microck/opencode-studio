@@ -1037,9 +1037,10 @@ const loadAggregatedConfig = () => {
     const activeDir = activeConfigPath ? path.dirname(activeConfigPath) : null;
 
     const aggregated = {
-        mcpServers: {},
+        mcp: {},
         command: {},
-        env: {}
+        env: {},
+        plugins: []
     };
 
     const configs = [];
@@ -1066,9 +1067,9 @@ const loadAggregatedConfig = () => {
     });
 
     [...configs].reverse().forEach(({ config }) => {
-        if (config.mcpServers && typeof config.mcpServers === 'object') {
-            for (const [key, value] of Object.entries(config.mcpServers)) {
-                aggregated.mcpServers[key] = value;
+        if (config.mcp && typeof config.mcp === 'object') {
+            for (const [key, value] of Object.entries(config.mcp)) {
+                aggregated.mcp[key] = value;
             }
         }
 
@@ -1078,6 +1079,19 @@ const loadAggregatedConfig = () => {
 
         if (config.env && typeof config.env === 'object') {
             Object.assign(aggregated.env, config.env);
+        }
+
+        if (config.plugins && Array.isArray(config.plugins)) {
+            for (const plugin of config.plugins) {
+                const name = typeof plugin === 'string' ? plugin : plugin.name || plugin.npm;
+                if (name && !aggregated.plugins.find((p) => p.name === name)) {
+                    aggregated.plugins.push({
+                        name,
+                        source: 'json-config',
+                        type: typeof plugin === 'object' && plugin.npm ? 'npm' : 'file'
+                    });
+                }
+            }
         }
     });
 
@@ -1203,7 +1217,11 @@ app.get('/api/mcp', (req, res) => {
             }
         }
 
-        res.json(Array.from(mcpMap.values()));
+        const mcpObj = {};
+        for (const [name, mcp] of mcpMap.entries()) {
+            mcpObj[name] = mcp.config || mcp;
+        }
+        res.json(mcpObj);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1229,14 +1247,25 @@ app.get('/api/commands', (req, res) => {
                     commandMap.set(name, {
                         name,
                         content: cmdConfig.template || cmdConfig,
-                        description: cmdConfig.description || (cmdConfig.template || cmdConfig).slice(0, 100).replace(/\n/g, ' '),
+                        description: cmdConfig.description || (typeof cmdConfig === 'string' ? cmdConfig.slice(0, 100).replace(/\n/g, ' ') : ''),
                         source: 'json-config'
                     });
                 }
             }
         }
 
-        res.json(Array.from(commandMap.values()));
+        const commandsObj = {};
+        for (const [name, cmd] of commandMap.entries()) {
+            commandsObj[name] = {
+                name,
+                template: cmd.content || cmd.template,
+                description: cmd.description,
+                source: cmd.source,
+                path: cmd.path,
+                root: cmd.root
+            };
+        }
+        res.json(commandsObj);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2529,7 +2558,16 @@ const aggregatePlugins = () => {
 app.get('/api/plugins', (req, res) => {
     try {
         const plugins = aggregatePlugins();
-        res.json(plugins);
+        const studio = loadStudioConfig();
+        const disabledPlugins = studio.disabledPlugins || [];
+
+        const pluginsWithStatus = plugins.map(p => ({
+            ...p,
+            enabled: !disabledPlugins.includes(p.name),
+            type: p.source === 'json-config' && p.type === 'npm' ? 'npm' : 'file'
+        }));
+
+        res.json(pluginsWithStatus);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
