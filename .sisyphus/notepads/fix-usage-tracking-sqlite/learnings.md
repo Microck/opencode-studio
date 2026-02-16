@@ -59,3 +59,27 @@
 - Leveraged `shadcn/ui` `Alert` component for concise message.
 - Detected empty usage (`totalTokens === 0`) to trigger hint.
 - Verified using Playwright by mocking `/api/usage` response with zero values.
+
+## Task 4: SQLite Totals/Models/Projects
+
+- `/api/usage` can aggregate totals with a bounded SQL result by grouping on `(project_id, modelID)` instead of scanning message rows.
+- Safe time-window interpolation works by coercing `from/to` to finite non-negative numbers and embedding only truncated integers.
+- Project filtering requirement can be met without SQL user input by filtering aggregate rows in JS (`row.projectId === projectId`).
+- `json_extract` fallback order for model ID should handle multiple shapes: `$.modelID`, `$.model.modelID`, then `$.model.id`.
+- Cost consistency now comes from token-based pricing (`input/output per 1M`) instead of relying on message `$.cost` presence.
+
+## Task 5: SQLite-backed byDay Buckets
+
+- Preserved legacy bucket formats while sourcing byDay from SQLite `message` table.
+- Hourly bucket format must be exactly `YYYY-MM-DDTHH:00:00Z` (`strftime('%Y-%m-%dT%H:00:00Z', ...)`).
+- Weekly buckets are safest when computed in JS from daily UTC dates to guarantee Monday-start output (`YYYY-MM-DD`).
+- Frontend stacked usage bars require dynamic per-model keys in each bucket: `${modelID}_input` and `${modelID}_output`.
+- Keeping `${modelID}` cost key in each bucket remains backward-compatible with existing payload shape.
+- SQL pre-aggregation by `bucket + modelID + sessionID` reduces JS work and keeps chronological sorting stable.
+
+## Task 6: Usage Endpoint Hardening
+
+- Cache keys should include `debug` and `source` flags to avoid serving mismatched payload variants.
+- `debug=1` diagnostics are useful for proving clamps/fallbacks (`min`, `max`, `clampedWindow`, `sourceUsed`, `errors`).
+- Input parsing is safest with a helper that returns `null` for missing values and `NaN` for invalid numeric input.
+- Source override behavior works cleanly with `source=auto|sqlite|legacy` and auto-only fallback to legacy on SQLite failure.

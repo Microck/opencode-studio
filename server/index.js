@@ -2881,7 +2881,9 @@ app.get('/api/auth', (req, res) => {
         { id: 'azure', name: 'Azure OpenAI', type: 'api' }
     ];
 
-    providers.forEach(p => importCurrentAuthToPool(p.id));
+    providers.forEach(p => {
+        importCurrentAuthToPool(p.id);
+    });
     syncAntigravityPool();
 
     const authCfg = loadAuthConfig() || {};
@@ -2938,7 +2940,9 @@ app.get('/api/auth', (req, res) => {
 
 app.get('/api/auth/profiles', (req, res) => {
     const providers = ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'];
-    providers.forEach(p => importCurrentAuthToPool(p));
+    providers.forEach(p => {
+        importCurrentAuthToPool(p);
+    });
     syncAntigravityPool();
     
     const authCfg = loadAuthConfig() || {};
@@ -3058,7 +3062,9 @@ app.delete('/api/auth/profiles/:provider/all', (req, res) => {
     
     if (fs.existsSync(dir)) {
         const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
-        files.forEach(f => fs.unlinkSync(path.join(dir, f)));
+        files.forEach(f => {
+            fs.unlinkSync(path.join(dir, f));
+        });
         console.log(`[Auth] Deleted ${files.length} profiles from ${dir}`);
     }
 
@@ -4059,66 +4065,364 @@ app.post('/api/profiles/:name/activate', (req, res) => {
 // END ACCOUNT POOL MANAGEMENT
 // ============================================
 
-app.get('/api/usage', async (req, res) => {
-    try {
-        const {projectId: fid, granularity = 'daily', range = '30d'} = req.query;
-        const cp = getConfigPath();
-        if (!cp) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-        
-        const home = os.homedir();
-        const dataCandidates = [
-            path.dirname(cp),
-            path.join(home, '.local', 'share', 'opencode'),
-            path.join(home, '.opencode'),
-            process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
-            path.join(home, 'AppData', 'Local', 'opencode')
-        ].filter(Boolean);
+const USAGE_EMPTY = { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
+const USAGE_MAX_WINDOW_MS = 31536000000;
+const USAGE_CACHE_TTL_MS = 10000;
+const usageCache = new Map();
+const usageInFlight = new Map();
 
-        let md = null;
-        let sd = null;
+function parseUsageTimeValue(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return NaN;
+    return Math.trunc(parsed);
+}
 
-        for (const d of dataCandidates) {
-            const mdp = path.join(d, 'storage', 'message');
-            const sdp = path.join(d, 'storage', 'session');
-            if (fs.existsSync(mdp)) {
-                md = mdp;
-                sd = sdp;
-                break;
+async function buildUsageFromLegacyStorage({ projectId, granularity, min, max, calculateCost }) {
+    const cp = getConfigPath();
+    if (!cp) return { ...USAGE_EMPTY };
+
+    const home = os.homedir();
+    const dataCandidates = [
+        path.dirname(cp),
+        path.join(home, '.local', 'share', 'opencode'),
+        path.join(home, '.opencode'),
+        process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
+        path.join(home, 'AppData', 'Local', 'opencode')
+    ].filter(Boolean);
+
+    let md = null;
+    let sd = null;
+    for (const d of dataCandidates) {
+        const mdp = path.join(d, 'storage', 'message');
+        const sdp = path.join(d, 'storage', 'session');
+        if (fs.existsSync(mdp)) {
+            md = mdp;
+            sd = sdp;
+            break;
+        }
+    }
+    if (!md) return { ...USAGE_EMPTY };
+
+    const pmap = new Map();
+    if (fs.existsSync(sd)) {
+        const sessionDirs = await fs.promises.readdir(sd);
+        await Promise.all(sessionDirs.map(async d => {
+            const fp = path.join(sd, d);
+            try {
+                const st = await fs.promises.stat(fp);
+                if (!st.isDirectory()) return;
+                const files = await fs.promises.readdir(fp);
+                await Promise.all(files.map(async f => {
+                    if (!f.startsWith('ses_') || !f.endsWith('.json')) return;
+                    try {
+                        const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
+                        pmap.set(f.replace('.json', ''), {
+                            name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unassigned'),
+                            id: m.projectID || d
+                        });
+                    } catch {}
+                }));
+            } catch {}
+        }));
+    }
+
+    const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
+    const seen = new Set();
+    const sessionDirs = await fs.promises.readdir(md);
+    await Promise.all(sessionDirs.map(async s => {
+        if (!s.startsWith('ses_')) return;
+        const sp = path.join(md, s);
+        try {
+            const spStats = await fs.promises.stat(sp);
+            if (!spStats.isDirectory()) return;
+            const files = await fs.promises.readdir(sp);
+            for (const f of files) {
+                if (!f.endsWith('.json')) continue;
+                const fullPath = path.join(sp, f);
+                if (seen.has(fullPath)) continue;
+                seen.add(fullPath);
+                try {
+                    const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
+                    const pid = pmap.get(s)?.id || 'unknown';
+                    if (projectId && projectId !== 'all' && pid !== projectId) continue;
+                    const createdAt = Number(msg?.time?.created || 0);
+                    if (min > 0 && createdAt < min) continue;
+                    if (max > 0 && createdAt > max) continue;
+                    if (msg.role !== 'assistant' || !msg.tokens) continue;
+
+                    const it = Number(msg.tokens.input || 0);
+                    const ot = Number(msg.tokens.output || 0);
+                    const t = it + ot;
+                    const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
+                    const c = calculateCost(mid, it, ot);
+
+                    const d = new Date(createdAt);
+                    let tk;
+                    if (granularity === 'hourly') tk = d.toISOString().substring(0, 13) + ':00:00Z';
+                    else if (granularity === 'weekly') {
+                        const day = d.getUTCDay();
+                        const diff = day === 0 ? -6 : 1 - day;
+                        d.setUTCDate(d.getUTCDate() + diff);
+                        tk = d.toISOString().split('T')[0];
+                    } else if (granularity === 'monthly') tk = d.toISOString().substring(0, 7) + '-01';
+                    else tk = d.toISOString().split('T')[0];
+
+                    stats.totalCost += c;
+                    stats.totalTokens += t;
+
+                    if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                    stats.byModel[mid].cost += c;
+                    stats.byModel[mid].tokens += t;
+                    stats.byModel[mid].inputTokens += it;
+                    stats.byModel[mid].outputTokens += ot;
+
+                    if (!stats.byProject[pid]) stats.byProject[pid] = { name: pmap.get(s)?.name || 'Unassigned', id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                    stats.byProject[pid].cost += c;
+                    stats.byProject[pid].tokens += t;
+                    stats.byProject[pid].inputTokens += it;
+                    stats.byProject[pid].outputTokens += ot;
+
+                    if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+                    const te = stats.byTime[tk];
+                    te.cost += c;
+                    te.tokens += t;
+                    te.inputTokens += it;
+                    te.outputTokens += ot;
+                    te[mid] = (te[mid] || 0) + c;
+                    te[`${mid}_input`] = (te[`${mid}_input`] || 0) + it;
+                    te[`${mid}_output`] = (te[`${mid}_output`] || 0) + ot;
+                } catch {}
+            }
+        } catch {}
+    }));
+
+    return {
+        totalCost: stats.totalCost,
+        totalTokens: stats.totalTokens,
+        byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
+        byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
+        byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
+    };
+}
+
+async function buildUsageFromSQLite({ projectId, granularity, min, max, calculateCost }) {
+    const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
+
+    const usageWhere = ["json_extract(m.data, '$.role') = 'assistant'"];
+    if (min > 0) usageWhere.push(`m.time_created >= ${Math.trunc(min)}`);
+    if (max > 0) usageWhere.push(`m.time_created <= ${Math.trunc(max)}`);
+
+    const sessionMapQuery = 'SELECT id AS sessionID, project_id AS projectId FROM session';
+    const sessionMapResult = await queryOpencodeDB(sessionMapQuery);
+    if (!sessionMapResult.success) {
+        throw new Error(`SQLite session map query failed: ${sessionMapResult.error || 'unknown error'}`);
+    }
+
+    const pmap = new Map();
+    if (Array.isArray(sessionMapResult.data)) {
+        for (const row of sessionMapResult.data) {
+            if (row.sessionID) {
+                pmap.set(String(row.sessionID), { id: String(row.projectId || 'unknown') });
             }
         }
+    }
 
-        if (!md) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
+    const usageAggregateQuery = `
+            SELECT
+                s.project_id AS projectId,
+                COALESCE(p.name, 'Unassigned') AS projectName,
+                COALESCE(
+                    NULLIF(json_extract(m.data, '$.modelID'), ''),
+                    NULLIF(json_extract(m.data, '$.model.modelID'), ''),
+                    NULLIF(json_extract(m.data, '$.model.id'), ''),
+                    'unknown'
+                ) AS modelID,
+                COALESCE(SUM(CAST(COALESCE(json_extract(m.data, '$.tokens.input'), 0) AS REAL)), 0) AS inputTokens,
+                COALESCE(SUM(CAST(COALESCE(json_extract(m.data, '$.tokens.output'), 0) AS REAL)), 0) AS outputTokens
+            FROM message m
+            JOIN session s ON m.session_id = s.id
+            LEFT JOIN project p ON s.project_id = p.id
+            WHERE ${usageWhere.join(' AND ')}
+            GROUP BY s.project_id, p.name, modelID
+        `;
 
-        const pmap = new Map();
-        if (fs.existsSync(sd)) {
-            const sessionDirs = await fs.promises.readdir(sd);
-            await Promise.all(sessionDirs.map(async d => {
-                const fp = path.join(sd, d);
-                try {
-                    const stats = await fs.promises.stat(fp);
-                    if (stats.isDirectory()) {
-                        const files = await fs.promises.readdir(fp);
-                        await Promise.all(files.map(async f => {
-                            if (f.startsWith('ses_') && f.endsWith('.json')) {
-                                try {
-                                    const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
-                                    pmap.set(f.replace('.json', ''), { 
-                                        name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'), 
-                                        id: m.projectID || d 
-                                    });
-                                } catch {}
-                            }
-                        }));
-                    }
-                } catch {}
-            }));
+    const usageAggregateResult = await queryOpencodeDB(usageAggregateQuery);
+    if (!usageAggregateResult.success) {
+        throw new Error(`SQLite aggregate query failed: ${usageAggregateResult.error || 'unknown error'}`);
+    }
+
+    if (Array.isArray(usageAggregateResult.data)) {
+        const aggregateRows = projectId && projectId !== 'all'
+            ? usageAggregateResult.data.filter(row => String(row.projectId || '') === String(projectId))
+            : usageAggregateResult.data;
+
+        for (const row of aggregateRows) {
+            const pid = String(row.projectId || 'unknown');
+            const projectName = row.projectName || 'Unassigned';
+            const mid = String(row.modelID || 'unknown');
+            const it = Number(row.inputTokens || 0);
+            const ot = Number(row.outputTokens || 0);
+            const t = it + ot;
+            const c = calculateCost(mid, it, ot);
+
+            stats.totalCost += c;
+            stats.totalTokens += t;
+
+            if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+            stats.byModel[mid].cost += c;
+            stats.byModel[mid].tokens += t;
+            stats.byModel[mid].inputTokens += it;
+            stats.byModel[mid].outputTokens += ot;
+
+            if (!stats.byProject[pid]) stats.byProject[pid] = { name: projectName, id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+            stats.byProject[pid].cost += c;
+            stats.byProject[pid].tokens += t;
+            stats.byProject[pid].inputTokens += it;
+            stats.byProject[pid].outputTokens += ot;
+        }
+    }
+
+    const sqliteByTime = {};
+    const toMondayBucket = (yyyyMmDd) => {
+        const date = new Date(`${yyyyMmDd}T00:00:00.000Z`);
+        if (Number.isNaN(date.getTime())) return yyyyMmDd;
+        const day = date.getUTCDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        date.setUTCDate(date.getUTCDate() + diff);
+        return date.toISOString().split('T')[0];
+    };
+
+    const bucketExpr = granularity === 'hourly'
+        ? "strftime('%Y-%m-%dT%H:00:00Z', time_created / 1000, 'unixepoch')"
+        : granularity === 'monthly'
+            ? "strftime('%Y-%m-01', time_created / 1000, 'unixepoch')"
+            : "strftime('%Y-%m-%d', time_created / 1000, 'unixepoch')";
+
+    const byTimeWhere = ["json_extract(data, '$.role') = 'assistant'"];
+    if (min > 0) byTimeWhere.push(`time_created >= ${Math.trunc(min)}`);
+    if (max > 0) byTimeWhere.push(`time_created <= ${Math.trunc(max)}`);
+
+    const usageByBucketQuery = `
+            SELECT
+                ${bucketExpr} AS bucket,
+                COALESCE(
+                    NULLIF(json_extract(data, '$.modelID'), ''),
+                    NULLIF(json_extract(data, '$.model.modelID'), ''),
+                    NULLIF(json_extract(data, '$.model.id'), ''),
+                    'unknown'
+                ) AS modelID,
+                COALESCE(
+                    NULLIF(json_extract(data, '$.sessionID'), ''),
+                    NULLIF(json_extract(data, '$.session.id'), ''),
+                    'unknown'
+                ) AS sessionID,
+                COALESCE(SUM(CAST(COALESCE(json_extract(data, '$.tokens.input'), 0) AS REAL)), 0) AS inputTokens,
+                COALESCE(SUM(CAST(COALESCE(json_extract(data, '$.tokens.output'), 0) AS REAL)), 0) AS outputTokens,
+                COALESCE(SUM(CAST(COALESCE(json_extract(data, '$.cost'), 0) AS REAL)), 0) AS cost
+            FROM message
+            WHERE ${byTimeWhere.join(' AND ')}
+            GROUP BY bucket, modelID, sessionID
+            ORDER BY bucket ASC
+        `;
+
+    const usageByBucketResult = await queryOpencodeDB(usageByBucketQuery);
+    if (!usageByBucketResult.success) {
+        throw new Error(`SQLite byDay query failed: ${usageByBucketResult.error || 'unknown error'}`);
+    }
+
+    if (Array.isArray(usageByBucketResult.data)) {
+        for (const row of usageByBucketResult.data) {
+            const sid = row.sessionID || 'unknown';
+            const pid = pmap.get(sid)?.id || 'unknown';
+            if (projectId && projectId !== 'all' && pid !== projectId) continue;
+
+            let tk = row.bucket;
+            if (!tk) continue;
+            if (granularity === 'weekly') tk = toMondayBucket(tk);
+
+            const mid = row.modelID || 'unknown';
+            const it = Number(row.inputTokens || 0);
+            const ot = Number(row.outputTokens || 0);
+            const c = calculateCost(mid, it, ot);
+            const t = it + ot;
+
+            if (!sqliteByTime[tk]) {
+                sqliteByTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+            }
+            const te = sqliteByTime[tk];
+            te.cost += c;
+            te.tokens += t;
+            te.inputTokens += it;
+            te.outputTokens += ot;
+            te[mid] = (te[mid] || 0) + c;
+            te[`${mid}_input`] = (te[`${mid}_input`] || 0) + it;
+            te[`${mid}_output`] = (te[`${mid}_output`] || 0) + ot;
+        }
+    }
+
+    return {
+        totalCost: stats.totalCost,
+        totalTokens: stats.totalTokens,
+        byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
+        byDay: Object.values(Object.keys(sqliteByTime).length ? sqliteByTime : stats.byTime)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(v => ({ ...v, date: v.name })),
+        byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
+    };
+}
+
+app.get('/api/usage', async (req, res) => {
+    try {
+        const cp = getConfigPath();
+        if (!cp) return res.json({ ...USAGE_EMPTY });
+
+        const pricingPer1M = {
+            'claude-opus-4.5': { input: 15.0, output: 75.0 },
+            'claude-sonnet-4.5': { input: 3.0, output: 15.0 },
+            'claude-3-5-sonnet': { input: 3.0, output: 15.0 },
+            'claude-3-opus': { input: 15.0, output: 75.0 },
+            'claude-3-haiku': { input: 0.25, output: 1.25 },
+            'gemini-3-pro-preview': { input: 2.0, output: 12.0 },
+            'gemini-3-flash': { input: 0.5, output: 3.0 },
+            'gemini-3-flash-preview': { input: 0.5, output: 3.0 },
+            'gemini-2.5-pro': { input: 1.25, output: 5.0 },
+            'gemini-2.5-flash': { input: 0.075, output: 0.3 },
+            'gemini-3-pro-high': { input: 4.0, output: 24.0 },
+            'gemini-claude-sonnet-4-5-thinking': { input: 3.0, output: 15.0 },
+            'gemini-claude-opus-4-5-thinking': { input: 15.0, output: 75.0 },
+            'gpt-5.2': { input: 10.0, output: 30.0 },
+            'gpt-4o': { input: 2.5, output: 10.0 },
+            'gpt-4o-mini': { input: 0.15, output: 0.6 },
+            'kimi-k2-thinking': { input: 2.0, output: 8.0 },
+            'grok-code': { input: 2.0, output: 8.0 },
+            'glm-4.7-free': { input: 0, output: 0 },
+            default: { input: 1.0, output: 2.0 }
+        };
+
+        const calculateCost = (model, inputTokens, outputTokens) => {
+            const price = pricingPer1M[model] || pricingPer1M.default;
+            return (inputTokens / 1000000 * price.input) + (outputTokens / 1000000 * price.output);
+        };
+
+        const rawGranularity = String(req.query.granularity || 'daily');
+        const granularity = ['hourly', 'daily', 'weekly', 'monthly'].includes(rawGranularity) ? rawGranularity : 'daily';
+        const rawRange = String(req.query.range || '30d');
+        const range = ['24h', '7d', '30d', '3m', '6m', '1y'].includes(rawRange) ? rawRange : '30d';
+        const projectId = req.query.projectId ? String(req.query.projectId) : undefined;
+        const debug = req.query.debug === '1';
+        const source = String(req.query.source || 'auto');
+        if (!['auto', 'sqlite', 'legacy'].includes(source)) {
+            return res.status(400).json({ error: 'Invalid source. Use sqlite, legacy, or auto.' });
         }
 
-        const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
-        const seen = new Set();
+        const from = parseUsageTimeValue(req.query.from);
+        const to = parseUsageTimeValue(req.query.to);
+        if (Number.isNaN(from) || Number.isNaN(to)) {
+            return res.status(400).json({ error: 'Invalid time window' });
+        }
+
         const now = Date.now();
-        const from = Number(req.query.from || 0);
-        const to = Number(req.query.to || 0);
         let min = 0;
         let max = 0;
         if (range === '24h') min = now - 86400000;
@@ -4127,76 +4431,81 @@ app.get('/api/usage', async (req, res) => {
         else if (range === '3m') min = now - 7776000000;
         else if (range === '6m') min = now - 15552000000;
         else if (range === '1y') min = now - 31536000000;
-        if (from) min = from;
-        if (to) max = to;
+        if (from !== null) min = from;
+        if (to !== null) max = to;
 
-        const sessionDirs = await fs.promises.readdir(md);
-        await Promise.all(sessionDirs.map(async s => {
-            if (!s.startsWith('ses_')) return;
-            const sp = path.join(md, s);
-            try {
-                const spStats = await fs.promises.stat(sp);
-                if (spStats.isDirectory()) {
-                    const files = await fs.promises.readdir(sp);
-                    for (const f of files) {
-                        if (!f.endsWith('.json')) continue;
-                        const fullPath = path.join(sp, f);
-                        if (seen.has(fullPath)) continue;
-                        seen.add(fullPath);
-                        
-                        try {
-                            const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
-                            const pid = pmap.get(s)?.id || 'unknown';
-                            if (fid && fid !== 'all' && pid !== fid) continue;
-                            if (min > 0 && msg.time.created < min) continue;
-                            if (max > 0 && msg.time.created > max) continue;
-                            
-                            if (msg.role === 'assistant' && msg.tokens) {
-                                const c = msg.cost || 0, it = msg.tokens.input || 0, ot = msg.tokens.output || 0, t = it + ot;
-                                const d = new Date(msg.time.created);
-                                let tk;
-                                if (granularity === 'hourly') tk = d.toISOString().substring(0, 13) + ':00:00Z';
-                                else if (granularity === 'weekly') {
-                                    const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                    tk = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                                } else if (granularity === 'monthly') tk = d.toISOString().substring(0, 7) + '-01';
-                                else tk = d.toISOString().split('T')[0];
+        if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < 0) {
+            return res.status(400).json({ error: 'Invalid time window' });
+        }
+        if (max > 0 && min > 0 && max < min) {
+            return res.status(400).json({ error: 'Invalid time window: to must be >= from' });
+        }
 
-                                const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
-                                stats.totalCost += c; stats.totalTokens += t;
-                                
-                                if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byModel[mid].cost += c; stats.byModel[mid].tokens += t; stats.byModel[mid].inputTokens += it; stats.byModel[mid].outputTokens += ot;
+        const originalMin = min;
+        const originalMax = max;
+        if (max > 0 && min > 0 && (max - min) > USAGE_MAX_WINDOW_MS) {
+            min = max - USAGE_MAX_WINDOW_MS;
+        } else if (max > 0 && min === 0) {
+            min = Math.max(0, max - USAGE_MAX_WINDOW_MS);
+        } else if (max === 0 && min > 0 && (now - min) > USAGE_MAX_WINDOW_MS) {
+            min = now - USAGE_MAX_WINDOW_MS;
+        }
 
-                                if (!stats.byProject[pid]) stats.byProject[pid] = { name: pmap.get(s)?.name || 'Unassigned', id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byProject[pid].cost += c; stats.byProject[pid].tokens += t; stats.byProject[pid].inputTokens += it; stats.byProject[pid].outputTokens += ot;
+        const cacheKey = JSON.stringify({ projectId: projectId || 'all', granularity, range, min, max, source, debug });
+        const cached = usageCache.get(cacheKey);
+        if (cached && cached.expiresAt > now) {
+            return res.json(debug ? { ...cached.payload, debug: { ...(cached.payload.debug || {}), cache: 'hit' } } : cached.payload);
+        }
 
-                                if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                const te = stats.byTime[tk];
-                                te.cost += c; te.tokens += t; te.inputTokens += it; te.outputTokens += ot;
-                                if (!te[mid]) te[mid] = 0;
-                                te[mid] += c;
-                                
-                                const kIn = `${mid}_input`, kOut = `${mid}_output`;
-                                te[kIn] = (te[kIn] || 0) + it;
-                                te[kOut] = (te[kOut] || 0) + ot;
-                            }
-                        } catch {}
+        if (!usageInFlight.has(cacheKey)) {
+            usageInFlight.set(cacheKey, (async () => {
+                let activeSource = source === 'auto' ? 'sqlite' : source;
+                const diagnostics = {
+                    cache: 'miss',
+                    sourceRequested: source,
+                    sourceUsed: activeSource,
+                    fallbackUsed: false,
+                    errors: [],
+                    min,
+                    max,
+                    clampedWindow: min !== originalMin || max !== originalMax
+                };
+
+                const runSQLite = async () => buildUsageFromSQLite({ projectId, granularity, min, max, calculateCost });
+                const runLegacy = async () => buildUsageFromLegacyStorage({ projectId, granularity, min, max, calculateCost });
+
+                let payload;
+                if (activeSource === 'legacy') {
+                    payload = await runLegacy();
+                } else {
+                    try {
+                        payload = await runSQLite();
+                    } catch (error) {
+                        diagnostics.errors.push(String(error?.message || error));
+                        if (source === 'sqlite') {
+                            payload = { ...USAGE_EMPTY };
+                        } else {
+                            diagnostics.fallbackUsed = true;
+                            activeSource = 'legacy';
+                            diagnostics.sourceUsed = activeSource;
+                            payload = await runLegacy();
+                        }
                     }
                 }
-            } catch {}
-        }));
 
-        res.json({
-            totalCost: stats.totalCost,
-            totalTokens: stats.totalTokens,
-            byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
-            byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
-            byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
-        });
+                const finalPayload = debug ? { ...payload, debug: diagnostics } : payload;
+                usageCache.set(cacheKey, { payload: finalPayload, expiresAt: Date.now() + USAGE_CACHE_TTL_MS });
+                return finalPayload;
+            })().finally(() => {
+                usageInFlight.delete(cacheKey);
+            }));
+        }
+
+        const payload = await usageInFlight.get(cacheKey);
+        return res.json(payload);
     } catch (error) {
         console.error('Usage API error:', error);
-        res.status(500).json({ error: 'Failed to fetch usage statistics' });
+        return res.status(500).json({ error: 'Failed to fetch usage statistics' });
     }
 });
 
@@ -4654,7 +4963,9 @@ app.post('/api/presets/:id/apply', (req, res) => {
 
 // Start watcher on server start
 async function startServer() {
-    ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
+    ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => {
+        importCurrentAuthToPool(p);
+    });
 
     const port = await findAvailablePort(DEFAULT_PORT);
     app.listen(port, () => {

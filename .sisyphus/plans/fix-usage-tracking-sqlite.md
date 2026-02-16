@@ -237,7 +237,7 @@ Critical Path: Task 1 -> Task 4/5/6 -> Task 7
     Evidence: .sisyphus/evidence/task-3-docs-grep.txt
   ```
 
-- [ ] 4. Backend: implement SQLite-backed totals + byModel + byProject
+- [x] 4. Backend: implement SQLite-backed totals + byModel + byProject
 
   **What to do**:
   - In `server/index.js` `/api/usage` handler:
@@ -301,7 +301,7 @@ Critical Path: Task 1 -> Task 4/5/6 -> Task 7
     Evidence: .sisyphus/evidence/task-4-project-filter.json
   ```
 
-- [ ] 5. Backend: implement SQLite-backed `byDay` with legacy-compatible granularity
+- [x] 5. Backend: implement SQLite-backed `byDay` with legacy-compatible granularity
 
   **What to do**:
   - Preserve `granularity` behavior from legacy code:
@@ -340,7 +340,7 @@ Critical Path: Task 1 -> Task 4/5/6 -> Task 7
     Evidence: .sisyphus/evidence/task-5-byday.json
   ```
 
-- [ ] 6. Backend hardening: input validation, range caps, caching, debug diagnostics, fallback
+- [x] 6. Backend hardening: input validation, range caps, caching, debug diagnostics, fallback
 
   **What to do**:
   - Validate `from/to` are finite integers (ms) and clamp to a max window (e.g., 1y) to prevent heavy scans.

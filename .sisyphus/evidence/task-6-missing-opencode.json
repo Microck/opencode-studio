@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-02-16T19:38:14.355Z",
+  "checks": {
+    "cacheFirst": "miss",
+    "cacheSecond": "hit",
+    "maxWindowClamped": true,
+    "clampedMin": 1739734686752,
+    "clampedMax": 1771270686752,
+    "sourceSQLite": "sqlite",
+    "sourceLegacy": "legacy",
+    "invalidSourceStatus": 400,
+    "invalidFromStatus": 400,
+    "singleFlightConcurrentStatuses": [
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "singleFlightSampleTokens": [
+      7030910,
+      7030910,
+      7030910,
+      7030910,
+      7030910
+    ]
+  },
+  "samples": {
+    "autoDebug": {
+      "cache": "miss",
+      "sourceRequested": "auto",
+      "sourceUsed": "sqlite",
+      "fallbackUsed": false,
+      "errors": [],
+      "min": 1771184286752,
+      "max": 1771270686752,
+      "clampedWindow": false
+    },
+    "hugeWindowDebug": {
+      "cache": "miss",
+      "sourceRequested": "auto",
+      "sourceUsed": "sqlite",
+      "fallbackUsed": false,
+      "errors": [],
+      "min": 1739734686752,
+      "max": 1771270686752,
+      "clampedWindow": true
+    },
+    "sqliteDebug": {
+      "cache": "miss",
+      "sourceRequested": "sqlite",
+      "sourceUsed": "sqlite",
+      "fallbackUsed": false,
+      "errors": [],
+      "min": 1771184286752,
+      "max": 1771270686752,
+      "clampedWindow": false
+    },
+    "legacyDebug": {
+      "cache": "miss",
+      "sourceRequested": "legacy",
+      "sourceUsed": "legacy",
+      "fallbackUsed": false,
+      "errors": [],
+      "min": 1771184286752,
+      "max": 1771270686752,
+      "clampedWindow": false
+    }
+  }
+}
