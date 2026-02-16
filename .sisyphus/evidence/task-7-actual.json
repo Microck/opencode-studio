@@ -1,0 +1,117 @@
+{
+  "from": 1771184549789,
+  "to": 1771270949789,
+  "response": {
+    "totalCost": 21.358368000000002,
+    "totalTokens": 7865184,
+    "byModel": [
+      {
+        "name": "gpt-5.2",
+        "id": "gpt-5.2",
+        "cost": 14.17071,
+        "tokens": 1080919,
+        "inputTokens": 912843,
+        "outputTokens": 168076
+      },
+      {
+        "name": "antigravity-gemini-3-pro",
+        "id": "antigravity-gemini-3-pro",
+        "cost": 3.467751,
+        "tokens": 3319421,
+        "inputTokens": 3171091,
+        "outputTokens": 148330
+      },
+      {
+        "name": "antigravity-claude-sonnet-4-5",
+        "id": "antigravity-claude-sonnet-4-5",
+        "cost": 1.7444209999999998,
+        "tokens": 1691116,
+        "inputTokens": 1637811,
+        "outputTokens": 53305
+      },
+      {
+        "name": "gpt-5.3-codex",
+        "id": "gpt-5.3-codex",
+        "cost": 1.2774670000000001,
+        "tokens": 1149406,
+        "inputTokens": 1021345,
+        "outputTokens": 128061
+      },
+      {
+        "name": "glm-4.7",
+        "id": "glm-4.7",
+        "cost": 0.698019,
+        "tokens": 624322,
+        "inputTokens": 550625,
+        "outputTokens": 73697
+      }
+    ],
+    "byDay": [
+      {
+        "date": "2026-02-15",
+        "name": "2026-02-15",
+        "id": "2026-02-15",
+        "cost": 0.061843999999999996,
+        "tokens": 58165,
+        "inputTokens": 54486,
+        "outputTokens": 3679,
+        "antigravity-claude-sonnet-4-5": 0.029366999999999997,
+        "antigravity-claude-sonnet-4-5_input": 26201,
+        "antigravity-claude-sonnet-4-5_output": 1583,
+        "gpt-5.3-codex": 0.032477,
+        "gpt-5.3-codex_input": 28285,
+        "gpt-5.3-codex_output": 2096
+      },
+      {
+        "date": "2026-02-16",
+        "name": "2026-02-16",
+        "id": "2026-02-16",
+        "cost": 21.341839,
+        "tokens": 7852098,
+        "inputTokens": 7284072,
+        "outputTokens": 568026,
+        "antigravity-claude-sonnet-4-5": 1.715054,
+        "antigravity-claude-sonnet-4-5_input": 1611610,
+        "antigravity-claude-sonnet-4-5_output": 51722,
+        "antigravity-gemini-3-pro": 3.513066,
+        "antigravity-gemini-3-pro_input": 3215934,
+        "antigravity-gemini-3-pro_output": 148566,
+        "glm-4.7": 0.6980190000000001,
+        "glm-4.7_input": 550625,
+        "glm-4.7_output": 73697,
+        "gpt-5.2": 14.17071,
+        "gpt-5.2_input": 912843,
+        "gpt-5.2_output": 168076,
+        "gpt-5.3-codex": 1.24499,
+        "gpt-5.3-codex_input": 993060,
+        "gpt-5.3-codex_output": 125965
+      }
+    ],
+    "byProject": [
+      {
+        "name": "Unassigned",
+        "id": "global",
+        "cost": 12.242321,
+        "tokens": 5328160,
+        "inputTokens": 4999720,
+        "outputTokens": 328440
+      },
+      {
+        "name": "Unassigned",
+        "id": "905019069653266eb13942cdfcb79cdae8d5ff42",
+        "cost": 8.040553000000001,
+        "tokens": 2388082,
+        "inputTokens": 2154026,
+        "outputTokens": 234056
+      },
+      {
+        "name": "Unassigned",
+        "id": "076d56cffe3bf6c639fc7781a06ec819524f57e5",
+        "cost": 1.075494,
+        "tokens": 148942,
+        "inputTokens": 139969,
+        "outputTokens": 8973
+      }
+    ]
+  }
+}

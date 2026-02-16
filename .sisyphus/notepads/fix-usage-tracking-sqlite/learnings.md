@@ -83,3 +83,10 @@
 - `debug=1` diagnostics are useful for proving clamps/fallbacks (`min`, `max`, `clampedWindow`, `sourceUsed`, `errors`).
 - Input parsing is safest with a helper that returns `null` for missing values and `NaN` for invalid numeric input.
 - Source override behavior works cleanly with `source=auto|sqlite|legacy` and auto-only fallback to legacy on SQLite failure.
+
+## Task 7: End-to-End QA and Evidence Capture
+
+- Reliable 24h verification requires computing a single `from/to` pair once, then using the same window for both SQLite and `/api/usage` checks.
+- SQLite aggregate parity check is stable when comparing against `assistant` role rows and summing `$.tokens.input + $.tokens.output`.
+- `/api/usage` response shape validation should check top-level numeric totals and array types (`byModel`, `byDay`, `byProject`) plus minimal entry fields (`id`, `tokens`).
+- Evidence artifacts are easiest to audit when split into expected (`task-7-expected.json`), actual (`task-7-actual.json`), and human-readable comparison (`task-7-diff.txt`).

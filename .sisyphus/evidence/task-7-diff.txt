@@ -1,0 +1,21 @@
+Task 7 QA Comparison
+Window:
+- from: 1771184549789
+- to:   1771270949789
+
+Totals:
+- expected totalTokens (SQLite): 7865184
+- actual totalTokens (/api/usage): 7865184
+- diff: 0
+
+Structure checks:
+- totalCost is number: PASS
+- totalTokens is number: PASS
+- byModel is array: PASS
+- byDay is array: PASS
+- byProject is array: PASS
+- byModel entries include id:string and tokens:number: PASS
+- byDay entries include id:string and tokens:number: PASS
+- byProject entries include id:string and tokens:number: PASS
+
+Result: PASS (endpoint totals match SQLite aggregate and required arrays are well-formed)

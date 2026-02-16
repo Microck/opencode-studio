@@ -378,7 +378,7 @@ Critical Path: Task 1 -> Task 4/5/6 -> Task 7
     Evidence: .sisyphus/evidence/task-6-missing-opencode.json
   ```
 
-- [ ] 7. End-to-end QA and evidence capture
+- [x] 7. End-to-end QA and evidence capture
 
   **What to do**:
   - Run the Metis-proposed verification script:
