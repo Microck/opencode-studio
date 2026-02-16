@@ -1,0 +1,10 @@
+Task 3: Docs - grep verification for SQLite migration
+
+Command: rg -n "opencode db path" README.md server/README.md
+
+Results:
+README.md:196:| usage showing zeros after OpenCode update | OpenCode >= 1.2.0 stores sessions in SQLite (`opencode.db`). Run `opencode db path` to verify - should output a valid database path (e.g., `~/.local/share/opencode/opencode.db`). Ensure `opencode` CLI is on PATH and restart the backend server. |
+
+Status: PASS - Found 1 match in README.md
+
+Verification complete.

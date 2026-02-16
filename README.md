@@ -193,6 +193,7 @@ config locations:
 | "Launch Backend" not working | run `npm install -g opencode-studio-server` first |
 | protocol handler not registered | run `opencode-studio-server --register` as admin |
 | github sync not working | run `gh auth login` first |
+| usage showing zeros after OpenCode update | OpenCode >= 1.2.0 stores sessions in SQLite (`opencode.db`). Run `opencode db path` to verify - should output a valid database path (e.g., `~/.local/share/opencode/opencode.db`). Ensure `opencode` CLI is on PATH and restart the backend server. |
 
 ---
 

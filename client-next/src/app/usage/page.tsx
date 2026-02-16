@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsageStats, UsageStats } from "@/lib/api";
-import { Loader, Dollar, Message, Calendar, Download, TrendingUp, Sliders, Users, Image as ImageIcon, ChartBar, Chart as PieChartIcon, Trending } from "@nsmr/pixelart-react";
+import { Loader, Dollar, Message, Calendar, Download, TrendingUp, Sliders, Users, Image as ImageIcon, ChartBar, Chart as PieChartIcon, Trending, InfoBox } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
 import { calculateCost, calculateDetailedCost } from "@/lib/data/pricing";
@@ -62,6 +62,8 @@ const TIME_RANGES = [
   { label: "1 Year", value: "1y", granularity: "monthly" },
   { label: "Custom", value: "custom", granularity: "daily" },
 ];
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null);
@@ -407,6 +409,17 @@ export default function UsagePage() {
           </DropdownMenu>
         </div>
       </div>
+
+      {stats.totalTokens === 0 && (
+        <Alert className="mb-6 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+          <InfoBox className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertTitle className="text-blue-800 dark:text-blue-300">No usage data found</AlertTitle>
+          <AlertDescription className="text-blue-700 dark:text-blue-400">
+            If you recently updated OpenCode (v1.2+), usage is now tracked in SQLite. 
+            Ensure your backend can run <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded text-xs font-mono">opencode db path</code>.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="hover-lift border-primary/10 shadow-sm bg-muted/5">

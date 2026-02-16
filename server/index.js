@@ -606,6 +606,56 @@ const getOhMyOpenCodeConfigPath = () => {
 
 const getConfigPath = () => getPaths().current;
 
+const queryOpencodeDB = async (sql) => {
+    return new Promise((resolve) => {
+        const args = ['db', sql, '--format=json'];
+        let killed = false;
+        let proc = null;
+        
+        const timeout = setTimeout(() => {
+            killed = true;
+            if (proc) proc.kill();
+            resolve({ success: false, error: 'Query timed out after 10s' });
+        }, 10000);
+
+        proc = spawn('opencode', args);
+        
+        let stdout = '';
+        let stderr = '';
+
+        proc.stdout.on('data', (data) => stdout += data.toString());
+        proc.stderr.on('data', (data) => stderr += data.toString());
+
+        proc.on('error', (err) => {
+            clearTimeout(timeout);
+            if (!killed) resolve({ success: false, error: err.message });
+        });
+
+        proc.on('close', (code) => {
+            clearTimeout(timeout);
+            if (killed) return;
+
+            if (code !== 0) {
+                resolve({ success: false, error: stderr || `Process exited with code ${code}` });
+                return;
+            }
+
+            try {
+                if (!stdout.trim()) {
+                    resolve({ success: true, data: [] });
+                    return;
+                }
+                const data = JSON.parse(stdout);
+                resolve({ success: true, data });
+            } catch (e) {
+                resolve({ success: false, error: `Failed to parse JSON output: ${e.message}`, raw: stdout });
+            }
+        });
+    });
+};
+
+
+
 const getSearchRoots = () => {
     const roots = [];
     
