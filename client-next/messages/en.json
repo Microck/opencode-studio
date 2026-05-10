@@ -605,6 +605,13 @@
     "templatePythonDesc": "Rules for Python projects"
   },
   "usage": {
+    "range24h": "Last 24h",
+    "range7d": "Last 7d",
+    "range30d": "Last 30d",
+    "range3m": "Last 3m",
+    "range6m": "Last 6m",
+    "range1y": "Last 1y",
+    "rangeCustom": "Custom",
     "selectBothDates": "Select both start and end dates.",
     "startDateBefore": "Start date must be before end date.",
     "fetchFailed": "Failed to fetch usage stats: {error}",
