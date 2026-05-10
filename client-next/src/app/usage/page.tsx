@@ -521,7 +521,7 @@ export default function UsagePage() {
                   </div>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
                 <BarChart data={stats.byDay}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                   <XAxis 
@@ -630,7 +630,7 @@ export default function UsagePage() {
                   <span data-pie-value className="text-sm font-bold text-primary"></span>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
                 <PieChart>
                   <Pie
                     data={pieData}
