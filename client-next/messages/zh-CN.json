@@ -609,6 +609,13 @@
     "templatePythonDesc": "\u9002\u7528\u4e8e Python \u9879\u76ee"
   },
   "usage": {
+    "range24h": "最近24小时",
+    "range7d": "最近7天",
+    "range30d": "最近30天",
+    "range3m": "最近3个月",
+    "range6m": "最近6个月",
+    "range1y": "最近1年",
+    "rangeCustom": "自定义",
     "selectBothDates": "\u8bf7\u9009\u62e9\u5f00\u59cb\u548c\u7ed3\u675f\u65e5\u671f\u3002",
     "startDateBefore": "\u5f00\u59cb\u65e5\u671f\u5fc5\u987b\u65e9\u4e8e\u7ed3\u675f\u65e5\u671f\u3002",
     "fetchFailed": "\u83b7\u53d6\u4f7f\u7528\u7edf\u8ba1\u5931\u8d25: {error}",
