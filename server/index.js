@@ -1282,6 +1282,57 @@ app.get('/api/mcp', (req, res) => {
     }
 });
 
+app.post('/api/fetch-url', async (req, res) => {
+    try {
+        const url = String(req.body?.url || '').trim();
+        if (!url) return res.status(400).json({ error: 'Missing url' });
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            return res.status(response.status).json({ error: `Failed to fetch URL (${response.status})` });
+        }
+
+        const content = await response.text();
+        const pathname = (() => {
+            try { return new URL(url).pathname; } catch { return ''; }
+        })();
+        const filename = path.basename(pathname) || 'file.txt';
+
+        res.json({ content, filename, url });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/bulk-fetch', async (req, res) => {
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const results = [];
+
+    for (const rawUrl of urls) {
+        const url = String(rawUrl || '').trim();
+        if (!url) continue;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                results.push({ url, success: false, error: `HTTP ${response.status}` });
+                continue;
+            }
+
+            const content = await response.text();
+            const pathname = (() => {
+                try { return new URL(url).pathname; } catch { return ''; }
+            })();
+            const filename = path.basename(pathname) || 'file.txt';
+            results.push({ url, success: true, content, filename });
+        } catch (err) {
+            results.push({ url, success: false, error: err.message });
+        }
+    }
+
+    res.json({ results });
+});
+
 app.get('/api/commands', (req, res) => {
     try {
         const commandMap = new Map();
@@ -2493,7 +2544,7 @@ app.get('/api/skills', (req, res) => {
 
 app.get('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2514,7 +2565,7 @@ app.get('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2554,7 +2605,7 @@ app.post('/api/skills/:name', (req, res) => {
 
 app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
