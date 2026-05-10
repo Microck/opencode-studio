@@ -649,7 +649,14 @@
     "modelInterface": "\u6a21\u578b\u63a5\u53e3",
     "input": "\u8f93\u5165",
     "output": "\u8f93\u51fa",
-    "cost": "\u8d39\u7528"
+    "cost": "\u8d39\u7528",
+    "range24h": "\u8fc7\u53bb 24 \u5c0f\u65f6",
+    "range7d": "\u8fc7\u53bb 7 \u5929",
+    "range30d": "\u8fc7\u53bb 30 \u5929",
+    "range3m": "\u8fc7\u53bb 3 \u4e2a\u6708",
+    "range6m": "\u8fc7\u53bb 6 \u4e2a\u6708",
+    "range1y": "\u8fc7\u53bb\u4e00\u5e74",
+    "rangeCustom": "\u81ea\u5b9a\u4e49\u8303\u56f4"
   },
   "config": {
     "invalidJson": "\u65e0\u6548\u7684 JSON: {error}",
