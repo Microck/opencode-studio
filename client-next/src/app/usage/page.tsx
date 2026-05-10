@@ -522,7 +522,7 @@ export default function UsagePage() {
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
-                <BarChart data={stats.byDay}>
+                <BarChart data={stats.byDay} margin={{ top: 4, right: 8, left: 0, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                   <XAxis 
                     dataKey="date" 
@@ -537,7 +537,8 @@ export default function UsagePage() {
                     interval={0}
                     angle={-45}
                     textAnchor="end"
-                    height={40}
+                    tickMargin={8}
+                    height={56}
                   />
                   <YAxis 
                     tickFormatter={(v) => `$${v}`}
