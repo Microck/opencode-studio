@@ -42,7 +42,7 @@ export default function SkillsPage() {
   useEffect(() => {
     const loadSkills = async () => {
       try {
-        setLoading(true);
+        if (skillsData.length === 0) setLoading(true);
         const data = await getSkills();
         setSkillsData(data);
       } finally {
@@ -100,7 +100,7 @@ export default function SkillsPage() {
     }
   };
 
-  if (loading) {
+  if (loading && skillsData.length === 0) {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">

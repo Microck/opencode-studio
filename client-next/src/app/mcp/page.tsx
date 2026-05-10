@@ -25,6 +25,8 @@ import { PresetsManager } from "@/components/presets-manager";
 import { useErrorTranslation } from "@/lib/error-translate";
 import type { MCPConfig } from "@/types";
 
+const MCP_CACHE_KEY = "opencode-studio-mcp-cache";
+
 export default function MCPPage() {
   const t = useTranslations('mcp');
   const translateError = useErrorTranslation();
@@ -36,21 +38,34 @@ export default function MCPPage() {
 
   const mcpEntries = Object.entries(mcpData);
 
-  const fetchMcpServers = async () => {
+  const fetchMcpServers = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await getMcpServers();
       setMcpData(data);
+      sessionStorage.setItem(MCP_CACHE_KEY, JSON.stringify(data));
     } catch (err: any) {
       toast.error(t('loadFailed'));
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMcpServers();
+    const hasCache = !!sessionStorage.getItem(MCP_CACHE_KEY);
+    try {
+      const cached = sessionStorage.getItem(MCP_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as Record<string, MCPConfig>;
+        if (parsed && typeof parsed === "object") {
+          setMcpData(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
+    fetchMcpServers(!hasCache);
   }, []);
   
   const filteredMCPs = useMemo(() => {
@@ -67,7 +82,7 @@ export default function MCPPage() {
     try {
       await toggleMCP(key);
       toast.success(mcpData[key]?.enabled ? t('toggleDisabled', { name: key }) : t('toggleEnabled', { name: key }));
-      await fetchMcpServers();
+      await fetchMcpServers(false);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
       toast.error(t('toggleFailed', { error: msg }));
@@ -79,7 +94,7 @@ export default function MCPPage() {
     try {
       await deleteMCP(deleteTarget);
       toast.success(t('deleted', { name: deleteTarget }));
-      await fetchMcpServers();
+      await fetchMcpServers(false);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
       toast.error(t('deleteFailed', { error: msg }));
@@ -92,7 +107,7 @@ export default function MCPPage() {
     try {
       await addMCP(name, mcpConfig);
       toast.success(t('added', { name }));
-      await fetchMcpServers();
+      await fetchMcpServers(false);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
       toast.error(t('addFailed', { error: msg }));
@@ -105,14 +120,14 @@ export default function MCPPage() {
     try {
       await updateMCP(key, mcpConfig);
       toast.success(t('updated', { name: key }));
-      await fetchMcpServers();
+      await fetchMcpServers(false);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
       toast.error(t('updateFailed', { error: msg }));
     }
   };
 
-  if (loading) {
+  if (loading && mcpEntries.length === 0) {
     return (
       <div className="space-y-4">
         <PageHelp title={t('title')} docUrl="https://opencode.ai/docs" docTitle={t('docTitle')} />

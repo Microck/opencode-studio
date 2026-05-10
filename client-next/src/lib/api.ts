@@ -19,11 +19,11 @@ async function probeBackendUrl(url: string): Promise<string | null> {
     }
 }
 
-async function discoverBackendPort(): Promise<string> {
-    if (cachedApiUrl) return cachedApiUrl;
-    if (resolvingApiUrl) return resolvingApiUrl;
+async function discoverBackendPort(force = false): Promise<string> {
+    if (!force && cachedApiUrl) return cachedApiUrl;
+    if (!force && resolvingApiUrl) return resolvingApiUrl;
 
-    if (Date.now() - lastDiscoveryFailureAt < DISCOVERY_RETRY_DELAY_MS) {
+    if (!force && Date.now() - lastDiscoveryFailureAt < DISCOVERY_RETRY_DELAY_MS) {
         throw new Error('Backend discovery throttled after recent failure');
     }
 
@@ -68,26 +68,48 @@ const DEFAULT_API_URL = 'http://127.0.0.1:1920/api';
 
 const api = axios.create({
   baseURL: envApiUrl || DEFAULT_API_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
     'X-Client-Version': CLIENT_VERSION,
   },
 });
 
-api.interceptors.request.use((config) => {
-  config.baseURL = cachedApiUrl || config.baseURL || envApiUrl || DEFAULT_API_URL;
-
-  // Start backend discovery in background (without blocking requests)
-  if (!cachedApiUrl && !resolvingApiUrl) {
-    discoverBackendPort()
-      .then((url) => {
-        api.defaults.baseURL = url;
-      })
-      .catch(() => {});
+api.interceptors.request.use(async (config) => {
+  try {
+    const url = await discoverBackendPort();
+    config.baseURL = url;
+  } catch {
+    config.baseURL = cachedApiUrl || config.baseURL || envApiUrl || DEFAULT_API_URL;
   }
-
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const code = error?.code as string | undefined;
+    const status = error?.response?.status as number | undefined;
+    const original = error?.config as (typeof error.config & { _retried?: boolean }) | undefined;
+
+    const retryableNetworkError = !status && (code === 'ERR_NETWORK' || code === 'ECONNABORTED' || code === 'ECONNREFUSED');
+
+    if (original && !original._retried && retryableNetworkError) {
+      original._retried = true;
+      try {
+        cachedApiUrl = null;
+        const url = await discoverBackendPort(true);
+        api.defaults.baseURL = url;
+        original.baseURL = url;
+        return api.request(original);
+      } catch {
+        // fall through
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 

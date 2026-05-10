@@ -49,7 +49,7 @@ export default function PluginsPage() {
   useEffect(() => {
     const loadPlugins = async () => {
       try {
-        setLoading(true);
+        if (pluginsData.length === 0) setLoading(true);
         const data = await getPlugins();
         setPluginsData(data);
       } finally {
@@ -109,7 +109,7 @@ export default function PluginsPage() {
     setPluginsData(data);
   };
 
-if (loading) {
+if (loading && pluginsData.length === 0) {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">

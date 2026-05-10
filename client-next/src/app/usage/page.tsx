@@ -110,8 +110,8 @@ export default function UsagePage() {
     setTimeRange("custom");
   };
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const selectedRange = TIME_RANGES.find(r => r.value === timeRange) || TIME_RANGES[2];
       const isCustom = timeRange === "custom";
@@ -186,7 +186,7 @@ export default function UsagePage() {
       console.error(e);
       setStats({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -202,7 +202,7 @@ export default function UsagePage() {
       }
     } catch {}
 
-    fetchStats();
+    fetchStats(!sessionStorage.getItem(USAGE_CACHE_KEY));
   }, [projectId, timeRange]);
 
   const pieData = useMemo(() => {
