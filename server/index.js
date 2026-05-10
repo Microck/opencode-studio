@@ -243,8 +243,14 @@ function setupLogWatcher() {
             fileSize = fs.statSync(filePath).size;
         } catch {}
 
-        // Tail from end initially
-        let start = Math.max(0, fileSize - 10000); 
+        // Tail from end initially so /logs isn't empty on first connect
+        const start = Math.max(0, fileSize - 10000);
+        if (fileSize > 0) {
+            try {
+                const initialChunk = fs.readFileSync(filePath, 'utf8').slice(start);
+                initialChunk.split('\n').forEach(processLogLine);
+            } catch {}
+        }
         
         const checkFile = () => {
             try {
@@ -257,8 +263,7 @@ function setupLogWatcher() {
                     });
                     
                     stream.on('data', (chunk) => {
-                        const lines = chunk.split('\n');
-                        lines.forEach(processLogLine);
+                        chunk.split('\n').forEach(processLogLine);
                     });
                     
                     fileSize = stat.size;
