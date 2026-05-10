@@ -178,6 +178,81 @@ const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'st
 const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
 const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
 const LOG_DIR = path.join(HOME_DIR, '.local', 'share', 'opencode', 'log');
+const SERVER_LOCK_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'server.lock.json');
+
+let lockFileDescriptor = null;
+
+function isProcessRunning(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function releaseServerLock() {
+    if (lockFileDescriptor !== null) {
+        try { fs.closeSync(lockFileDescriptor); } catch {}
+        lockFileDescriptor = null;
+    }
+    if (fs.existsSync(SERVER_LOCK_PATH)) {
+        try { fs.unlinkSync(SERVER_LOCK_PATH); } catch {}
+    }
+}
+
+function setupServerLockCleanup() {
+    process.once('exit', releaseServerLock);
+    process.once('SIGINT', () => {
+        releaseServerLock();
+        process.exit(0);
+    });
+    process.once('SIGTERM', () => {
+        releaseServerLock();
+        process.exit(0);
+    });
+    process.once('uncaughtException', (err) => {
+        releaseServerLock();
+        throw err;
+    });
+    process.once('unhandledRejection', (reason) => {
+        releaseServerLock();
+        throw reason;
+    });
+}
+
+function ensureSingleServerInstance() {
+    const lockDir = path.dirname(SERVER_LOCK_PATH);
+    if (!fs.existsSync(lockDir)) fs.mkdirSync(lockDir, { recursive: true });
+
+    const lockData = JSON.stringify({ pid: process.pid, createdAt: Date.now() }, null, 2);
+
+    try {
+        lockFileDescriptor = fs.openSync(SERVER_LOCK_PATH, 'wx');
+        fs.writeFileSync(lockFileDescriptor, lockData, 'utf8');
+        setupServerLockCleanup();
+        return true;
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+
+        try {
+            const raw = fs.readFileSync(SERVER_LOCK_PATH, 'utf8');
+            const existing = JSON.parse(raw);
+            if (isProcessRunning(existing.pid)) {
+                console.error(`Another opencode-studio server is already running (PID ${existing.pid}). Aborting startup.`);
+                return false;
+            }
+        } catch {}
+
+        try { fs.unlinkSync(SERVER_LOCK_PATH); } catch {}
+
+        lockFileDescriptor = fs.openSync(SERVER_LOCK_PATH, 'wx');
+        fs.writeFileSync(lockFileDescriptor, lockData, 'utf8');
+        setupServerLockCleanup();
+        return true;
+    }
+}
 
 const LOG_BUFFER_SIZE = 100;
 const logBuffer = [];
@@ -5316,6 +5391,10 @@ app.post('/api/presets/:id/apply', (req, res) => {
 
 // Start watcher on server start
 async function startServer() {
+    if (!ensureSingleServerInstance()) {
+        process.exit(1);
+    }
+
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
     const port = await findAvailablePort(DEFAULT_PORT);
