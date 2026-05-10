@@ -7,6 +7,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
+const configProviders = require('./lib/config-providers');
 
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
@@ -2066,13 +2067,635 @@ function saveOhMyOpenCodeConfig(config) {
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
+function getProviderSearchRoots() {
+    return getSearchRoots();
+}
+
+function detectConfigProviders() {
+    return configProviders.detectProviders({
+        roots: getProviderSearchRoots()
+    });
+}
+
+function getProviderByIdOrNull(providerId) {
+    const providers = detectConfigProviders();
+    return providers.find((provider) => provider.id === providerId) || null;
+}
+
+function parseProviderInput(body = {}) {
+    const hasRaw = typeof body.raw === 'string';
+    const hasConfig = body.config && typeof body.config === 'object' && !Array.isArray(body.config);
+
+    if (hasRaw) {
+        try {
+            const parsed = configProviders.parseJsonText(body.raw);
+            return {
+                ok: true,
+                raw: body.raw,
+                config: parsed,
+                diagnostics: []
+            };
+        } catch (error) {
+            return {
+                ok: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'INVALID_JSONC_INPUT',
+                    message: 'Malformed JSON/JSONC payload',
+                    details: { error: error.message }
+                }]
+            };
+        }
+    }
+
+    if (hasConfig) {
+        return {
+            ok: true,
+            raw: JSON.stringify(body.config, null, 2),
+            config: body.config,
+            diagnostics: []
+        };
+    }
+
+    return {
+        ok: false,
+        diagnostics: [{
+            severity: 'error',
+            code: 'INVALID_PROVIDER_PAYLOAD',
+            message: 'Request body must include either raw (string) or config (object)'
+        }]
+    };
+}
+
+function getExpectedRevision(body = {}) {
+    const hash = configProviders.getExpectedRevisionHash(body);
+    return hash ? { hash } : null;
+}
+
+function getCurrentRevisionForPath(targetPath) {
+    if (!targetPath || !fs.existsSync(targetPath)) return null;
+    const raw = configProviders.readConfigTextSync(targetPath, 'utf8');
+    const stats = fs.statSync(targetPath);
+    return configProviders.buildContentRevision({ content: raw, stats });
+}
+
+function compareExpectedRevision(targetPath, body = {}) {
+    const expected = getExpectedRevision(body);
+    if (!expected || !expected.hash) return { ok: true, current: getCurrentRevisionForPath(targetPath) };
+
+    const current = getCurrentRevisionForPath(targetPath);
+    if (configProviders.isStaleRevision({ expectedHash: expected.hash, currentRevision: current })) {
+        return {
+            ok: false,
+            status: 409,
+            diagnostics: [{
+                severity: 'error',
+                code: 'STALE_WRITE',
+                message: 'Config changed since it was last read',
+                details: { expectedRevision: expected, currentRevision: current }
+            }]
+        };
+    }
+
+    return { ok: true, current };
+}
+
+function validatePathWritable(pathToWrite) {
+    try {
+        const resolvedPath = path.resolve(pathToWrite);
+        if (fs.existsSync(resolvedPath)) {
+            const stats = fs.lstatSync(resolvedPath);
+            if (stats.isSymbolicLink()) {
+                return {
+                    ok: false,
+                    diagnostics: [{
+                        severity: 'error',
+                        code: 'UNSAFE_PROVIDER_PATH',
+                        message: 'Refusing to write through symlink provider path',
+                        details: { path: resolvedPath }
+                    }]
+                };
+            }
+            fs.accessSync(resolvedPath, fs.constants.W_OK);
+            return { ok: true };
+        }
+
+        const parentDir = path.dirname(resolvedPath);
+        fs.mkdirSync(parentDir, { recursive: true });
+        fs.accessSync(parentDir, fs.constants.W_OK);
+        return { ok: true };
+    } catch (error) {
+        return {
+            ok: false,
+            diagnostics: [{
+                severity: 'error',
+                code: 'PROVIDER_PATH_NOT_WRITABLE',
+                message: 'Provider path is not writable',
+                details: { path: pathToWrite, error: error.message }
+            }]
+        };
+    }
+}
+
+function parseAndValidateProviderPayload(provider, body = {}) {
+    const parsed = parseProviderInput(body);
+    if (!parsed.ok) return parsed;
+
+    const diagnostics = [...(provider?.diagnostics || [])];
+    const hasBlockingProviderDiagnostic = diagnostics.some((d) => d && d.severity === 'error');
+    if (hasBlockingProviderDiagnostic) {
+        return { ok: false, diagnostics };
+    }
+
+    if (provider && provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENCODE_SLIM) {
+        const preset = parsed.config && parsed.config.preset;
+        if (preset !== undefined && !configProviders.isPlainObject(preset)) {
+            diagnostics.push({
+                severity: 'error',
+                code: 'UNSUPPORTED_SLIM_PRESET_SHAPE',
+                message: 'Slim preset must be an object when provided',
+                details: { receivedType: Array.isArray(preset) ? 'array' : typeof preset }
+            });
+        }
+    }
+
+    if (diagnostics.some((d) => d && d.severity === 'error')) {
+        return { ok: false, diagnostics };
+    }
+
+    return {
+        ok: true,
+        raw: parsed.raw,
+        config: parsed.config,
+        diagnostics
+    };
+}
+
+function buildWriteContent({ provider, body = {}, parsed, targetPath }) {
+    if (typeof body.raw === 'string') {
+        return { raw: parsed.raw, config: parsed.config };
+    }
+
+    const incomingConfig = parsed.config;
+    let existingConfig = {};
+    if (targetPath && fs.existsSync(targetPath)) {
+        try {
+            const existingRaw = configProviders.readConfigTextSync(targetPath, 'utf8');
+            existingConfig = configProviders.parseJsonText(existingRaw);
+        } catch {
+            existingConfig = {};
+        }
+    }
+
+    const mergedConfig = configProviders.deepMergePreservingUnknown(existingConfig, incomingConfig);
+    return {
+        raw: JSON.stringify(mergedConfig, null, 2),
+        config: mergedConfig
+    };
+}
+
+function loadProviderDetails(provider) {
+    if (!provider || !provider.activePath || !provider.exists) {
+        return {
+            config: null,
+            raw: null,
+            revision: null,
+            diagnostics: provider ? provider.diagnostics : []
+        };
+    }
+
+    try {
+        const raw = configProviders.readConfigTextSync(provider.activePath, 'utf8');
+        const stats = fs.statSync(provider.activePath);
+        const config = configProviders.parseJsonText(raw);
+        const revision = configProviders.buildContentRevision({ content: raw, stats });
+        return {
+            config,
+            raw,
+            revision,
+            diagnostics: provider.diagnostics || []
+        };
+    } catch (error) {
+        return {
+            config: null,
+            raw: null,
+            revision: null,
+            diagnostics: [
+                ...(provider.diagnostics || []),
+                {
+                    severity: 'error',
+                    code: 'PROVIDER_READ_FAILED',
+                    message: `Failed to load provider config for ${provider.id}`,
+                    details: { error: error.message, path: provider.activePath }
+                }
+            ]
+        };
+    }
+}
+
+function requireOpenAgentProvider(provider) {
+    if (!provider) {
+        return {
+            ok: false,
+            status: 404,
+            payload: { error: 'Provider not found' }
+        };
+    }
+    if (provider.id !== configProviders.PROVIDER_IDS.OH_MY_OPENAGENT) {
+        return {
+            ok: false,
+            status: 400,
+            payload: {
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILES_ONLY',
+                    message: 'Multiple config files are only supported for Oh My OpenAgent'
+                }]
+            }
+        };
+    }
+    return { ok: true };
+}
+
+function buildOpenAgentProfileRecord(provider, profilePath, activeRevision) {
+    const raw = configProviders.readConfigTextSync(profilePath, 'utf8');
+    const stats = fs.statSync(profilePath);
+    const revision = configProviders.buildContentRevision({ content: raw, stats });
+    const diagnostics = [];
+    try {
+        configProviders.parseJsonText(raw);
+    } catch (error) {
+        diagnostics.push({
+            severity: 'error',
+            code: 'MALFORMED_OPENAGENT_PROFILE',
+            message: `Malformed OpenAgent profile config: ${profilePath}`,
+            details: { path: profilePath, error: error.message }
+        });
+    }
+
+    return {
+        name: path.basename(profilePath).replace(/\.jsonc?$/i, ''),
+        path: profilePath,
+        active: !!activeRevision && activeRevision.hash === revision.hash,
+        revision,
+        diagnostics
+    };
+}
+
+function listOpenAgentProfiles(provider) {
+    const activePath = configProviders.getOpenAgentDefaultActivePath(provider);
+    const activeRevision = getCurrentRevisionForPath(activePath);
+    const profilePaths = configProviders.listOpenAgentProfilePaths(provider);
+    return profilePaths.map((profilePath) => buildOpenAgentProfileRecord(provider, profilePath, activeRevision));
+}
+
+function resolveOpenAgentProfileSelection(provider, body = {}) {
+    const requestedPath = typeof body.path === 'string' ? body.path : null;
+    if (requestedPath) {
+        const normalized = configProviders.normalizePath(requestedPath);
+        if (configProviders.isOpenAgentProfilePath(provider, normalized) && fs.existsSync(normalized)) {
+            return { ok: true, path: normalized };
+        }
+    }
+
+    if (typeof body.name === 'string') {
+        const profilePath = configProviders.getOpenAgentProfilePath(provider, body.name);
+        if (profilePath && fs.existsSync(profilePath)) return { ok: true, path: profilePath };
+    }
+
+    return {
+        ok: false,
+        diagnostics: [{
+            severity: 'error',
+            code: 'OPENAGENT_PROFILE_NOT_FOUND',
+            message: 'Selected OpenAgent config profile was not found',
+            details: {
+                path: requestedPath,
+                name: typeof body.name === 'string' ? body.name : null,
+                expectedPaths: configProviders.listOpenAgentProfilePaths(provider)
+            }
+        }]
+    };
+}
+
+function resolveSavePath(provider, requestedPath) {
+    return configProviders.resolveProviderWritePath({
+        provider,
+        requestedPath
+    });
+}
+
+app.get('/api/config-providers', (req, res) => {
+    try {
+        const providers = detectConfigProviders();
+        res.json(providers.map((provider) => ({
+            id: provider.id,
+            displayName: provider.displayName,
+            paths: provider.paths,
+            exists: provider.exists,
+            activePath: provider.activePath,
+            capabilities: provider.capabilities,
+            diagnostics: provider.diagnostics || []
+        })));
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+        const details = loadProviderDetails(provider);
+        res.json({
+            id: provider.id,
+            displayName: provider.displayName,
+            paths: provider.paths,
+            exists: provider.exists,
+            activePath: provider.activePath,
+            capabilities: provider.capabilities,
+            diagnostics: details.diagnostics,
+            config: details.config,
+            raw: details.raw,
+            revision: details.revision
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id/profiles', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        res.json({
+            profileDir: configProviders.getOpenAgentProfileDir(provider),
+            activePath: configProviders.getOpenAgentDefaultActivePath(provider),
+            profiles: listOpenAgentProfiles(provider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/profiles', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        const profilePath = configProviders.getOpenAgentProfilePath(provider, req.body && req.body.name);
+        if (!profilePath) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILE_NAME_REQUIRED',
+                    message: 'OpenAgent config profile name is required'
+                }]
+            });
+        }
+
+        const content = typeof req.body?.raw === 'string' ? req.body.raw : '{}\n';
+        const parsed = parseAndValidateProviderPayload(provider, { raw: content });
+        if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+
+        const pathSafety = validatePathWritable(profilePath);
+        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+
+        const createResult = configProviders.createFileIfMissingSync(profilePath, parsed.raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        res.json({
+            success: true,
+            created: createResult.created,
+            profile: buildOpenAgentProfileRecord(updatedProvider, profilePath, getCurrentRevisionForPath(configProviders.getOpenAgentDefaultActivePath(updatedProvider))),
+            profiles: listOpenAgentProfiles(updatedProvider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/profiles/switch', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        const selected = resolveOpenAgentProfileSelection(provider, req.body || {});
+        if (!selected.ok) return res.status(400).json({ success: false, diagnostics: selected.diagnostics });
+
+        const raw = configProviders.readConfigTextSync(selected.path, 'utf8');
+        const parsed = parseAndValidateProviderPayload(provider, { raw });
+        if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+
+        const activePath = configProviders.getOpenAgentDefaultActivePath(provider);
+        const pathSafety = validatePathWritable(activePath);
+        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+
+        configProviders.writeConfigTextAtomicSync(activePath, raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        const updatedDetails = loadProviderDetails(updatedProvider);
+        res.json({
+            success: true,
+            path: activePath,
+            selectedPath: selected.path,
+            diagnostics: updatedDetails.diagnostics || [],
+            revision: updatedDetails.revision,
+            profiles: listOpenAgentProfiles(updatedProvider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/validate', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ valid: false, diagnostics: parsed.diagnostics });
+        }
+
+        res.json({
+            valid: true,
+            diagnostics: parsed.diagnostics || [],
+            config: parsed.config
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/save', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const revisionCheck = compareExpectedRevision(pathDecision.path, req.body || {});
+        if (!revisionCheck.ok) {
+            return res.status(revisionCheck.status || 409).json({ success: false, diagnostics: revisionCheck.diagnostics });
+        }
+
+        const writePayload = buildWriteContent({
+            provider,
+            body: req.body || {},
+            parsed,
+            targetPath: pathDecision.path
+        });
+
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        const updatedDetails = loadProviderDetails(updatedProvider);
+        res.json({
+            success: true,
+            id: provider.id,
+            path: pathDecision.path,
+            exists: true,
+            diagnostics: updatedProvider.diagnostics || [],
+            revision: updatedDetails.revision || getCurrentRevisionForPath(pathDecision.path)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/create', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const content = typeof req.body?.raw === 'string' ? req.body.raw : '{}\n';
+        const parsed = parseAndValidateProviderPayload(provider, { raw: content });
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const createResult = configProviders.createFileIfMissingSync(pathDecision.path, parsed.raw, 'utf8');
+        res.json({ success: true, created: createResult.created, path: pathDecision.path });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/import', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const providerMatch = configProviders.validateImportProviderMatch({
+            routeProviderId: provider.id,
+            payload: req.body || {}
+        });
+        if (!providerMatch.ok) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [providerMatch.diagnostic]
+            });
+        }
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const revisionCheck = compareExpectedRevision(pathDecision.path, req.body || {});
+        if (!revisionCheck.ok) {
+            return res.status(revisionCheck.status || 409).json({ success: false, diagnostics: revisionCheck.diagnostics });
+        }
+
+        const writePayload = buildWriteContent({
+            provider,
+            body: req.body || {},
+            parsed,
+            targetPath: pathDecision.path
+        });
+
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        res.json({
+            success: true,
+            imported: true,
+            id: provider.id,
+            providerId: provider.id,
+            path: pathDecision.path,
+            revision: getCurrentRevisionForPath(pathDecision.path)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id/export', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+        const details = loadProviderDetails(provider);
+        res.json({
+            id: provider.id,
+            providerId: provider.id,
+            path: provider.activePath,
+            exists: provider.exists,
+            raw: details.raw,
+            config: details.config,
+            revision: details.revision,
+            diagnostics: details.diagnostics
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/ohmyopencode', (req, res) => {
-    const ohMyPath = getOhMyOpenCodeConfigPath();
-    const exists = ohMyPath && fs.existsSync(ohMyPath);
-    const config = exists ? loadOhMyOpenCodeConfig() : null;
+    const provider = getProviderByIdOrNull(configProviders.PROVIDER_IDS.OH_MY_OPENAGENT);
+    const details = provider ? loadProviderDetails(provider) : { config: null, diagnostics: [] };
+    const ohMyPath = provider
+        ? (provider.activePath || getOhMyOpenCodeConfigPath())
+        : getOhMyOpenCodeConfigPath();
+    const exists = !!(provider && provider.exists);
+    const config = exists ? details.config : null;
     const studio = loadStudioConfig();
     const preferences = studio.ohmy || { agents: {} };
-    res.json({ path: ohMyPath, exists, config, preferences });
+    res.json({ path: ohMyPath, exists, config, preferences, warnings: details.diagnostics.length > 0 ? details.diagnostics : undefined });
 });
 
 app.post('/api/ohmyopencode', (req, res) => {
@@ -2086,7 +2709,9 @@ app.post('/api/ohmyopencode', (req, res) => {
         studio.ohmy = preferences;
         saveStudioConfig(studio);
         
-        const currentConfig = loadOhMyOpenCodeConfig() || {};
+        const provider = getProviderByIdOrNull(configProviders.PROVIDER_IDS.OH_MY_OPENAGENT);
+        const details = provider ? loadProviderDetails(provider) : { config: null };
+        const currentConfig = details.config || {};
         const warnings = [];
         
         for (const [agentName, agentPrefs] of Object.entries(preferences.agents)) {
@@ -2110,9 +2735,17 @@ app.post('/api/ohmyopencode', (req, res) => {
             }
         }
         
-        saveOhMyOpenCodeConfig(currentConfig);
+        const legacyOhMyPath = getOhMyOpenCodeConfigPath();
+        const saveTargetProvider = (provider && provider.activePath)
+            ? provider
+            : { activePath: legacyOhMyPath, paths: [legacyOhMyPath].filter(Boolean) };
+        const pathDecision = resolveSavePath(saveTargetProvider);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, JSON.stringify(currentConfig, null, 2), 'utf8');
         
-        const ohMyPath = getOhMyOpenCodeConfigPath();
+        const ohMyPath = pathDecision.path;
         triggerGitHubAutoSync();
         res.json({ 
             success: true, 

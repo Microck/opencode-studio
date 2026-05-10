@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse, MCPConfig } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse, MCPConfig, OhMyPreferences, OhMyConfigResponse, GitHubBackupStatus, GitHubBackupResult, GitHubBackupConfig, ConfigProviderId, ConfigProviderCreatePayload, ConfigProviderCreateProfilePayload, ConfigProviderCreateProfileResult, ConfigProviderCreateResult, ConfigProviderDetail, ConfigProviderExportResult, ConfigProviderImportPayload, ConfigProviderImportResult, ConfigProviderProfilesResult, ConfigProviderSavePayload, ConfigProviderSaveResult, ConfigProviderSummary, ConfigProviderSwitchProfilePayload, ConfigProviderSwitchProfileResult, ConfigProviderValidationPayload, ConfigProviderValidationResult } from '@/types';
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
@@ -143,6 +143,8 @@ export function buildProtocolUrl(action: string, params?: Record<string, string>
   }
   return url;
 }
+
+const configProviderRoute = (id: ConfigProviderId, suffix = '') => `/config-providers/${encodeURIComponent(id)}${suffix}`;
 
 export interface PendingAction {
   type: 'install-mcp' | 'import-skill' | 'import-plugin';
@@ -466,6 +468,56 @@ export async function bulkFetchUrls(urls: string[]): Promise<BulkFetchResponse> 
   return data;
 }
 
+export async function getConfigProviders(): Promise<ConfigProviderSummary[]> {
+  const { data } = await api.get<ConfigProviderSummary[]>('/config-providers');
+  return data;
+}
+
+export async function getConfigProvider(id: ConfigProviderId): Promise<ConfigProviderDetail> {
+  const { data } = await api.get<ConfigProviderDetail>(configProviderRoute(id));
+  return data;
+}
+
+export async function validateConfigProvider(id: ConfigProviderId, payload: ConfigProviderValidationPayload = {}): Promise<ConfigProviderValidationResult> {
+  const { data } = await api.post<ConfigProviderValidationResult>(configProviderRoute(id, '/validate'), payload);
+  return data;
+}
+
+export async function saveConfigProvider(id: ConfigProviderId, payload: ConfigProviderSavePayload): Promise<ConfigProviderSaveResult> {
+  const { data } = await api.post<ConfigProviderSaveResult>(configProviderRoute(id, '/save'), payload);
+  return data;
+}
+
+export async function createConfigProvider(id: ConfigProviderId, payload: ConfigProviderCreatePayload = {}): Promise<ConfigProviderCreateResult> {
+  const { data } = await api.post<ConfigProviderCreateResult>(configProviderRoute(id, '/create'), payload);
+  return data;
+}
+
+export async function importConfigProvider(id: ConfigProviderId, payload: ConfigProviderImportPayload = {}): Promise<ConfigProviderImportResult> {
+  const { data } = await api.post<ConfigProviderImportResult>(configProviderRoute(id, '/import'), payload);
+  return data;
+}
+
+export async function exportConfigProvider(id: ConfigProviderId): Promise<ConfigProviderExportResult> {
+  const { data } = await api.get<ConfigProviderExportResult>(configProviderRoute(id, '/export'));
+  return data;
+}
+
+export async function getConfigProviderProfiles(id: ConfigProviderId): Promise<ConfigProviderProfilesResult> {
+  const { data } = await api.get<ConfigProviderProfilesResult>(configProviderRoute(id, '/profiles'));
+  return data;
+}
+
+export async function createConfigProviderProfile(id: ConfigProviderId, payload: ConfigProviderCreateProfilePayload): Promise<ConfigProviderCreateProfileResult> {
+  const { data } = await api.post<ConfigProviderCreateProfileResult>(configProviderRoute(id, '/profiles'), payload);
+  return data;
+}
+
+export async function switchConfigProviderProfile(id: ConfigProviderId, payload: ConfigProviderSwitchProfilePayload): Promise<ConfigProviderSwitchProfileResult> {
+  const { data } = await api.post<ConfigProviderSwitchProfileResult>(configProviderRoute(id, '/profiles/switch'), payload);
+  return data;
+}
+
 export async function getAuthInfo(): Promise<AuthInfo> {
   const { data } = await api.get<AuthInfo>('/auth');
   return data;
@@ -723,8 +775,6 @@ export async function activateProfile(name: string): Promise<{ success: boolean 
   const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
   return data;
 }
-
-import type { OhMyPreferences, OhMyConfigResponse, GitHubBackupStatus, GitHubBackupResult, GitHubBackupConfig } from '@/types';
 
 export async function getOhMyConfig(): Promise<OhMyConfigResponse> {
   const { data } = await api.get<OhMyConfigResponse>('/ohmyopencode');

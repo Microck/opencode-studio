@@ -134,6 +134,159 @@ export interface ProviderConfig {
   options?: ProviderOptions;
 }
 
+export type ConfigProviderId = 'opencode' | 'oh-my-openagent' | 'oh-my-opencode-slim';
+
+export interface ConfigProviderDiagnosticDetails {
+  path?: string | null;
+  paths?: string[];
+  expectedPaths?: string[];
+  routeProvider?: string;
+  payloadProvider?: string;
+  [key: string]: unknown;
+}
+
+export interface ConfigProviderDiagnostic {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  message: string;
+  path?: string | null;
+  details?: ConfigProviderDiagnosticDetails | string | null;
+}
+
+export interface ConfigProviderCapabilities {
+  canDetect: boolean;
+  canLoad: boolean;
+  canValidate: boolean;
+  canSave: boolean;
+  canCreate: boolean;
+  canImportConfig: boolean;
+  canExportConfig: boolean;
+}
+
+export interface ConfigProviderSummary {
+  id: ConfigProviderId;
+  displayName: string;
+  paths: string[];
+  exists: boolean;
+  activePath: string | null;
+  capabilities: ConfigProviderCapabilities;
+  diagnostics: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderDetail extends ConfigProviderSummary {
+  config: Record<string, unknown> | null;
+  raw: string | null;
+  revision: ConfigProviderRevision | null;
+}
+
+export interface ConfigProviderProfile {
+  name: string;
+  path: string;
+  active: boolean;
+  revision: ConfigProviderRevision;
+  diagnostics: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderProfilesResult {
+  profileDir: string | null;
+  activePath: string | null;
+  profiles: ConfigProviderProfile[];
+}
+
+export interface ConfigProviderCreateProfilePayload {
+  name: string;
+  raw?: string;
+}
+
+export interface ConfigProviderCreateProfileResult {
+  success: boolean;
+  created: boolean;
+  profile: ConfigProviderProfile;
+  profiles: ConfigProviderProfile[];
+  diagnostics?: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderSwitchProfilePayload {
+  path?: string;
+  name?: string;
+}
+
+export interface ConfigProviderSwitchProfileResult {
+  success: boolean;
+  path: string;
+  selectedPath: string;
+  revision: ConfigProviderRevision | null;
+  diagnostics: ConfigProviderDiagnostic[];
+  profiles: ConfigProviderProfile[];
+}
+
+export interface ConfigProviderRevision {
+  algorithm: string;
+  hash: string | null;
+  size: number;
+  mtimeMs: number | null;
+}
+
+export interface ConfigProviderContentPayload {
+  raw?: string;
+  config?: Record<string, unknown> | null;
+  path?: string | null;
+}
+
+export interface ConfigProviderValidationPayload extends ConfigProviderContentPayload {}
+
+export interface ConfigProviderValidationResult {
+  valid: boolean;
+  diagnostics: ConfigProviderDiagnostic[];
+  config?: Record<string, unknown> | null;
+}
+
+export interface ConfigProviderSavePayload extends ConfigProviderContentPayload {
+  expectedRevision?: string | ConfigProviderRevision | null;
+}
+
+export interface ConfigProviderSaveResult {
+  success: boolean;
+  id: ConfigProviderId;
+  path: string;
+  exists: boolean;
+  diagnostics: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderCreatePayload {
+  raw?: string;
+  path?: string | null;
+}
+
+export interface ConfigProviderCreateResult {
+  success: boolean;
+  created: boolean;
+  path: string;
+  diagnostics?: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderImportPayload extends ConfigProviderContentPayload {
+  id?: ConfigProviderId;
+  providerId?: ConfigProviderId;
+  provider?: ConfigProviderId;
+}
+
+export interface ConfigProviderImportResult {
+  success: boolean;
+  imported: boolean;
+  path: string;
+  diagnostics?: ConfigProviderDiagnostic[];
+}
+
+export interface ConfigProviderExportResult {
+  id: ConfigProviderId;
+  path: string | null;
+  exists: boolean;
+  raw: string | null;
+  config: Record<string, unknown> | null;
+  diagnostics: ConfigProviderDiagnostic[];
+}
+
 export interface TUIConfig {
   scroll_speed?: number;
   scroll_acceleration?: {
