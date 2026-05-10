@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
 import { SkillCard } from "@/components/skill-card";
@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
-import { deleteSkill } from "@/lib/api";
+import { deleteSkill, getSkills } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
@@ -27,20 +27,44 @@ import { PresetsManager } from "@/components/presets-manager";
 
 export default function SkillsPage() {
   const t = useTranslations('skills');
-  const { skills, loading, refreshData, toggleSkill } = useApp();
+  const { skills, refreshData, toggleSkill } = useApp();
+  const [skillsData, setSkillsData] = useState(skills);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ name: string } | null>(null);
 
+  useEffect(() => {
+    setSkillsData(skills);
+  }, [skills]);
+
+  useEffect(() => {
+    const loadSkills = async () => {
+      try {
+        if (skillsData.length === 0) setLoading(true);
+        const data = await getSkills();
+        setSkillsData(data);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSkills();
+  }, []);
+
   const filteredSkills = useMemo(() => {
-    if (!search.trim()) return skills;
+    if (!search.trim()) return skillsData;
     const q = search.toLowerCase();
-    return skills.filter(s => 
+    return skillsData.filter(s => 
       s.name.toLowerCase().includes(q) || 
       (s.description?.toLowerCase().includes(q))
     );
-  }, [skills, search]);
+  }, [skillsData, search]);
+
+  const reloadSkills = async () => {
+    const data = await getSkills();
+    setSkillsData(data);
+  };
 
   const handleOpen = (name: string) => {
     router.push(`/editor?type=skills&name=${encodeURIComponent(name)}`);
@@ -49,7 +73,7 @@ export default function SkillsPage() {
   const handleToggle = async (name: string) => {
     try {
       await toggleSkill(name);
-      const skill = skills.find(s => s.name === name);
+      const skill = skillsData.find(s => s.name === name);
       toast.success(skill?.enabled ? t('toggleDisabled', { name }) : t('toggleEnabled', { name }));
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
@@ -68,6 +92,7 @@ export default function SkillsPage() {
       await deleteSkill(deleteTarget.name);
       toast.success(t('deleted', { name: deleteTarget.name }));
       setDeleteDialogOpen(false);
+      await reloadSkills();
       refreshData();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
@@ -75,7 +100,7 @@ export default function SkillsPage() {
     }
   };
 
-  if (loading) {
+  if (loading && skillsData.length === 0) {
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
@@ -98,14 +123,14 @@ export default function SkillsPage() {
           <PresetsManager />
           <BulkImportDialog 
             type="skills"
-            existingNames={skills.map(s => s.name)} 
-            onSuccess={refreshData} 
+            existingNames={skillsData.map(s => s.name)} 
+            onSuccess={async () => { await reloadSkills(); refreshData(); }} 
           />
-          <AddSkillDialog onSuccess={refreshData} />
+          <AddSkillDialog onSuccess={async () => { await reloadSkills(); refreshData(); }} />
         </div>
       </div>
 
-      {skills.length > 0 && (
+      {skillsData.length > 0 && (
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -117,7 +142,7 @@ export default function SkillsPage() {
         </div>
       )}
 
-      {skills.length === 0 ? (
+      {skillsData.length === 0 ? (
         <p className="text-muted-foreground italic">{t('noSkills')}</p>
       ) : filteredSkills.length === 0 ? (
         <p className="text-muted-foreground italic">{t('noMatch', { search })}</p>

@@ -64,6 +64,8 @@ const TIME_RANGES = [
   { labelKey: "rangeCustom", value: "custom", granularity: "daily" },
 ];
 
+const USAGE_CACHE_KEY = "opencode-studio-usage-cache";
+
 export default function UsagePage() {
   const t = useTranslations('usage');
   const [stats, setStats] = useState<UsageStats | null>(null);
@@ -108,8 +110,8 @@ export default function UsagePage() {
     setTimeRange("custom");
   };
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const selectedRange = TIME_RANGES.find(r => r.value === timeRange) || TIME_RANGES[2];
       const isCustom = timeRange === "custom";
@@ -137,24 +139,28 @@ export default function UsagePage() {
         to
       );
       
+      const byModel: any[] = Array.isArray((data as any)?.byModel) ? (data as any).byModel : [];
+      const byProject: any[] = Array.isArray((data as any)?.byProject) ? (data as any).byProject : [];
+      const byDay: any[] = Array.isArray((data as any)?.byDay) ? (data as any).byDay : [];
+
       const enrichedStats: UsageStats = {
         totalCost: 0,
-        totalTokens: data.totalTokens,
-        byModel: (data.byModel || []).map(m => ({
+        totalTokens: Number((data as any)?.totalTokens || 0),
+        byModel: byModel.map((m: any) => ({
           ...m,
           cost: calculateCost(m.name, m.inputTokens, m.outputTokens)
-        })).sort((a, b) => b.cost - a.cost),
+        })).sort((a: any, b: any) => b.cost - a.cost),
         byDay: [],
-        byProject: (data.byProject || []).map(p => ({
+        byProject: byProject.map((p: any) => ({
           ...p,
           cost: calculateCost("default", p.inputTokens, p.outputTokens)
-        })).sort((a, b) => b.cost - a.cost)
+        })).sort((a: any, b: any) => b.cost - a.cost)
       };
 
       enrichedStats.totalCost = enrichedStats.byModel.reduce((acc, m) => acc + m.cost, 0);
       
       const modelNames = enrichedStats.byModel.map(m => m.name);
-      const processedByDay = (data.byDay || []).map((d: any) => {
+      const processedByDay = byDay.map((d: any) => {
         const modelCosts: Record<string, number> = {};
         modelNames.forEach(mid => {
           modelCosts[mid] = 0;
@@ -173,18 +179,31 @@ export default function UsagePage() {
       
       enrichedStats.byDay = processedByDay;
       setStats(enrichedStats);
+      sessionStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(enrichedStats));
     } catch (e: any) {
       const msg = e.response?.data?.error || e.message || "Unknown error";
       toast.error(t('fetchFailed', { error: msg }));
       console.error(e);
+      setStats({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
-  }, [projectId, timeRange, customRange.start, customRange.end]);
+    try {
+      const cached = sessionStorage.getItem(USAGE_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as UsageStats;
+        if (parsed && typeof parsed === 'object') {
+          setStats(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
+    fetchStats(!sessionStorage.getItem(USAGE_CACHE_KEY));
+  }, [projectId, timeRange]);
 
   const pieData = useMemo(() => {
     if (!stats) return [];
@@ -296,7 +315,13 @@ export default function UsagePage() {
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        {t('fetchFailed', { error: 'No data' })}
+      </div>
+    );
+  }
 
   const totalInputTokens = stats.byModel.reduce((acc, m) => acc + m.inputTokens, 0);
   const totalOutputTokens = stats.byModel.reduce((acc, m) => acc + m.outputTokens, 0);
@@ -496,7 +521,7 @@ export default function UsagePage() {
                   </div>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
                 <BarChart data={stats.byDay}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                   <XAxis 
@@ -605,7 +630,7 @@ export default function UsagePage() {
                   <span data-pie-value className="text-sm font-bold text-primary"></span>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
                 <PieChart>
                   <Pie
                     data={pieData}

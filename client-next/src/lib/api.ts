@@ -3,22 +3,29 @@ import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, Auth
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
+const PROBE_TIMEOUT_MS = 150;
+const DISCOVERY_RETRY_DELAY_MS = 5000;
 
 let cachedApiUrl: string | null = null;
 let resolvingApiUrl: Promise<string> | null = null;
+let lastDiscoveryFailureAt = 0;
 
 async function probeBackendUrl(url: string): Promise<string | null> {
     try {
-        await axios.get(`${url}/health`, { timeout: 500 });
+        await axios.get(`${url}/health`, { timeout: PROBE_TIMEOUT_MS });
         return url;
     } catch {
         return null;
     }
 }
 
-async function discoverBackendPort(): Promise<string> {
-    if (cachedApiUrl) return cachedApiUrl;
-    if (resolvingApiUrl) return resolvingApiUrl;
+async function discoverBackendPort(force = false): Promise<string> {
+    if (!force && cachedApiUrl) return cachedApiUrl;
+    if (!force && resolvingApiUrl) return resolvingApiUrl;
+
+    if (!force && Date.now() - lastDiscoveryFailureAt < DISCOVERY_RETRY_DELAY_MS) {
+        throw new Error('Backend discovery throttled after recent failure');
+    }
 
     resolvingApiUrl = (async () => {
         const preferred = [envApiUrl, DEFAULT_API_URL].filter(Boolean) as string[];
@@ -45,6 +52,9 @@ async function discoverBackendPort(): Promise<string> {
 
     try {
         return await resolvingApiUrl;
+    } catch (err) {
+        lastDiscoveryFailureAt = Date.now();
+        throw err;
     } finally {
         resolvingApiUrl = null;
     }
@@ -58,6 +68,7 @@ const DEFAULT_API_URL = 'http://127.0.0.1:1920/api';
 
 const api = axios.create({
   baseURL: envApiUrl || DEFAULT_API_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
     'X-Client-Version': CLIENT_VERSION,
@@ -69,10 +80,36 @@ api.interceptors.request.use(async (config) => {
     const url = await discoverBackendPort();
     config.baseURL = url;
   } catch {
-    config.baseURL = config.baseURL || envApiUrl || DEFAULT_API_URL;
+    config.baseURL = cachedApiUrl || config.baseURL || envApiUrl || DEFAULT_API_URL;
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const code = error?.code as string | undefined;
+    const status = error?.response?.status as number | undefined;
+    const original = error?.config as (typeof error.config & { _retried?: boolean }) | undefined;
+
+    const retryableNetworkError = !status && (code === 'ERR_NETWORK' || code === 'ECONNABORTED' || code === 'ECONNREFUSED');
+
+    if (original && !original._retried && retryableNetworkError) {
+      original._retried = true;
+      try {
+        cachedApiUrl = null;
+        const url = await discoverBackendPort(true);
+        api.defaults.baseURL = url;
+        original.baseURL = url;
+        return api.request(original);
+      } catch {
+        // fall through
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 

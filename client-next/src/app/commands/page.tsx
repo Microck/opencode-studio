@@ -35,6 +35,8 @@ interface CommandEntry {
   template: string;
 }
 
+const COMMANDS_CACHE_KEY = "opencode-studio-commands-cache";
+
 export default function CommandsPage() {
   const t = useTranslations('commands');
   const [commands, setCommands] = useState<CommandEntry[]>([]);
@@ -47,25 +49,37 @@ export default function CommandsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const fetchCommands = async () => {
+  const fetchCommands = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await getCommands();
       const entries = Object.entries(data).map(([name, value]) => ({
         name,
         template: value.template,
       }));
       setCommands(entries);
+      sessionStorage.setItem(COMMANDS_CACHE_KEY, JSON.stringify(entries));
     } catch (err: any) {
       toast.error(t('loadFailed'));
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCommands();
+    try {
+      const cached = sessionStorage.getItem(COMMANDS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as CommandEntry[];
+        if (Array.isArray(parsed)) {
+          setCommands(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
+    fetchCommands(!sessionStorage.getItem(COMMANDS_CACHE_KEY));
   }, []);
 
   const handleAdd = async () => {
@@ -88,7 +102,7 @@ export default function CommandsPage() {
       setNewName("");
       setNewTemplate("");
       setAddOpen(false);
-      fetchCommands();
+      fetchCommands(false);
     } catch {
       toast.error(t('createFailed'));
     }
@@ -121,7 +135,7 @@ export default function CommandsPage() {
       toast.success(t('updateSuccess', { name: editingCmd.name }));
       setEditOpen(false);
       setEditingCmd(null);
-      fetchCommands();
+      fetchCommands(false);
     } catch {
       toast.error(t('updateFailed'));
     }
@@ -140,7 +154,7 @@ export default function CommandsPage() {
       await deleteCommand(deleteTarget);
       toast.success(t('deleteSuccess', { name: deleteTarget }));
       setDeleteDialogOpen(false);
-      fetchCommands();
+      fetchCommands(false);
     } catch {
       toast.error(t('deleteFailed'));
     }
@@ -155,7 +169,7 @@ export default function CommandsPage() {
     setEditOpen(true);
   };
 
-  if (loading) {
+  if (loading && commands.length === 0) {
     return (
       <div className="space-y-4">
          <div className="flex justify-between items-center">
