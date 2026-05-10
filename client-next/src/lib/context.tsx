@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, syncAuto, syncPush, getSyncStatus, type PendingAction, type VersionCheck } from '@/lib/api';
+import { getApiBaseUrl, getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, syncAuto, syncPush, getSyncStatus, type PendingAction, type VersionCheck } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
 import { UpdateRequiredModal } from '@/components/update-required-modal';
 
@@ -62,6 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const checkedPendingRef = useRef(false);
   const versionCheckedRef = useRef(false);
   const autoSyncCheckedRef = useRef(false);
+  const consecutiveHealthFailsRef = useRef(0);
 
   const refreshData = useCallback(async () => {
     // Prevent multiple simultaneous refreshes
@@ -82,6 +83,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // We are connected because the requests succeeded
       setConnected(true);
     } catch (err: any) {
+      const isAbort = err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || /aborted/i.test(String(err?.message || ''));
+      if (isAbort) {
+        return;
+      }
+
       let errorMessage = 'Failed to load data from backend';
       
       if (err.code === 'ERR_NETWORK') {
@@ -154,6 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const isHealthy = await checkHealth();
         if (isHealthy) {
+          consecutiveHealthFailsRef.current = 0;
           if (!connected) {
             setConnected(true);
             checkServerVersion();
@@ -162,20 +169,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
             checkForPendingAction();
           }
         } else {
-          if (connected) {
+          consecutiveHealthFailsRef.current += 1;
+          if (connected && consecutiveHealthFailsRef.current >= 3) {
             setConnected(false);
             setError('Backend disconnected. Attempting to reconnect...');
             checkedPendingRef.current = false;
           }
         }
       } catch {
-        if (connected) {
+        consecutiveHealthFailsRef.current += 1;
+        if (connected && consecutiveHealthFailsRef.current >= 3) {
           setConnected(false);
           setError('Backend connection lost. Check if the server is still running.');
         }
       }
     };
 
+    getApiBaseUrl().catch(() => {});
     checkServerVersion();
     checkAutoSync();
     refreshData();

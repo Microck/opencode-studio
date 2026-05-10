@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { spawn, exec, execSync } = require('child_process');
+const { spawn, spawnSync, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
 
 const pkg = require('./package.json');
@@ -1282,6 +1282,57 @@ app.get('/api/mcp', (req, res) => {
     }
 });
 
+app.post('/api/fetch-url', async (req, res) => {
+    try {
+        const url = String(req.body?.url || '').trim();
+        if (!url) return res.status(400).json({ error: 'Missing url' });
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            return res.status(response.status).json({ error: `Failed to fetch URL (${response.status})` });
+        }
+
+        const content = await response.text();
+        const pathname = (() => {
+            try { return new URL(url).pathname; } catch { return ''; }
+        })();
+        const filename = path.basename(pathname) || 'file.txt';
+
+        res.json({ content, filename, url });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/bulk-fetch', async (req, res) => {
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const results = [];
+
+    for (const rawUrl of urls) {
+        const url = String(rawUrl || '').trim();
+        if (!url) continue;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                results.push({ url, success: false, error: `HTTP ${response.status}` });
+                continue;
+            }
+
+            const content = await response.text();
+            const pathname = (() => {
+                try { return new URL(url).pathname; } catch { return ''; }
+            })();
+            const filename = path.basename(pathname) || 'file.txt';
+            results.push({ url, success: true, content, filename });
+        } catch (err) {
+            results.push({ url, success: false, error: err.message });
+        }
+    }
+
+    res.json({ results });
+});
+
 app.get('/api/commands', (req, res) => {
     try {
         const commandMap = new Map();
@@ -2493,7 +2544,7 @@ app.get('/api/skills', (req, res) => {
 
 app.get('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2514,7 +2565,7 @@ app.get('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2554,7 +2605,7 @@ app.post('/api/skills/:name', (req, res) => {
 
 app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -4088,34 +4139,289 @@ app.post('/api/profiles/:name/activate', (req, res) => {
 // END ACCOUNT POOL MANAGEMENT
 // ============================================
 
+const getUsageRangeBounds = (range, fromRaw, toRaw) => {
+    const now = Date.now();
+    const from = Number(fromRaw || 0);
+    const to = Number(toRaw || 0);
+    let min = 0;
+    let max = 0;
+
+    if (range === '24h') min = now - 86400000;
+    else if (range === '7d') min = now - 604800000;
+    else if (range === '30d') min = now - 2592000000;
+    else if (range === '3m') min = now - 7776000000;
+    else if (range === '6m') min = now - 15552000000;
+    else if (range === '1y') min = now - 31536000000;
+
+    if (from) min = from;
+    if (to) max = to;
+
+    return { min, max };
+};
+
+const getUsageDataCandidates = (configPath) => {
+    const home = os.homedir();
+    return [
+        configPath ? path.dirname(configPath) : null,
+        path.join(home, '.local', 'share', 'opencode'),
+        path.join(home, '.opencode'),
+        process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
+        path.join(home, 'AppData', 'Local', 'opencode')
+    ].filter(Boolean);
+};
+
+const detectUsageSource = (configPath) => {
+    const candidates = getUsageDataCandidates(configPath);
+    let jsonSource = null;
+
+    for (const base of candidates) {
+        const messageDir = path.join(base, 'storage', 'message');
+        const sessionDir = path.join(base, 'storage', 'session');
+        if (fs.existsSync(messageDir)) {
+            jsonSource = { messageDir, sessionDir, base };
+            break;
+        }
+    }
+
+    for (const base of candidates) {
+        const dbPath = path.join(base, 'opencode.db');
+        if (fs.existsSync(dbPath)) {
+            return { type: 'sqlite', dbPath, base, ...jsonSource };
+        }
+    }
+
+    if (jsonSource) return { type: 'json', ...jsonSource };
+    return null;
+};
+
+const getUsageFromSqlite = ({ dbPath, projectId, granularity, range, from, to }) => {
+    const py = `
+import sqlite3, json, sys
+from datetime import datetime, timezone, timedelta
+
+args = json.loads(sys.argv[1])
+db_path = args["dbPath"]
+project_filter = args.get("projectId")
+granularity = args.get("granularity", "daily")
+min_ts = int(args.get("min", 0) or 0)
+max_ts = int(args.get("max", 0) or 0)
+
+con = sqlite3.connect(db_path)
+cur = con.cursor()
+
+stats = {
+  "totalCost": 0,
+  "totalTokens": 0,
+  "byModel": {},
+  "byTime": {},
+  "byProject": {}
+}
+
+def table_columns(table_name):
+    try:
+        return {row[1] for row in cur.execute(f"PRAGMA table_info({table_name})")}
+    except Exception:
+        return set()
+
+def clean_name(value):
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name:
+        return None
+    if name.lower() in ('unknown', 'unassigned', 'null', 'none'):
+        return None
+    return name
+
+def basename_from_path(value):
+    if not isinstance(value, str):
+        return None
+    v = value.strip().replace(chr(92), '/')
+    if not v:
+        return None
+    base = v.rsplit('/', 1)[-1].strip()
+    return clean_name(base)
+
+def derive_project_name(project_name, session_directory, session_data, project_id):
+    candidates = []
+
+    direct = clean_name(project_name)
+    if direct:
+        candidates.append(direct)
+
+    dir_base = basename_from_path(session_directory)
+    if dir_base:
+        candidates.append(dir_base)
+
+    if isinstance(session_data, str) and session_data.strip():
+        try:
+            session_obj = json.loads(session_data)
+            for key in ('projectName', 'name', 'title'):
+                val = clean_name(session_obj.get(key)) if isinstance(session_obj, dict) else None
+                if val:
+                    candidates.append(val)
+
+            for key in ('directory', 'cwd', 'path', 'projectPath', 'workspace'):
+                val = basename_from_path(session_obj.get(key)) if isinstance(session_obj, dict) else None
+                if val:
+                    candidates.append(val)
+
+            project_obj = session_obj.get('project') if isinstance(session_obj, dict) else None
+            if isinstance(project_obj, dict):
+                nested_name = clean_name(project_obj.get('name')) or clean_name(project_obj.get('title'))
+                nested_dir = basename_from_path(project_obj.get('directory') or project_obj.get('path'))
+                if nested_name:
+                    candidates.append(nested_name)
+                if nested_dir:
+                    candidates.append(nested_dir)
+        except Exception:
+            pass
+
+    for name in candidates:
+        if name:
+            return name
+
+    pid = str(project_id or '').strip()
+    return pid[:8] if pid else 'Unassigned'
+
+session_cols = table_columns('session')
+project_cols = table_columns('project')
+
+session_data_select = 's.data' if 'data' in session_cols else "''"
+session_directory_select = 's.directory' if 'directory' in session_cols else "''"
+project_name_select = 'p.name' if 'name' in project_cols else "''"
+project_join = 'LEFT JOIN project p ON p.id = s.project_id' if project_cols else ''
+
+q = f"""
+SELECT m.data, m.time_created, s.project_id, {project_name_select} AS project_name, {session_directory_select} AS session_directory, {session_data_select} AS session_data
+FROM message m
+JOIN session s ON s.id = m.session_id
+{project_join}
+WHERE (? = 0 OR m.time_created >= ?)
+  AND (? = 0 OR m.time_created <= ?)
+"""
+params = (min_ts, min_ts, max_ts, max_ts)
+
+for data, time_created, project_id, project_name, session_directory, session_data in cur.execute(q, params):
+    if project_filter and project_filter != 'all' and str(project_id or '') != str(project_filter):
+        continue
+
+    try:
+        msg = json.loads(data)
+    except Exception:
+        continue
+
+    if msg.get('role') != 'assistant' or not msg.get('tokens'):
+        continue
+
+    tokens = msg.get('tokens') or {}
+    it = int(tokens.get('input') or 0)
+    ot = int(tokens.get('output') or 0)
+    t = it + ot
+
+    try:
+        c = float(msg.get('cost') or 0)
+    except Exception:
+        c = 0
+
+    model = msg.get('modelID') or ((msg.get('model') or {}).get('modelID')) or ((msg.get('model') or {}).get('id')) or 'unknown'
+
+    dt = datetime.fromtimestamp((time_created or 0) / 1000, tz=timezone.utc)
+    if granularity == 'hourly':
+        tk = dt.strftime('%Y-%m-%dT%H:00:00Z')
+    elif granularity == 'weekly':
+        monday = dt - timedelta(days=dt.weekday())
+        tk = monday.strftime('%Y-%m-%d')
+    elif granularity == 'monthly':
+        tk = dt.strftime('%Y-%m-01')
+    else:
+        tk = dt.strftime('%Y-%m-%d')
+
+    stats['totalCost'] += c
+    stats['totalTokens'] += t
+
+    if model not in stats['byModel']:
+        stats['byModel'][model] = { 'name': model, 'id': model, 'cost': 0, 'tokens': 0, 'inputTokens': 0, 'outputTokens': 0 }
+    bm = stats['byModel'][model]
+    bm['cost'] += c
+    bm['tokens'] += t
+    bm['inputTokens'] += it
+    bm['outputTokens'] += ot
+
+    pid = str(project_id or 'unknown')
+    pname = derive_project_name(project_name, session_directory, session_data, pid)
+    if pid not in stats['byProject']:
+        stats['byProject'][pid] = { 'name': pname or 'Unassigned', 'id': pid, 'cost': 0, 'tokens': 0, 'inputTokens': 0, 'outputTokens': 0 }
+    bp = stats['byProject'][pid]
+    bp['cost'] += c
+    bp['tokens'] += t
+    bp['inputTokens'] += it
+    bp['outputTokens'] += ot
+
+    if tk not in stats['byTime']:
+        stats['byTime'][tk] = { 'date': tk, 'name': tk, 'id': tk, 'cost': 0, 'tokens': 0, 'inputTokens': 0, 'outputTokens': 0 }
+    bt = stats['byTime'][tk]
+    bt['cost'] += c
+    bt['tokens'] += t
+    bt['inputTokens'] += it
+    bt['outputTokens'] += ot
+    bt[model] = (bt.get(model) or 0) + c
+    bt[f'{model}_input'] = (bt.get(f'{model}_input') or 0) + it
+    bt[f'{model}_output'] = (bt.get(f'{model}_output') or 0) + ot
+
+out = {
+  'totalCost': stats['totalCost'],
+  'totalTokens': stats['totalTokens'],
+  'byModel': sorted(stats['byModel'].values(), key=lambda x: x.get('cost', 0), reverse=True),
+  'byDay': [dict(v, date=v.get('name')) for v in sorted(stats['byTime'].values(), key=lambda x: x.get('name', ''))],
+  'byProject': sorted(stats['byProject'].values(), key=lambda x: x.get('cost', 0), reverse=True)
+}
+
+print(json.dumps(out))
+`;
+
+    const { min, max } = getUsageRangeBounds(range, from, to);
+    const payload = JSON.stringify({ dbPath, projectId, granularity, min, max });
+    const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const result = spawnSync(pyCmd, ['-c', py, payload], { encoding: 'utf8', timeout: 15000 });
+
+    if (result.error || result.status !== 0 || !result.stdout?.trim()) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(result.stdout.trim());
+    } catch {
+        return null;
+    }
+};
+
 app.get('/api/usage', async (req, res) => {
     try {
-        const {projectId: fid, granularity = 'daily', range = '30d'} = req.query;
+        const { projectId: fid, granularity = 'daily', range = '30d' } = req.query;
         const cp = getConfigPath();
         if (!cp) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-        
-        const home = os.homedir();
-        const dataCandidates = [
-            path.dirname(cp),
-            path.join(home, '.local', 'share', 'opencode'),
-            path.join(home, '.opencode'),
-            process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
-            path.join(home, 'AppData', 'Local', 'opencode')
-        ].filter(Boolean);
 
-        let md = null;
-        let sd = null;
+        const source = detectUsageSource(cp);
+        if (!source) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
 
-        for (const d of dataCandidates) {
-            const mdp = path.join(d, 'storage', 'message');
-            const sdp = path.join(d, 'storage', 'session');
-            if (fs.existsSync(mdp)) {
-                md = mdp;
-                sd = sdp;
-                break;
-            }
+        // Prefer SQLite when available (new OpenCode storage)
+        if (source.type === 'sqlite') {
+            const sqliteResult = getUsageFromSqlite({
+                dbPath: source.dbPath,
+                projectId: fid,
+                granularity,
+                range,
+                from: req.query.from,
+                to: req.query.to
+            });
+            if (sqliteResult) return res.json(sqliteResult);
+            console.warn('Usage API: SQLite detected but query failed, falling back to JSON storage.');
         }
 
+        // Legacy JSON storage fallback
+        const md = source.messageDir;
+        const sd = source.sessionDir;
         if (!md) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
 
         const pmap = new Map();
@@ -4131,9 +4437,9 @@ app.get('/api/usage', async (req, res) => {
                             if (f.startsWith('ses_') && f.endsWith('.json')) {
                                 try {
                                     const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
-                                    pmap.set(f.replace('.json', ''), { 
-                                        name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'), 
-                                        id: m.projectID || d 
+                                    pmap.set(f.replace('.json', ''), {
+                                        name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'),
+                                        id: m.projectID || d
                                     });
                                 } catch {}
                             }
@@ -4145,19 +4451,7 @@ app.get('/api/usage', async (req, res) => {
 
         const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
         const seen = new Set();
-        const now = Date.now();
-        const from = Number(req.query.from || 0);
-        const to = Number(req.query.to || 0);
-        let min = 0;
-        let max = 0;
-        if (range === '24h') min = now - 86400000;
-        else if (range === '7d') min = now - 604800000;
-        else if (range === '30d') min = now - 2592000000;
-        else if (range === '3m') min = now - 7776000000;
-        else if (range === '6m') min = now - 15552000000;
-        else if (range === '1y') min = now - 31536000000;
-        if (from) min = from;
-        if (to) max = to;
+        const { min, max } = getUsageRangeBounds(range, req.query.from, req.query.to);
 
         const sessionDirs = await fs.promises.readdir(md);
         await Promise.all(sessionDirs.map(async s => {
@@ -4172,14 +4466,14 @@ app.get('/api/usage', async (req, res) => {
                         const fullPath = path.join(sp, f);
                         if (seen.has(fullPath)) continue;
                         seen.add(fullPath);
-                        
+
                         try {
                             const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
                             const pid = pmap.get(s)?.id || 'unknown';
                             if (fid && fid !== 'all' && pid !== fid) continue;
                             if (min > 0 && msg.time.created < min) continue;
                             if (max > 0 && msg.time.created > max) continue;
-                            
+
                             if (msg.role === 'assistant' && msg.tokens) {
                                 const c = msg.cost || 0, it = msg.tokens.input || 0, ot = msg.tokens.output || 0, t = it + ot;
                                 const d = new Date(msg.time.created);
@@ -4193,7 +4487,7 @@ app.get('/api/usage', async (req, res) => {
 
                                 const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
                                 stats.totalCost += c; stats.totalTokens += t;
-                                
+
                                 if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
                                 stats.byModel[mid].cost += c; stats.byModel[mid].tokens += t; stats.byModel[mid].inputTokens += it; stats.byModel[mid].outputTokens += ot;
 
@@ -4205,7 +4499,7 @@ app.get('/api/usage', async (req, res) => {
                                 te.cost += c; te.tokens += t; te.inputTokens += it; te.outputTokens += ot;
                                 if (!te[mid]) te[mid] = 0;
                                 te[mid] += c;
-                                
+
                                 const kIn = `${mid}_input`, kOut = `${mid}_output`;
                                 te[kIn] = (te[kIn] || 0) + it;
                                 te[kOut] = (te[kOut] || 0) + ot;
