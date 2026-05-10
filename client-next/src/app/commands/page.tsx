@@ -35,6 +35,8 @@ interface CommandEntry {
   template: string;
 }
 
+const COMMANDS_CACHE_KEY = "opencode-studio-commands-cache";
+
 export default function CommandsPage() {
   const t = useTranslations('commands');
   const [commands, setCommands] = useState<CommandEntry[]>([]);
@@ -56,6 +58,7 @@ export default function CommandsPage() {
         template: value.template,
       }));
       setCommands(entries);
+      sessionStorage.setItem(COMMANDS_CACHE_KEY, JSON.stringify(entries));
     } catch (err: any) {
       toast.error(t('loadFailed'));
       console.error(err);
@@ -65,6 +68,17 @@ export default function CommandsPage() {
   };
 
   useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(COMMANDS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as CommandEntry[];
+        if (Array.isArray(parsed)) {
+          setCommands(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
     fetchCommands();
   }, []);
 

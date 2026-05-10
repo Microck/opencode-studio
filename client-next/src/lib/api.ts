@@ -3,13 +3,16 @@ import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, Auth
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
+const PROBE_TIMEOUT_MS = 150;
+const DISCOVERY_RETRY_DELAY_MS = 5000;
 
 let cachedApiUrl: string | null = null;
 let resolvingApiUrl: Promise<string> | null = null;
+let lastDiscoveryFailureAt = 0;
 
 async function probeBackendUrl(url: string): Promise<string | null> {
     try {
-        await axios.get(`${url}/health`, { timeout: 500 });
+        await axios.get(`${url}/health`, { timeout: PROBE_TIMEOUT_MS });
         return url;
     } catch {
         return null;
@@ -19,6 +22,10 @@ async function probeBackendUrl(url: string): Promise<string | null> {
 async function discoverBackendPort(): Promise<string> {
     if (cachedApiUrl) return cachedApiUrl;
     if (resolvingApiUrl) return resolvingApiUrl;
+
+    if (Date.now() - lastDiscoveryFailureAt < DISCOVERY_RETRY_DELAY_MS) {
+        throw new Error('Backend discovery throttled after recent failure');
+    }
 
     resolvingApiUrl = (async () => {
         const preferred = [envApiUrl, DEFAULT_API_URL].filter(Boolean) as string[];
@@ -45,6 +52,9 @@ async function discoverBackendPort(): Promise<string> {
 
     try {
         return await resolvingApiUrl;
+    } catch (err) {
+        lastDiscoveryFailureAt = Date.now();
+        throw err;
     } finally {
         resolvingApiUrl = null;
     }
@@ -64,13 +74,18 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use(async (config) => {
-  try {
-    const url = await discoverBackendPort();
-    config.baseURL = url;
-  } catch {
-    config.baseURL = config.baseURL || envApiUrl || DEFAULT_API_URL;
+api.interceptors.request.use((config) => {
+  config.baseURL = cachedApiUrl || config.baseURL || envApiUrl || DEFAULT_API_URL;
+
+  // Start backend discovery in background (without blocking requests)
+  if (!cachedApiUrl && !resolvingApiUrl) {
+    discoverBackendPort()
+      .then((url) => {
+        api.defaults.baseURL = url;
+      })
+      .catch(() => {});
   }
+
   return config;
 });
 

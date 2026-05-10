@@ -9,7 +9,7 @@ import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
+import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin, getPlugins } from "@/lib/api";
 import { toast } from "sonner";
 import { Search } from "@nsmr/pixelart-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ import { PresetsManager } from "@/components/presets-manager";
 
 export default function PluginsPage() {
   const t = useTranslations('plugins');
-  const { plugins, loading, refreshData, togglePlugin } = useApp();
+  const { plugins, refreshData, togglePlugin } = useApp();
+  const [pluginsData, setPluginsData] = useState(plugins);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [activeGPlugin, setActiveGPlugin] = useState<string | null>(null);
@@ -40,11 +42,28 @@ export default function PluginsPage() {
     getActiveGooglePlugin().then(res => setActiveGPlugin(res.activePlugin)).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    setPluginsData(plugins);
+  }, [plugins]);
+
+  useEffect(() => {
+    const loadPlugins = async () => {
+      try {
+        setLoading(true);
+        const data = await getPlugins();
+        setPluginsData(data);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPlugins();
+  }, []);
+
   const filteredPlugins = useMemo(() => {
-    if (!search.trim()) return plugins;
+    if (!search.trim()) return pluginsData;
     const q = search.toLowerCase();
-    return plugins.filter(p => p.name.toLowerCase().includes(q));
-  }, [plugins, search]);
+    return pluginsData.filter(p => p.name.toLowerCase().includes(q));
+  }, [pluginsData, search]);
 
   const handleOpen = (name: string, type: 'file' | 'npm') => {
     if (type === 'npm') return;
@@ -54,7 +73,7 @@ export default function PluginsPage() {
   const handleToggle = async (name: string) => {
     try {
       await togglePlugin(name);
-      const plugin = plugins.find(p => p.name === name);
+      const plugin = pluginsData.find(p => p.name === name);
       toast.success(plugin?.enabled ? t('toggleDisabled', { name }) : t('toggleEnabled', { name }));
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
@@ -77,11 +96,17 @@ export default function PluginsPage() {
       }
       toast.success(t('deleted', { name: deleteTarget.name }));
       setDeleteDialogOpen(false);
+      await reloadPlugins();
       refreshData();
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');
       toast.error(t('deleteFailed', { error: msg }));
     }
+  };
+
+  const reloadPlugins = async () => {
+    const data = await getPlugins();
+    setPluginsData(data);
   };
 
 if (loading) {
@@ -107,14 +132,14 @@ if (loading) {
           <PresetsManager />
           <BulkImportDialog 
             type="plugins"
-            existingNames={plugins.map(p => p.name)} 
-            onSuccess={refreshData} 
+            existingNames={pluginsData.map(p => p.name)} 
+            onSuccess={async () => { await reloadPlugins(); refreshData(); }} 
           />
-          <AddPluginDialog onSuccess={refreshData} />
+          <AddPluginDialog onSuccess={async () => { await reloadPlugins(); refreshData(); }} />
         </div>
       </div>
 
-      {plugins.length > 0 && (
+      {pluginsData.length > 0 && (
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -126,7 +151,7 @@ if (loading) {
         </div>
       )}
 
-      {plugins.length === 0 ? (
+      {pluginsData.length === 0 ? (
         <p className="text-muted-foreground italic">{t('noPlugins')}</p>
       ) : filteredPlugins.length === 0 ? (
         <p className="text-muted-foreground italic">{t('noMatch', { search })}</p>

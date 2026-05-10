@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
-import api, { getPaths, setConfigPath, getBackup, restoreBackup, getGitHubBackupStatus, backupToGitHub, restoreFromGitHub, setGitHubAutoSync, type PathsInfo, type BackupData } from "@/lib/api";
+import api, { getConfig, getPaths, setConfigPath, getBackup, restoreBackup, getGitHubBackupStatus, backupToGitHub, restoreFromGitHub, setGitHubAutoSync, type PathsInfo, type BackupData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -52,7 +52,9 @@ const ESSENTIAL_KEYBINDS = [
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
-  const { config, loading, saveConfig, refreshData } = useApp();
+  const { config: contextConfig, saveConfig, refreshData } = useApp();
+  const [config, setConfig] = useState<OpencodeConfig | null>(contextConfig);
+  const [loading, setLoading] = useState(true);
   const [pathsInfoBox, setPathsInfo] = useState<PathsInfo | null>(null);
   const [manualPath, setManualPath] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +84,19 @@ const [systemPrompt, setSystemPrompt] = useState("");
   };
 
   useEffect(() => {
+    if (contextConfig) setConfig(contextConfig);
+  }, [contextConfig]);
+
+  useEffect(() => {
+    const loadSettingsData = async () => {
+      try {
+        const cfg = await getConfig();
+        setConfig(cfg);
+      } catch {}
+      setLoading(false);
+    };
+
+    loadSettingsData();
     getPaths().then(setPathsInfo).catch(console.error);
     loadSystemPrompt();
 
@@ -123,7 +138,9 @@ const [systemPrompt, setSystemPrompt] = useState("");
   const updateConfig = async (updates: Partial<OpencodeConfig>) => {
     if (!config) return;
     try {
-      await saveConfig({ ...config, ...updates });
+      const nextConfig = { ...config, ...updates };
+      await saveConfig(nextConfig);
+      setConfig(nextConfig);
       toast.success(t('toast.settingsSaved'));
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message || t('unknownError');

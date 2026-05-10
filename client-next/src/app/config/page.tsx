@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
+import { getConfig } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,11 +15,28 @@ import { toast } from "sonner";
 
 export default function ConfigPage() {
   const t = useTranslations('config');
-  const { config, loading, saveConfig } = useApp();
+  const { config: contextConfig, saveConfig } = useApp();
+  const [config, setConfig] = useState<any | null>(contextConfig);
+  const [loading, setLoading] = useState(true);
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (contextConfig) setConfig(contextConfig);
+  }, [contextConfig]);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const cfg = await getConfig();
+        setConfig(cfg);
+      } catch {}
+      setLoading(false);
+    };
+    loadConfig();
+  }, []);
 
   useEffect(() => {
     if (config) {
@@ -51,6 +69,7 @@ export default function ConfigPage() {
       setSaving(true);
       const parsed = JSON.parse(content);
       await saveConfig(parsed);
+      setConfig(parsed);
       toast.success(t('saved'));
       setHasChanges(false);
     } catch {
