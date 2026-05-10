@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { DatabaseSync } = require('node:sqlite');
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
 const configProviders = require('./lib/config-providers');
@@ -4721,141 +4722,248 @@ app.post('/api/profiles/:name/activate', (req, res) => {
 // END ACCOUNT POOL MANAGEMENT
 // ============================================
 
+function emptyUsageStats() {
+    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
+}
+
+function getUsageDataCandidates(cp) {
+    const home = os.homedir();
+    return [
+        path.dirname(cp),
+        path.join(home, '.local', 'share', 'opencode'),
+        path.join(home, '.opencode'),
+        process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
+        path.join(home, 'AppData', 'Local', 'opencode')
+    ].filter(Boolean);
+}
+
+function getUsageTimeBounds(range, from, to) {
+    const now = Date.now();
+    let min = 0;
+    let max = 0;
+    if (range === '24h') min = now - 86400000;
+    else if (range === '7d') min = now - 604800000;
+    else if (range === '30d') min = now - 2592000000;
+    else if (range === '3m') min = now - 7776000000;
+    else if (range === '6m') min = now - 15552000000;
+    else if (range === '1y') min = now - 31536000000;
+    if (from) min = from;
+    if (to) max = to;
+    return { min, max };
+}
+
+function getTimeKey(createdAt, granularity) {
+    const d = new Date(createdAt);
+    if (granularity === 'hourly') return d.toISOString().substring(0, 13) + ':00:00Z';
+    if (granularity === 'weekly') {
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff)).toISOString().split('T')[0];
+    }
+    if (granularity === 'monthly') return d.toISOString().substring(0, 7) + '-01';
+    return d.toISOString().split('T')[0];
+}
+
+function createStatsAccumulator() {
+    return { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
+}
+
+function appendUsage(stats, projectInfo, msg, granularity) {
+    if (msg.role !== 'assistant' || !msg.tokens) return;
+    const c = msg.cost || 0;
+    const it = msg.tokens.input || 0;
+    const ot = msg.tokens.output || 0;
+    const t = it + ot;
+    const createdAt = msg.time?.created;
+    if (!createdAt) return;
+
+    const tk = getTimeKey(createdAt, granularity);
+    const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
+    const pid = projectInfo.id;
+    const pname = projectInfo.name;
+
+    stats.totalCost += c;
+    stats.totalTokens += t;
+
+    if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    stats.byModel[mid].cost += c;
+    stats.byModel[mid].tokens += t;
+    stats.byModel[mid].inputTokens += it;
+    stats.byModel[mid].outputTokens += ot;
+
+    if (!stats.byProject[pid]) stats.byProject[pid] = { name: pname, id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    stats.byProject[pid].cost += c;
+    stats.byProject[pid].tokens += t;
+    stats.byProject[pid].inputTokens += it;
+    stats.byProject[pid].outputTokens += ot;
+
+    if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    const te = stats.byTime[tk];
+    te.cost += c;
+    te.tokens += t;
+    te.inputTokens += it;
+    te.outputTokens += ot;
+    if (!te[mid]) te[mid] = 0;
+    te[mid] += c;
+
+    const kIn = `${mid}_input`;
+    const kOut = `${mid}_output`;
+    te[kIn] = (te[kIn] || 0) + it;
+    te[kOut] = (te[kOut] || 0) + ot;
+}
+
+function finalizeUsageStats(stats) {
+    return {
+        totalCost: stats.totalCost,
+        totalTokens: stats.totalTokens,
+        byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
+        byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
+        byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
+    };
+}
+
+function tryReadUsageFromSqlite(opts) {
+    const { dbPath, projectIdFilter, min, max, granularity } = opts;
+    let db;
+    try {
+        db = new DatabaseSync(dbPath, { readonly: true });
+        const rows = db.prepare(`
+            SELECT m.data AS message_data, m.time_created AS message_time_created,
+                   s.project_id AS session_project_id,
+                   p.id AS project_id, p.name AS project_name, p.worktree AS project_worktree
+            FROM message m
+            LEFT JOIN session s ON s.id = m.session_id
+            LEFT JOIN project p ON p.id = s.project_id
+        `).all();
+
+        const stats = createStatsAccumulator();
+        for (const row of rows) {
+            let msg;
+            try {
+                msg = JSON.parse(row.message_data);
+            } catch {
+                continue;
+            }
+            if (!msg.time) msg.time = {};
+            if (!msg.time.created) msg.time.created = row.message_time_created;
+            if (!msg.time.created) continue;
+
+            const pid = row.project_id || row.session_project_id || 'unknown';
+            if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
+            if (min > 0 && msg.time.created < min) continue;
+            if (max > 0 && msg.time.created > max) continue;
+
+            const fallbackName = row.project_worktree ? path.basename(row.project_worktree) : 'Unassigned';
+            const pname = row.project_name || fallbackName;
+            appendUsage(stats, { id: pid, name: pname }, msg, granularity);
+        }
+
+        return finalizeUsageStats(stats);
+    } finally {
+        if (db) {
+            try { db.close(); } catch {}
+        }
+    }
+}
+
+async function readUsageFromLegacyJson(opts) {
+    const { dataCandidates, projectIdFilter, min, max, granularity } = opts;
+    let md = null;
+    let sd = null;
+
+    for (const d of dataCandidates) {
+        const mdp = path.join(d, 'storage', 'message');
+        const sdp = path.join(d, 'storage', 'session');
+        if (fs.existsSync(mdp)) {
+            md = mdp;
+            sd = sdp;
+            break;
+        }
+    }
+
+    if (!md) return emptyUsageStats();
+
+    const pmap = new Map();
+    if (fs.existsSync(sd)) {
+        const sessionDirs = await fs.promises.readdir(sd);
+        await Promise.all(sessionDirs.map(async d => {
+            const fp = path.join(sd, d);
+            try {
+                const fpStats = await fs.promises.stat(fp);
+                if (fpStats.isDirectory()) {
+                    const files = await fs.promises.readdir(fp);
+                    await Promise.all(files.map(async f => {
+                        if (f.startsWith('ses_') && f.endsWith('.json')) {
+                            try {
+                                const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
+                                pmap.set(f.replace('.json', ''), {
+                                    name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'),
+                                    id: m.projectID || d
+                                });
+                            } catch {}
+                        }
+                    }));
+                }
+            } catch {}
+        }));
+    }
+
+    const stats = createStatsAccumulator();
+    const seen = new Set();
+    const sessionDirs = await fs.promises.readdir(md);
+    await Promise.all(sessionDirs.map(async s => {
+        if (!s.startsWith('ses_')) return;
+        const sp = path.join(md, s);
+        try {
+            const spStats = await fs.promises.stat(sp);
+            if (spStats.isDirectory()) {
+                const files = await fs.promises.readdir(sp);
+                for (const f of files) {
+                    if (!f.endsWith('.json')) continue;
+                    const fullPath = path.join(sp, f);
+                    if (seen.has(fullPath)) continue;
+                    seen.add(fullPath);
+                    try {
+                        const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
+                        const pid = pmap.get(s)?.id || 'unknown';
+                        if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
+                        if (!msg.time?.created) continue;
+                        if (min > 0 && msg.time.created < min) continue;
+                        if (max > 0 && msg.time.created > max) continue;
+                        appendUsage(stats, { id: pid, name: pmap.get(s)?.name || 'Unassigned' }, msg, granularity);
+                    } catch {}
+                }
+            }
+        } catch {}
+    }));
+
+    return finalizeUsageStats(stats);
+}
+
 app.get('/api/usage', async (req, res) => {
     try {
-        const {projectId: fid, granularity = 'daily', range = '30d'} = req.query;
+        const { projectId: projectIdFilter, granularity = 'daily', range = '30d' } = req.query;
         const cp = getConfigPath();
-        if (!cp) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-        
-        const home = os.homedir();
-        const dataCandidates = [
-            path.dirname(cp),
-            path.join(home, '.local', 'share', 'opencode'),
-            path.join(home, '.opencode'),
-            process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
-            path.join(home, 'AppData', 'Local', 'opencode')
-        ].filter(Boolean);
+        if (!cp) return res.json(emptyUsageStats());
 
-        let md = null;
-        let sd = null;
+        const dataCandidates = getUsageDataCandidates(cp);
+        const from = Number(req.query.from || 0);
+        const to = Number(req.query.to || 0);
+        const { min, max } = getUsageTimeBounds(range, from, to);
 
         for (const d of dataCandidates) {
-            const mdp = path.join(d, 'storage', 'message');
-            const sdp = path.join(d, 'storage', 'session');
-            if (fs.existsSync(mdp)) {
-                md = mdp;
-                sd = sdp;
+            const dbPath = path.join(d, 'opencode.db');
+            if (!fs.existsSync(dbPath)) continue;
+            try {
+                return res.json(tryReadUsageFromSqlite({ dbPath, projectIdFilter, min, max, granularity }));
+            } catch (error) {
+                console.warn('[Usage] Failed reading SQLite usage DB, falling back to legacy JSON:', error?.message || error);
                 break;
             }
         }
 
-        if (!md) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-
-        const pmap = new Map();
-        if (fs.existsSync(sd)) {
-            const sessionDirs = await fs.promises.readdir(sd);
-            await Promise.all(sessionDirs.map(async d => {
-                const fp = path.join(sd, d);
-                try {
-                    const stats = await fs.promises.stat(fp);
-                    if (stats.isDirectory()) {
-                        const files = await fs.promises.readdir(fp);
-                        await Promise.all(files.map(async f => {
-                            if (f.startsWith('ses_') && f.endsWith('.json')) {
-                                try {
-                                    const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
-                                    pmap.set(f.replace('.json', ''), { 
-                                        name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'), 
-                                        id: m.projectID || d 
-                                    });
-                                } catch {}
-                            }
-                        }));
-                    }
-                } catch {}
-            }));
-        }
-
-        const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
-        const seen = new Set();
-        const now = Date.now();
-        const from = Number(req.query.from || 0);
-        const to = Number(req.query.to || 0);
-        let min = 0;
-        let max = 0;
-        if (range === '24h') min = now - 86400000;
-        else if (range === '7d') min = now - 604800000;
-        else if (range === '30d') min = now - 2592000000;
-        else if (range === '3m') min = now - 7776000000;
-        else if (range === '6m') min = now - 15552000000;
-        else if (range === '1y') min = now - 31536000000;
-        if (from) min = from;
-        if (to) max = to;
-
-        const sessionDirs = await fs.promises.readdir(md);
-        await Promise.all(sessionDirs.map(async s => {
-            if (!s.startsWith('ses_')) return;
-            const sp = path.join(md, s);
-            try {
-                const spStats = await fs.promises.stat(sp);
-                if (spStats.isDirectory()) {
-                    const files = await fs.promises.readdir(sp);
-                    for (const f of files) {
-                        if (!f.endsWith('.json')) continue;
-                        const fullPath = path.join(sp, f);
-                        if (seen.has(fullPath)) continue;
-                        seen.add(fullPath);
-                        
-                        try {
-                            const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
-                            const pid = pmap.get(s)?.id || 'unknown';
-                            if (fid && fid !== 'all' && pid !== fid) continue;
-                            if (min > 0 && msg.time.created < min) continue;
-                            if (max > 0 && msg.time.created > max) continue;
-                            
-                            if (msg.role === 'assistant' && msg.tokens) {
-                                const c = msg.cost || 0, it = msg.tokens.input || 0, ot = msg.tokens.output || 0, t = it + ot;
-                                const d = new Date(msg.time.created);
-                                let tk;
-                                if (granularity === 'hourly') tk = d.toISOString().substring(0, 13) + ':00:00Z';
-                                else if (granularity === 'weekly') {
-                                    const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                    tk = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                                } else if (granularity === 'monthly') tk = d.toISOString().substring(0, 7) + '-01';
-                                else tk = d.toISOString().split('T')[0];
-
-                                const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
-                                stats.totalCost += c; stats.totalTokens += t;
-                                
-                                if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byModel[mid].cost += c; stats.byModel[mid].tokens += t; stats.byModel[mid].inputTokens += it; stats.byModel[mid].outputTokens += ot;
-
-                                if (!stats.byProject[pid]) stats.byProject[pid] = { name: pmap.get(s)?.name || 'Unassigned', id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byProject[pid].cost += c; stats.byProject[pid].tokens += t; stats.byProject[pid].inputTokens += it; stats.byProject[pid].outputTokens += ot;
-
-                                if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                const te = stats.byTime[tk];
-                                te.cost += c; te.tokens += t; te.inputTokens += it; te.outputTokens += ot;
-                                if (!te[mid]) te[mid] = 0;
-                                te[mid] += c;
-                                
-                                const kIn = `${mid}_input`, kOut = `${mid}_output`;
-                                te[kIn] = (te[kIn] || 0) + it;
-                                te[kOut] = (te[kOut] || 0) + ot;
-                            }
-                        } catch {}
-                    }
-                }
-            } catch {}
-        }));
-
-        res.json({
-            totalCost: stats.totalCost,
-            totalTokens: stats.totalTokens,
-            byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
-            byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
-            byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
-        });
+        const legacy = await readUsageFromLegacyJson({ dataCandidates, projectIdFilter, min, max, granularity });
+        return res.json(legacy);
     } catch (error) {
         console.error('Usage API error:', error);
         res.status(500).json({ error: ERROR_CODES.FAILED_FETCH_USAGE, code: 'FAILED_FETCH_USAGE' });
