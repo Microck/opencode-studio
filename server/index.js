@@ -9,6 +9,7 @@ let DatabaseSync;
 try { ({ DatabaseSync } = require('node:sqlite')); } catch {}
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
+const jsoncParser = require('jsonc-parser');
 const configProviders = require('./lib/config-providers');
 
 const pkg = require('./package.json');
@@ -96,6 +97,48 @@ const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
         }
         throw err;
     }
+};
+
+const parseJsonConfigText = (content, filePath = 'config') => {
+    const errors = [];
+    const value = jsoncParser.parse(content, errors, {
+        allowTrailingComma: true,
+        disallowComments: false
+    });
+    if (errors.length) {
+        const first = errors[0];
+        throw new SyntaxError(`Invalid JSON/JSONC in ${filePath} (code ${first.error} at offset ${first.offset})`);
+    }
+    return value || {};
+};
+
+const readJsonConfigFile = (filePath) => parseJsonConfigText(fs.readFileSync(filePath, 'utf8'), filePath);
+
+const findFirstExistingFile = (filePaths) => filePaths.find((filePath) => fs.existsSync(filePath)) || null;
+
+const getOpenCodeConfigPathForRoot = (root) => findFirstExistingFile([
+    path.join(root, 'opencode.json'),
+    path.join(root, 'opencode.jsonc')
+]);
+
+const normalizeArray = (value) => Array.isArray(value) ? value : [];
+
+const getObjectConfig = (...values) => {
+    for (const value of values) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    }
+    return {};
+};
+
+const withUiConfigAliases = (config) => {
+    if (!config || typeof config !== 'object') return config;
+    return {
+        ...config,
+        mcp: getObjectConfig(config.mcp, config.mcpServers),
+        command: getObjectConfig(config.command, config.commands),
+        plugin: [...normalizeArray(config.plugin), ...normalizeArray(config.plugins)],
+        agent: getObjectConfig(config.agent, config.agents)
+    };
 };
 
 const app = express();
@@ -713,6 +756,11 @@ const getPaths = () => {
         } else if (fs.existsSync(potentialJsonc)) {
             manualPath = potentialJsonc;
         }
+    } else if (manualPath && !fs.existsSync(manualPath) && path.basename(manualPath) === 'opencode.json') {
+        const potentialJsonc = path.join(path.dirname(manualPath), 'opencode.jsonc');
+        if (fs.existsSync(potentialJsonc)) {
+            manualPath = potentialJsonc;
+        }
     }
 
     let detected = null;
@@ -726,7 +774,7 @@ const getPaths = () => {
     return {
         detected,
         manual: manualPath,
-        current: manualPath || detected,
+        current: manualPath && fs.existsSync(manualPath) ? manualPath : detected,
         candidates: [...new Set(candidates)]
     };
 };
@@ -735,11 +783,13 @@ const getOhMyOpenCodeConfigPath = () => {
     const cp = getConfigPath();
     if (!cp) return null;
     const dir = path.dirname(cp);
-    const newPath = path.join(dir, 'oh-my-openagent.json');
-    const oldPath = path.join(dir, 'oh-my-opencode.json');
-    if (fs.existsSync(newPath)) return newPath;
-    if (fs.existsSync(oldPath)) return oldPath;
-    return newPath;
+    const existingPath = findFirstExistingFile([
+        path.join(dir, 'oh-my-openagent.json'),
+        path.join(dir, 'oh-my-openagent.jsonc'),
+        path.join(dir, 'oh-my-opencode.json'),
+        path.join(dir, 'oh-my-opencode.jsonc')
+    ]);
+    return existingPath || path.join(dir, 'oh-my-openagent.json');
 };
 
 const getConfigPath = () => getPaths().current;
@@ -777,28 +827,54 @@ const getSearchRoots = () => {
     return unique;
 };
 
+// Recursively collect all files with the given extensions under a directory
+const collectFilesRecursive = (dir, extensions) => {
+    const results = [];
+    if (!fs.existsSync(dir)) return results;
+    let entries;
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return results;
+    }
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            results.push(...collectFilesRecursive(fullPath, extensions));
+        } else if (extensions.some(ext => ext.startsWith('.') ? entry.name.endsWith(ext) : entry.name === ext)) {
+            results.push(fullPath);
+        }
+    }
+    return results;
+};
+
 const getSkillDirs = () => {
     const roots = getSearchRoots();
     const dirs = [];
 
     for (const root of roots) {
-        const skillsDir = path.join(root, 'skills');
-        if (fs.existsSync(skillsDir)) {
-            try {
-                const packages = fs.readdirSync(skillsDir, { withFileTypes: true })
-                    .filter(d => d.isDirectory());
-                for (const pkg of packages) {
-                    const nestedSkillsDir = path.join(skillsDir, pkg.name, 'skills');
-                    if (fs.existsSync(nestedSkillsDir)) {
-                        dirs.push({ path: nestedSkillsDir, source: 'skills-dir', root, package: pkg.name });
+        for (const folderName of ['skills', 'skill']) {
+            const skillsDir = path.join(root, folderName);
+            if (fs.existsSync(skillsDir)) {
+                try {
+                    const packages = fs.readdirSync(skillsDir, { withFileTypes: true })
+                        .filter(d => d.isDirectory());
+                    for (const pkg of packages) {
+                        for (const nestedFolderName of ['skills', 'skill']) {
+                            const nestedSkillsDir = path.join(skillsDir, pkg.name, nestedFolderName);
+                            if (fs.existsSync(nestedSkillsDir)) {
+                                dirs.push({ path: nestedSkillsDir, source: 'skills-dir', root, package: pkg.name });
+                            }
+                        }
+                        const pkgSkillFile = path.join(skillsDir, pkg.name, 'SKILL.md');
+                        if (fs.existsSync(pkgSkillFile)) {
+                            dirs.push({ path: path.join(skillsDir, pkg.name), source: 'skills-dir', root, package: pkg.name, isFlat: true });
+                        }
                     }
-                    const pkgSkillFile = path.join(skillsDir, pkg.name, 'SKILL.md');
-                    if (fs.existsSync(pkgSkillFile)) {
-                        dirs.push({ path: path.join(skillsDir, pkg.name), source: 'skills-dir', root, package: pkg.name, isFlat: true });
-                    }
+                    dirs.push({ path: skillsDir, source: 'skills-dir', root });
+                } catch (e) {
+                    console.warn(`Failed to read skills from ${skillsDir}:`, e.message);
                 }
-            } catch (e) {
-                console.warn(`Failed to read skills from ${skillsDir}:`, e.message);
             }
         }
     }
@@ -811,9 +887,11 @@ const getCommandDirs = () => {
     const dirs = [];
 
     for (const root of roots) {
-        const cmdDir = path.join(root, 'command');
-        if (fs.existsSync(cmdDir)) {
-            dirs.push({ path: cmdDir, source: 'command-dir', root });
+        for (const folderName of ['command', 'commands']) {
+            const cmdDir = path.join(root, folderName);
+            if (fs.existsSync(cmdDir)) {
+                dirs.push({ path: cmdDir, source: 'command-dir', root });
+            }
         }
     }
 
@@ -825,9 +903,11 @@ const getMcpDirs = () => {
     const dirs = [];
 
     for (const root of roots) {
-        const mcpDir = path.join(root, 'mcp');
-        if (fs.existsSync(mcpDir)) {
-            dirs.push({ path: mcpDir, source: 'mcp-dir', root });
+        for (const folderName of ['mcp', 'mcps']) {
+            const mcpDir = path.join(root, folderName);
+            if (fs.existsSync(mcpDir)) {
+                dirs.push({ path: mcpDir, source: 'mcp-dir', root });
+            }
         }
     }
 
@@ -858,13 +938,11 @@ const loadCommandsFromDir = (dirInfo) => {
     if (!fs.existsSync(dirInfo.path)) return commands;
 
     try {
-        const files = fs.readdirSync(dirInfo.path)
-            .filter(f => f.endsWith('.md'));
+        const filePaths = collectFilesRecursive(dirInfo.path, ['.md']);
 
-        for (const file of files) {
-            const filePath = path.join(dirInfo.path, file);
+        for (const filePath of filePaths) {
             const content = fs.readFileSync(filePath, 'utf8');
-            const name = path.basename(file, '.md');
+            const name = path.basename(filePath, '.md');
 
             let metadata = {};
             let body = content;
@@ -898,18 +976,21 @@ const loadMcpsFromDir = (dirInfo) => {
     if (!fs.existsSync(dirInfo.path)) return mcps;
 
     try {
-        const files = fs.readdirSync(dirInfo.path)
-            .filter(f => f.endsWith('.json') || f.endsWith('.yaml') || f.endsWith('.yml'));
+        const filePaths = collectFilesRecursive(dirInfo.path, ['.json', '.jsonc', '.yaml', '.yml']);
 
-        for (const file of files) {
-            const filePath = path.join(dirInfo.path, file);
+        for (const filePath of filePaths) {
             const content = fs.readFileSync(filePath, 'utf8');
-            const name = path.basename(file, path.extname(file));
+            const ext = path.extname(filePath);
+            const name = path.basename(filePath, ext);
 
             let config;
             try {
-                if (file.endsWith('.json')) {
-                    config = JSON.parse(content);
+                if (ext === '.json' || ext === '.jsonc') {
+                    const errors = [];
+                    config = jsoncParser.parse(content, errors, { allowTrailingComma: true });
+                    if (errors.length) {
+                        throw new Error(`JSONC parse errors in ${filePath}: ${errors.map(e => e.error).join(', ')}`);
+                    }
                 } else {
                     config = yaml.load(content);
                 }
@@ -937,17 +1018,15 @@ const loadPluginsFromDir = (dirInfo) => {
     if (!fs.existsSync(dirInfo.path)) return plugins;
 
     try {
-        const files = fs.readdirSync(dirInfo.path)
-            .filter(f => f.endsWith('.js') || f.endsWith('.ts'));
+        const filePaths = collectFilesRecursive(dirInfo.path, ['.js', '.ts']);
 
-        for (const file of files) {
-            const filePath = path.join(dirInfo.path, file);
+        for (const filePath of filePaths) {
             const content = fs.readFileSync(filePath, 'utf8');
-            const name = path.basename(file, path.extname(file));
+            const name = path.basename(filePath, path.extname(filePath));
 
             plugins.push({
                 name,
-                filename: file,
+                filename: path.basename(filePath),
                 content,
                 source: dirInfo.source,
                 path: filePath,
@@ -985,18 +1064,16 @@ const loadSkillsFromDir = (dirInfo) => {
                 ...metadata
             });
         } else {
-            const entries = fs.readdirSync(dirInfo.path, { withFileTypes: true });
-            for (const entry of entries) {
-                if (!entry.isDirectory()) continue;
-
-                const skillPath = path.join(dirInfo.path, entry.name, 'SKILL.md');
-                if (!fs.existsSync(skillPath)) continue;
+            const skillPaths = collectFilesRecursive(dirInfo.path, ['SKILL.md']);
+            for (const skillPath of skillPaths) {
+                const skillDir = path.dirname(skillPath);
+                const name = path.basename(skillDir);
 
                 const content = fs.readFileSync(skillPath, 'utf8');
                 const { data: metadata, body } = parseAgentMarkdown(content);
 
                 skills.push({
-                    name: entry.name,
+                    name,
                     content: body,
                     description: metadata.description || body.slice(0, 100).replace(/\n/g, ' '),
                     source: dirInfo.source,
@@ -1104,12 +1181,12 @@ const loadConfig = () => {
     const configPath = getConfigPath();
     if (!configPath || !fs.existsSync(configPath)) return null;
     try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = readJsonConfigFile(configPath);
         const studioConfig = loadStudioConfig();
         if (studioConfig.activeGooglePlugin === 'antigravity' && !config.small_model) {
             config.small_model = "google/gemini-3-flash";
         }
-        return config;
+        return withUiConfigAliases(config);
     } catch {
         return null;
     }
@@ -1129,12 +1206,12 @@ const aggregateModels = () => {
     const providerMap = new Map();
     
     for (const root of roots) {
-        const configPath = path.join(root, 'opencode.json');
+        const configPath = getOpenCodeConfigPathForRoot(root);
         
-        if (!fs.existsSync(configPath)) continue;
+        if (!configPath) continue;
         
         try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const config = readJsonConfigFile(configPath);
             
             let providers = null;
             
@@ -1178,10 +1255,10 @@ const loadAggregatedConfig = () => {
 
     const configs = [];
     for (const root of roots) {
-        const configPath = path.join(root, 'opencode.json');
-        if (fs.existsSync(configPath)) {
+        const configPath = getOpenCodeConfigPathForRoot(root);
+        if (configPath) {
             try {
-                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                const content = readJsonConfigFile(configPath);
                 configs.push({
                     root,
                     isHighestPriority: activeDir ? path.resolve(root) === path.resolve(activeDir) : false,
@@ -1200,22 +1277,25 @@ const loadAggregatedConfig = () => {
     });
 
     [...configs].reverse().forEach(({ config }) => {
-        if (config.mcp && typeof config.mcp === 'object') {
-            for (const [key, value] of Object.entries(config.mcp)) {
+        const mcpConfig = getObjectConfig(config.mcp, config.mcpServers);
+        if (Object.keys(mcpConfig).length) {
+            for (const [key, value] of Object.entries(mcpConfig)) {
                 aggregated.mcp[key] = value;
             }
         }
 
-        if (config.command && typeof config.command === 'object') {
-            Object.assign(aggregated.command, config.command);
+        const commandConfig = getObjectConfig(config.command, config.commands);
+        if (Object.keys(commandConfig).length) {
+            Object.assign(aggregated.command, commandConfig);
         }
 
         if (config.env && typeof config.env === 'object') {
             Object.assign(aggregated.env, config.env);
         }
 
-        if (config.plugins && Array.isArray(config.plugins)) {
-            for (const plugin of config.plugins) {
+        const pluginConfig = [...normalizeArray(config.plugin), ...normalizeArray(config.plugins)];
+        if (pluginConfig.length) {
+            for (const plugin of pluginConfig) {
                 const name = typeof plugin === 'string' ? plugin : plugin.name || plugin.npm;
                 if (name && !aggregated.plugins.find((p) => p.name === name)) {
                     aggregated.plugins.push({
@@ -1295,8 +1375,7 @@ app.post('/api/paths', (req, res) => {
     const studioConfig = loadStudioConfig();
     
     if (configPath && fs.existsSync(configPath) && fs.statSync(configPath).isDirectory()) {
-        const potentialFile = path.join(configPath, 'opencode.json');
-        studioConfig.configPath = potentialFile;
+        studioConfig.configPath = getOpenCodeConfigPathForRoot(configPath) || path.join(configPath, 'opencode.json');
     } else {
         studioConfig.configPath = configPath;
     }
@@ -1409,12 +1488,12 @@ const aggregateAgents = () => {
     const roots = getSearchRoots();
     
     for (const root of roots) {
-        // Read from opencode.json (agent field - singular)
-        const configPath = path.join(root, 'opencode.json');
-        if (fs.existsSync(configPath)) {
+        // Read from opencode.json/jsonc (agent or agents field)
+        const configPath = getOpenCodeConfigPathForRoot(root);
+        if (configPath) {
             try {
-                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                const configAgents = content.agent || {};
+                const content = readJsonConfigFile(configPath);
+                const configAgents = getObjectConfig(content.agent, content.agents);
                 for (const [name, agentConfig] of Object.entries(configAgents)) {
                     if (!agentMap.has(name)) {
                         agentMap.set(name, {
@@ -1432,11 +1511,16 @@ const aggregateAgents = () => {
             }
         }
         
-        // Read from oh-my-openagent.json (agents field - plural)
-        const omoConfigPath = path.join(root, 'oh-my-openagent.json');
-        if (fs.existsSync(omoConfigPath)) {
+        // Read from oh-my-openagent/oh-my-opencode JSON/JSONC aliases (agents field - plural)
+        const omoConfigPath = findFirstExistingFile([
+            path.join(root, 'oh-my-openagent.json'),
+            path.join(root, 'oh-my-openagent.jsonc'),
+            path.join(root, 'oh-my-opencode.json'),
+            path.join(root, 'oh-my-opencode.jsonc')
+        ]);
+        if (omoConfigPath) {
             try {
-                const content = JSON.parse(fs.readFileSync(omoConfigPath, 'utf8'));
+                const content = readJsonConfigFile(omoConfigPath);
                 const configAgents = content.agents || {};
                 for (const [name, agentConfig] of Object.entries(configAgents)) {
                     if (!agentMap.has(name)) {
@@ -1458,12 +1542,11 @@ const aggregateAgents = () => {
     
     for (const dir of getAgentDirs()) {
         if (!fs.existsSync(dir)) continue;
-        const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
-        files.forEach((file) => {
-            const fp = path.join(dir, file);
+        const filePaths = collectFilesRecursive(dir, ['.md']);
+        filePaths.forEach((fp) => {
             const content = fs.readFileSync(fp, 'utf8');
             const { data, body } = parseAgentMarkdown(content);
-            const name = path.basename(file, '.md');
+            const name = path.basename(fp, '.md');
             
             if (!agentMap.has(name)) {
                 agentMap.set(name, {
@@ -2132,7 +2215,7 @@ function loadOhMyOpenCodeConfig() {
     const configPath = getOhMyOpenCodeConfigPath();
     if (!configPath || !fs.existsSync(configPath)) return {};
     try {
-        return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        return readJsonConfigFile(configPath);
     } catch {
         return {};
     }
@@ -3158,6 +3241,19 @@ const getActiveSkillDir = () => {
     return cp ? path.join(path.dirname(cp), 'skills') : null;
 };
 
+const findSkillPathByName = (dirInfo, name) => {
+    if (dirInfo.isFlat && (dirInfo.package === name || path.basename(dirInfo.path) === name)) {
+        const flatPath = path.join(dirInfo.path, 'SKILL.md');
+        return fs.existsSync(flatPath) ? flatPath : null;
+    }
+
+    const nestedPath = path.join(dirInfo.path, name, 'SKILL.md');
+    if (fs.existsSync(nestedPath)) return nestedPath;
+
+    const skillPaths = collectFilesRecursive(dirInfo.path, ['SKILL.md']);
+    return skillPaths.find((skillPath) => path.basename(path.dirname(skillPath)) === name) || null;
+};
+
 app.get('/api/skills', (req, res) => {
     const studio = loadStudioConfig();
     const disabledSkills = studio.disabledSkills || [];
@@ -3179,17 +3275,16 @@ app.get('/api/skills', (req, res) => {
                     });
                 }
             } else {
-                fs.readdirSync(dirInfo.path, { withFileTypes: true }).forEach(e => {
-                    if (e.isDirectory() && fs.existsSync(path.join(dirInfo.path, e.name, 'SKILL.md'))) {
-                        if (!skillMap.has(e.name)) {
-                            skillMap.set(e.name, {
-                                name: e.name,
-                                path: path.join(dirInfo.path, e.name, 'SKILL.md'),
+                collectFilesRecursive(dirInfo.path, ['SKILL.md']).forEach(skillPath => {
+                    const name = path.basename(path.dirname(skillPath));
+                    if (!skillMap.has(name)) {
+                        skillMap.set(name, {
+                                name,
+                                path: skillPath,
                                 source: dirInfo.source,
                                 package: dirInfo.package,
-                                enabled: !disabledSkills.includes(e.name)
-                            });
-                        }
+                                enabled: !disabledSkills.includes(name)
+                        });
                     }
                 });
             }
@@ -3203,20 +3298,14 @@ app.get('/api/skills', (req, res) => {
 
 app.get('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
     for (const dirInfo of getSkillDirs()) {
-        const nestedPath = path.join(dirInfo.path, name, 'SKILL.md');
-        if (fs.existsSync(nestedPath)) {
-            return res.json({ name, content: fs.readFileSync(nestedPath, 'utf8'), source: dirInfo.source });
-        }
-        if (dirInfo.isFlat && (dirInfo.package === name || path.basename(dirInfo.path) === name)) {
-            const flatPath = path.join(dirInfo.path, 'SKILL.md');
-            if (fs.existsSync(flatPath)) {
-                return res.json({ name, content: fs.readFileSync(flatPath, 'utf8'), source: dirInfo.source });
-            }
+        const skillPath = findSkillPathByName(dirInfo, name);
+        if (skillPath) {
+            return res.json({ name, content: fs.readFileSync(skillPath, 'utf8'), source: dirInfo.source });
         }
     }
     res.status(404).json({ error: ERROR_CODES.NOT_FOUND, code: 'NOT_FOUND' });
@@ -3224,7 +3313,7 @@ app.get('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -3232,8 +3321,9 @@ app.post('/api/skills/:name', (req, res) => {
 
     // Check if editing existing
     for (const dirInfo of getSkillDirs()) {
-        if (fs.existsSync(path.join(dirInfo.path, name, 'SKILL.md'))) {
-            targetDir = path.join(dirInfo.path, name);
+        const skillPath = findSkillPathByName(dirInfo, name);
+        if (skillPath) {
+            targetDir = path.dirname(skillPath);
             break;
         }
     }
@@ -3254,7 +3344,7 @@ app.post('/api/skills/:name', (req, res) => {
 
     try {
         if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-        fs.writeFileSync(path.join(targetDir, 'SKILL.md'), req.body.content, 'utf8');
+        atomicWriteFileSync(path.join(targetDir, 'SKILL.md'), req.body.content, 'utf8');
         triggerGitHubAutoSync();
         res.json({ success: true });
     } catch (e) {
@@ -3264,16 +3354,16 @@ app.post('/api/skills/:name', (req, res) => {
 
 app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
     let deleted = false;
     for (const dirInfo of getSkillDirs()) {
-        const skillDir = path.join(dirInfo.path, name);
-        if (fs.existsSync(path.join(skillDir, 'SKILL.md'))) {
+        const skillPath = findSkillPathByName(dirInfo, name);
+        if (skillPath) {
             try {
-                fs.rmSync(skillDir, { recursive: true, force: true });
+                fs.rmSync(path.dirname(skillPath), { recursive: true, force: true });
                 deleted = true;
                 break;
             } catch (e) {
@@ -3292,6 +3382,10 @@ app.delete('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name/toggle', (req, res) => {
     const { name } = req.params;
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
+    }
+
     const studio = loadStudioConfig();
     studio.disabledSkills = studio.disabledSkills || [];
     
@@ -3309,6 +3403,22 @@ app.post('/api/skills/:name/toggle', (req, res) => {
 const getActivePluginDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'plugin') : null;
+};
+
+const findPluginPathByName = (dirInfo, name) => {
+    const possiblePaths = [
+        path.join(dirInfo.path, name + '.js'),
+        path.join(dirInfo.path, name + '.ts'),
+        path.join(dirInfo.path, name, 'index.js'),
+        path.join(dirInfo.path, name, 'index.ts')
+    ];
+
+    for (const pluginPath of possiblePaths) {
+        if (fs.existsSync(pluginPath)) return pluginPath;
+    }
+
+    return collectFilesRecursive(dirInfo.path, ['.js', '.ts'])
+        .find((pluginPath) => path.basename(pluginPath, path.extname(pluginPath)) === name) || null;
 };
 
 const aggregatePlugins = () => {
@@ -3366,18 +3476,10 @@ app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
 
     for (const dirInfo of getPluginDirs()) {
-        const possiblePaths = [
-            path.join(dirInfo.path, name + '.js'),
-            path.join(dirInfo.path, name + '.ts'),
-            path.join(dirInfo.path, name, 'index.js'),
-            path.join(dirInfo.path, name, 'index.ts')
-        ];
-
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                const content = fs.readFileSync(p, 'utf8');
-                return res.json({ name, content });
-            }
+        const pluginPath = findPluginPathByName(dirInfo, name);
+        if (pluginPath) {
+            const content = fs.readFileSync(pluginPath, 'utf8');
+            return res.json({ name, content });
         }
     }
     res.status(404).json({ error: ERROR_CODES.PLUGIN_NOT_FOUND, code: 'PLUGIN_NOT_FOUND' });
@@ -3388,19 +3490,11 @@ app.post('/api/plugins/:name', (req, res) => {
     const { content } = req.body;
 
     for (const dirInfo of getPluginDirs()) {
-        const possiblePaths = [
-            path.join(dirInfo.path, name + '.js'),
-            path.join(dirInfo.path, name + '.ts'),
-            path.join(dirInfo.path, name, 'index.js'),
-            path.join(dirInfo.path, name, 'index.ts')
-        ];
-
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                atomicWriteFileSync(p, content);
-                triggerGitHubAutoSync();
-                return res.json({ success: true });
-            }
+        const pluginPath = findPluginPathByName(dirInfo, name);
+        if (pluginPath) {
+            atomicWriteFileSync(pluginPath, content);
+            triggerGitHubAutoSync();
+            return res.json({ success: true });
         }
     }
 
@@ -3425,24 +3519,16 @@ app.delete('/api/plugins/:name', (req, res) => {
 
     let deleted = false;
     for (const dirInfo of getPluginDirs()) {
-        const possiblePaths = [
-            path.join(dirInfo.path, name),
-            path.join(dirInfo.path, name + '.js'),
-            path.join(dirInfo.path, name + '.ts')
-        ];
-
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                if (fs.statSync(p).isDirectory()) {
-                    fs.rmSync(p, { recursive: true, force: true });
-                } else {
-                    fs.unlinkSync(p);
-                }
-                deleted = true;
-                break;
+        const pluginPath = findPluginPathByName(dirInfo, name) || (fs.existsSync(path.join(dirInfo.path, name)) ? path.join(dirInfo.path, name) : null);
+        if (pluginPath) {
+            if (fs.statSync(pluginPath).isDirectory()) {
+                fs.rmSync(pluginPath, { recursive: true, force: true });
+            } else {
+                fs.unlinkSync(pluginPath);
             }
+            deleted = true;
+            break;
         }
-        if (deleted) break;
     }
 
     if (deleted) {

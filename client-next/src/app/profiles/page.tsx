@@ -119,7 +119,7 @@ export default function ProfilesPage() {
           <div className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <PageHelp
               title={t('title')}
-              docUrl="https://opencode.ai/docs"
+              docUrl="https://github.com/Microck/opencode-studio#features"
               docTitle={t('docTitle')}
             />
             <Badge variant="outline" className="font-mono text-xs font-normal">

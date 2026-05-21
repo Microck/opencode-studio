@@ -62,9 +62,11 @@ function EditorContent() {
           setContent(data.content);
           setCurrentName(name);
         }
-      } catch {
-        toast.error(t('loadFailed'));
-        router.back();
+      } catch (err) {
+        const error = err as { response?: { data?: { error?: string } }; message?: string };
+        const detail = error.response?.data?.error || error.message;
+        toast.error(detail ? `${t('loadFailed')}: ${detail}` : t('loadFailed'));
+        router.replace(type ? `/${type}` : "/skills");
       } finally {
         setLoading(false);
       }

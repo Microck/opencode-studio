@@ -552,11 +552,11 @@
     "switchFailed": "Failed to switch profile",
     "switchFailedWithError": "Failed to switch profile: {error}",
     "loading": "Loading...",
-    "title": "Profiles",
-    "docTitle": "Profiles Documentation",
+    "title": "Studio Profiles",
+    "docTitle": "OpenCode Studio Profiles",
     "activeProfile": "Active: {name}",
     "noActiveProfile": "No active profile",
-    "description": "Manage isolated OpenCode environments (configs, history, sessions).",
+    "description": "OpenCode Studio feature: isolated OpenCode config directories (configs, history, sessions).",
     "newProfile": "New Profile",
     "createTitle": "Create Profile",
     "createDescription": "Create a new isolated configuration environment.",
@@ -797,11 +797,11 @@
       "tip1": "Permission patterns control tool access"
     },
     "profiles": {
-      "title": "Profiles",
-      "description": "Isolated OpenCode environments with separate configs, history, and session memory.",
-      "usage": "Create new profiles for different projects or contexts. Switch instantly to change entire configuration.",
-      "tip0": "Each profile has its own opencode.json",
-      "tip1": "Useful for separating work/personal projects"
+      "title": "Studio Profiles",
+      "description": "OpenCode Studio feature for isolated OpenCode directories. Not an official OpenCode config key.",
+      "usage": "Profiles live under ~/.config/opencode-profiles/. Switching rewires ~/.config/opencode to the selected profile.",
+      "tip0": "Each profile has its own opencode.json or opencode.jsonc",
+      "tip1": "Use only if you want Studio to manage multiple config environments"
     },
     "quickstart": {
       "title": "Quickstart",

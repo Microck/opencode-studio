@@ -287,20 +287,20 @@ export async function getSkills(): Promise<SkillInfo[]> {
 }
 
 export async function getSkill(name: string): Promise<SkillFile> {
-  const { data } = await api.get<SkillFile>(`/skills/${name}`);
+  const { data } = await api.get<SkillFile>(`/skills/${encodeURIComponent(name)}`);
   return data;
 }
 
 export async function saveSkill(name: string, description: string, content: string): Promise<void> {
-  await api.post(`/skills/${name}`, { description, content });
+  await api.post(`/skills/${encodeURIComponent(name)}`, { description, content });
 }
 
 export async function deleteSkill(name: string): Promise<void> {
-  await api.delete(`/skills/${name}`);
+  await api.delete(`/skills/${encodeURIComponent(name)}`);
 }
 
 export async function toggleSkill(name: string): Promise<{ enabled: boolean }> {
-  const { data } = await api.post<{ success: boolean; enabled: boolean }>(`/skills/${name}/toggle`);
+  const { data } = await api.post<{ success: boolean; enabled: boolean }>(`/skills/${encodeURIComponent(name)}/toggle`);
   return { enabled: data.enabled };
 }
 
