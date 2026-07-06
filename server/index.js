@@ -11,6 +11,12 @@ const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
 const configProviders = require('./lib/config-providers');
 const { corsOptions, setLocalNetworkAccessHeaders } = require('./lib/cors-policy');
+const {
+    assertSafeBackupResourceNames,
+    isSafeAgentName,
+    isSafePluginName,
+    isSafeSkillName,
+} = require('./lib/resource-names');
 
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
@@ -22,6 +28,7 @@ const ERROR_CODES = {
   INVALID_PERMISSION: "Invalid permission value. Must be ask, allow, or deny.",
   MISSING_AGENT_NAME: "Missing agent name",
   INVALID_AGENT_NAME: "Invalid agent name",
+  INVALID_PLUGIN_NAME: "Invalid plugin name",
   NO_CONFIG_PATH: "No config path found",
   INVALID_NAME_OR_DURATION: "Invalid name or duration",
   INVALID_STATE: "Invalid state",
@@ -68,6 +75,14 @@ function compareVersions(current, minimum) {
         if (cv < mv) return -1;
     }
     return 0;
+}
+
+function sendErrorResponse(res, err) {
+    const status = err.statusCode || err.status || 500;
+    res.status(status).json({
+        error: err.message,
+        ...(err.code && { code: err.code }),
+    });
 }
 
 // Atomic file write: write to temp file then rename to prevent corruption
@@ -1496,7 +1511,7 @@ app.post('/api/agents', (req, res) => {
     try {
         const { name, config: agentConfig, source, scope } = req.body || {};
         if (!name || typeof name !== 'string') return res.status(400).json({ error: ERROR_CODES.MISSING_AGENT_NAME, code: 'MISSING_AGENT_NAME' });
-        if (!/^[a-zA-Z0-9 _-]+$/.test(name)) return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        if (!isSafeAgentName(name)) return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
 
         const config = loadConfig() || {};
         if (!config.agent) config.agent = {};
@@ -1551,6 +1566,9 @@ app.put('/api/agents/:name', (req, res) => {
     try {
         const { name } = req.params;
         const { config: agentConfig } = req.body || {};
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
 
         const normalizedConfig = { ...(agentConfig || {}) };
         if (normalizedConfig.permissions && !normalizedConfig.permission) {
@@ -1595,6 +1613,10 @@ app.put('/api/agents/:name', (req, res) => {
 app.delete('/api/agents/:name', (req, res) => {
     try {
         const { name } = req.params;
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
+
         const config = loadConfig() || {};
 
         if (config.agent && config.agent[name]) {
@@ -1617,6 +1639,10 @@ app.delete('/api/agents/:name', (req, res) => {
 app.post('/api/agents/:name/toggle', (req, res) => {
     try {
         const { name } = req.params;
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
+
         const studio = loadStudioConfig();
         const disabled = new Set(studio.disabledAgents || []);
         if (disabled.has(name)) disabled.delete(name); else disabled.add(name);
@@ -1757,6 +1783,7 @@ app.get('/api/backup', (req, res) => {
 app.post('/api/restore', (req, res) => {
     try {
         const { studioConfig, opencodeConfig, skills, plugins } = req.body;
+        assertSafeBackupResourceNames(req.body || {});
         
         if (studioConfig) saveStudioConfig(studioConfig);
         if (opencodeConfig) saveConfig(opencodeConfig);
@@ -1781,7 +1808,7 @@ app.post('/api/restore', (req, res) => {
         
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -1854,6 +1881,8 @@ function buildBackupData() {
 }
 
 function restoreFromBackup(backup, studio) {
+    assertSafeBackupResourceNames(backup || {});
+
     if (backup.studioConfig) {
         const merged = { 
             ...backup.studioConfig, 
@@ -2049,7 +2078,7 @@ app.post('/api/sync/pull', async (req, res) => {
         
         res.json({ success: true, timestamp: backup.timestamp, skills: (backup.skills || []).length, plugins: (backup.plugins || []).length });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -2098,7 +2127,7 @@ app.post('/api/sync/auto', async (req, res) => {
         
         res.json({ action: 'none', reason: 'local is current' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -3181,7 +3210,7 @@ app.get('/api/skills', (req, res) => {
 
 app.get('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -3202,7 +3231,7 @@ app.get('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -3242,7 +3271,7 @@ app.post('/api/skills/:name', (req, res) => {
 
 app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -3270,6 +3299,10 @@ app.delete('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name/toggle', (req, res) => {
     const { name } = req.params;
+    if (!isSafeSkillName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
+    }
+
     const studio = loadStudioConfig();
     studio.disabledSkills = studio.disabledSkills || [];
     
@@ -3342,6 +3375,9 @@ app.get('/api/plugins', (req, res) => {
 
 app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -3364,6 +3400,9 @@ app.get('/api/plugins/:name', (req, res) => {
 app.post('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     const { content } = req.body;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -3400,6 +3439,9 @@ app.post('/api/plugins/:name', (req, res) => {
 
 app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     let deleted = false;
     for (const dirInfo of getPluginDirs()) {
