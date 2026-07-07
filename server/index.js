@@ -14,6 +14,7 @@ const { corsOptions, setLocalNetworkAccessHeaders } = require('./lib/cors-policy
 const {
     assertSafeBackupResourceNames,
     isSafeAgentName,
+    isSafeAuthProfileName,
     isSafePluginName,
     isSafeSkillName,
 } = require('./lib/resource-names');
@@ -47,6 +48,7 @@ const ERROR_CODES = {
   NO_CONFIG_FOR_PLUGIN: "No active config to create plugin",
   NO_AUTH_FOR_PROVIDER: "No current auth for provider",
   PROFILE_NOT_FOUND: "Profile not found",
+  INVALID_AUTH_PROFILE_NAME: "Invalid auth profile name",
   FAILED_OPEN_TERMINAL: "Failed to open terminal",
   NO_TERMINAL: "No terminal emulator found",
   NO_ACCOUNTS_IN_POOL: "No accounts in pool",
@@ -3608,6 +3610,12 @@ const listAuthProfiles = (p, activePlugin) => {
     } catch { return []; }
 };
 
+function rejectInvalidAuthProfileName(res, name) {
+    if (isSafeAuthProfileName(name)) return false;
+    res.status(400).json({ error: ERROR_CODES.INVALID_AUTH_PROFILE_NAME, code: 'INVALID_AUTH_PROFILE_NAME' });
+    return true;
+}
+
 app.get('/api/auth/providers', (req, res) => {
     const providers = [
         { id: 'google', name: 'Google', type: 'oauth', description: 'Google Gemini API' },
@@ -3739,6 +3747,7 @@ app.post('/api/auth/profiles/:provider', (req, res) => {
     }
 
     const profileName = name || auth[provider].email || `profile-${Date.now()}`;
+    if (rejectInvalidAuthProfileName(res, profileName)) return;
     const profilePath = path.join(dir, `${profileName}.json`);
     atomicWriteFileSync(profilePath, JSON.stringify(auth[provider], null, 2));
 
@@ -3763,6 +3772,7 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
     const dir = getProfileDir(provider, activePlugin);
     const profilePath = path.join(dir, `${name}.json`);
     if (!fs.existsSync(profilePath)) return res.status(404).json({ error: ERROR_CODES.PROFILE_NOT_FOUND, code: 'PROFILE_NOT_FOUND' });
@@ -3879,6 +3889,7 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
     const dir = getProfileDir(provider, activePlugin);
     const profilePath = path.join(dir, `${name}.json`);
     console.log(`[Auth] Target path: ${profilePath}, Exists: ${fs.existsSync(profilePath)}`);
@@ -3992,6 +4003,8 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+    if (rejectInvalidAuthProfileName(res, newName)) return;
     const dir = getProfileDir(provider, activePlugin);
     const oldPath = path.join(dir, `${name}.json`);
     const newPath = path.join(dir, `${newName}.json`);
@@ -4220,6 +4233,10 @@ function importCurrentAuthToPool(provider) {
     }
 
     const name = email || creds.accountId || creds.id || 'primary';
+    if (!isSafeAuthProfileName(name)) {
+        console.warn(`[Auth] Skipping ${provider} pool sync for invalid profile name.`);
+        return;
+    }
     const profileDir = path.join(AUTH_PROFILES_DIR, provider);
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
@@ -4279,6 +4296,10 @@ function importCurrentGoogleAuthToPool() {
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
     const email = creds.email;
+    if (!isSafeAuthProfileName(email)) {
+        console.warn('[Auth] Skipping Google pool sync for invalid profile name.');
+        return;
+    }
     const profilePath = path.join(profileDir, `${email}.json`);
 
     // Check if we need to sync (new account or updated tokens/metadata)
@@ -4373,6 +4394,10 @@ function syncAntigravityPool() {
     const seen = new Set();
     allAccounts.forEach((account, idx) => {
         const name = account.email || `account-${idx + 1}`;
+        if (!isSafeAuthProfileName(name)) {
+            console.warn('[Pool] Skipping Antigravity account with invalid profile name.');
+            return;
+        }
         seen.add(name);
         const profilePath = path.join(profileDir, `${name}.json`);
         if (!fs.existsSync(profilePath)) {
@@ -4635,6 +4660,8 @@ app.put('/api/auth/pool/:name/cooldown', (req, res) => {
     const { name } = req.params;
     let { duration, provider = 'google', rule } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     if (rule) {
         const studio = loadStudioConfig();
         const r = (studio.cooldownRules || []).find(cr => cr.name === rule);
@@ -4666,6 +4693,8 @@ app.delete('/api/auth/pool/:name/cooldown', (req, res) => {
     const { name } = req.params;
     const provider = req.query.provider || 'google';
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -4685,6 +4714,8 @@ app.post('/api/auth/pool/:name/usage', (req, res) => {
     const { name } = req.params;
     const { provider = 'google' } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -4712,6 +4743,8 @@ app.put('/api/auth/pool/:name/metadata', (req, res) => {
     const { name } = req.params;
     const { provider = 'google', email, createdAt, projectId, tier } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -5260,6 +5293,9 @@ app.post('/api/auth/google/start', async (req, res) => {
             const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
             if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
             const profileName = email || `google-${Date.now()}`;
+            if (!isSafeAuthProfileName(profileName)) {
+                throw new Error('Invalid auth profile name');
+            }
             const profilePath = path.join(profileDir, `${profileName}.json`);
             
             console.log(`[Auth] Saving profile to: ${profilePath}`);

@@ -4,6 +4,7 @@ const { describe, it } = require('node:test');
 const {
     assertSafeBackupResourceNames,
     isSafeAgentName,
+    isSafeAuthProfileName,
     isSafePluginName,
     isSafeSkillName,
 } = require('./resource-names');
@@ -14,6 +15,7 @@ describe('resource name policy', () => {
         assert.equal(isSafePluginName('watcher.plugin'), true);
         assert.equal(isSafePluginName('watcher.ts'), true);
         assert.equal(isSafeAgentName('Build Agent'), true);
+        assert.equal(isSafeAuthProfileName('jikui.feng+oss@example.com'), true);
     });
 
     it('rejects path traversal and path separator names', () => {
@@ -21,6 +23,13 @@ describe('resource name policy', () => {
             assert.equal(isSafeSkillName(name), false, `skill ${name}`);
             assert.equal(isSafePluginName(name), false, `plugin ${name}`);
             assert.equal(isSafeAgentName(name), false, `agent ${name}`);
+            assert.equal(isSafeAuthProfileName(name), false, `auth profile ${name}`);
+        }
+    });
+
+    it('rejects malformed auth profile names', () => {
+        for (const name of [' user@example.com', 'user@example.com ', 'profile:name', 'profile*name', '']) {
+            assert.equal(isSafeAuthProfileName(name), false, `auth profile ${name}`);
         }
     });
 
@@ -39,6 +48,14 @@ describe('resource name policy', () => {
         assert.throws(
             () => assertSafeBackupResourceNames({ plugins: [{ name: '../escape', content: 'bad' }] }),
             /Invalid plugin name/
+        );
+        assert.throws(
+            () => assertSafeBackupResourceNames({ skills: { name: 'debugging', content: 'bad' } }),
+            /Invalid skills list/
+        );
+        assert.throws(
+            () => assertSafeBackupResourceNames({ plugins: { name: 'hooks', content: 'bad' } }),
+            /Invalid plugins list/
         );
     });
 });
