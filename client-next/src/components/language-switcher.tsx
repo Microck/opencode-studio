@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const locales = [
-  { code: "en", label: "English" },
-  { code: "zh-CN", label: "中文" },
-  { code: "ko", label: "한국어" },
+  { code: "en", label: "English", triggerLabel: "EN" },
+  { code: "zh-CN", label: "중文", triggerLabel: "中" },
+  { code: "ko", label: "한국어", triggerLabel: "한" },
 ] as const;
 
 export function LanguageSwitcher() {
