@@ -96,6 +96,7 @@ function activateProfile(name) {
 }
 
 module.exports = {
+    safeName,
     listProfiles,
     createProfile,
     deleteProfile,
