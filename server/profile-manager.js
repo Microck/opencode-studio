@@ -7,7 +7,11 @@ const OPENCODE_DIR = path.join(HOME_DIR, '.config', 'opencode');
 const PROFILES_DIR = path.join(HOME_DIR, '.config', 'opencode-profiles');
 
 function safeName(name) {
-    if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+    if (!name || typeof name !== 'string' || name.includes('/') || name.includes('\\')) {
+        throw new Error('Invalid profile name');
+    }
+    const target = path.resolve(PROFILES_DIR, name);
+    if (path.dirname(target) !== path.resolve(PROFILES_DIR)) {
         throw new Error('Invalid profile name');
     }
     return name;

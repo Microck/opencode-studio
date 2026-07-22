@@ -5564,8 +5564,8 @@ async function startServer() {
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
     const port = await findAvailablePort(DEFAULT_PORT);
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
+    app.listen(port, '127.0.0.1', () => {
+        console.log(`Server running at http://127.0.0.1:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
             const studio = loadStudioConfig();
