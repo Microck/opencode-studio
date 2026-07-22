@@ -6,6 +6,17 @@ const HOME_DIR = os.homedir();
 const OPENCODE_DIR = path.join(HOME_DIR, '.config', 'opencode');
 const PROFILES_DIR = path.join(HOME_DIR, '.config', 'opencode-profiles');
 
+function safeName(name) {
+    if (!name || typeof name !== 'string' || name.includes('/') || name.includes('\\')) {
+        throw new Error('Invalid profile name');
+    }
+    const target = path.resolve(PROFILES_DIR, name);
+    if (path.dirname(target) !== path.resolve(PROFILES_DIR)) {
+        throw new Error('Invalid profile name');
+    }
+    return name;
+}
+
 if (!fs.existsSync(PROFILES_DIR)) {
     fs.mkdirSync(PROFILES_DIR, { recursive: true });
 }
@@ -51,6 +62,7 @@ function listProfiles() {
 }
 
 function createProfile(name) {
+    safeName(name);
     const dir = path.join(PROFILES_DIR, name);
     if (fs.existsSync(dir)) throw new Error('Profile already exists');
     fs.mkdirSync(dir, { recursive: true });
@@ -58,6 +70,7 @@ function createProfile(name) {
 }
 
 function deleteProfile(name) {
+    safeName(name);
     const { active } = listProfiles();
     if (name === active) throw new Error('Cannot delete active profile');
     if (name === 'default') throw new Error('Cannot delete default profile');
@@ -70,6 +83,7 @@ function deleteProfile(name) {
 }
 
 function activateProfile(name) {
+    safeName(name);
     const target = path.join(PROFILES_DIR, name);
     if (!fs.existsSync(target)) throw new Error('Profile not found');
     
@@ -82,6 +96,7 @@ function activateProfile(name) {
 }
 
 module.exports = {
+    safeName,
     listProfiles,
     createProfile,
     deleteProfile,
