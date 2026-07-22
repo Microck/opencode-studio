@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.4] - 2026-07-22
+
+### Security
+- **Profile Path Traversal**: Reject profile names containing path separators or traversal sequences to prevent arbitrary filesystem delete/create/symlink. `safeName` validation now requires names to resolve to a direct child of `PROFILES_DIR`, rejecting `.`, `..`, path separators, absolute and empty names (#55, fixes #54).
+- **Localhost Binding**: Bind the server listener to `127.0.0.1` so unauthenticated profile/auth endpoints are not reachable from the network.
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
 ## [2.4.3] - 2026-07-16
 
 ### Added
