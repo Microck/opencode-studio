@@ -1,0 +1,37 @@
+# Dev files
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+.next/
+out/
+dist/
+.cache/
+*.tsbuildinfo
+
+# Test files
+**/test/
+**/tests/
+**/__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+**/vitest.config.*
+
+# Lockfiles (npm regenerates these during install)
+package-lock.json
+**/package-lock.json
+
+**/.DS_Store
+**/Thumbs.db
+
+# Sisyphus working files
+.s
+
+# CI
+.github/

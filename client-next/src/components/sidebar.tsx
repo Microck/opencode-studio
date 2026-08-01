@@ -74,7 +74,15 @@ export function Sidebar() {
 
         <nav className="flex-1 py-4 space-y-0.5">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const isActive = (() => {
+              if (pathname === item.href) return true;
+              if (!pathname.startsWith(`${item.href}/`)) return false;
+              // Check if a more specific nav item matches instead
+              const hasMoreSpecificMatch = navItems.some(
+                (other) => other.href !== item.href && other.href.startsWith(`${item.href}/`) && (pathname === other.href || pathname.startsWith(`${other.href}/`))
+              );
+              return !hasMoreSpecificMatch;
+            })();
             return (
               <Tooltip key={item.href}>
                 <TooltipTrigger asChild>

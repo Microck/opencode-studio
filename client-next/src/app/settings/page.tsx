@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PermissionEditor } from "@/components/permission-editor";
+import { CustomProviderModelEditor } from "@/components/custom-provider-model-editor";
 import { Sliders as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     general: true,
+    customProviders: false,
     permissions: false,
     prompts: false,
     backup: false,
@@ -374,6 +376,30 @@ const [systemPrompt, setSystemPrompt] = useState("");
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {config && (
+        <Collapsible open={openSections.customProviders} onOpenChange={() => toggleSection("customProviders")}>
+          <Card className="hover-lift">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    <CardTitle>{t('customProviders.title')}</CardTitle>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${openSections.customProviders ? "rotate-180" : ""}`} />
+                </div>
+                <CardDescription>{t('customProviders.description')}</CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="animate-scale-in">
+              <CardContent className="space-y-4 pt-0">
+                <CustomProviderModelEditor config={config} onSave={updateConfig} />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
 
       <Collapsible open={openSections.permissions} onOpenChange={() => toggleSection("permissions")}>
         <Card className="hover-lift">

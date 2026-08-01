@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, StudioConfig, PluginModelsConfig, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse, MCPConfig } from '@/types';
+import type { OpencodeConfig, SkillFile, PluginFile, SkillInfo, PluginInfo, AuthInfo, AuthProvider, AuthProfilesInfo, Preset, PresetConfig, AgentConfig, AgentInfo, AgentsResponse, SystemToolInfo, RulesResponse, MCPConfig, OhMyPreferences, OhMyConfigResponse, GitHubBackupStatus, GitHubBackupResult, GitHubBackupConfig, ConfigProviderId, ConfigProviderCreatePayload, ConfigProviderCreateProfilePayload, ConfigProviderCreateProfileResult, ConfigProviderCreateResult, ConfigProviderDetail, ConfigProviderExportResult, ConfigProviderImportPayload, ConfigProviderImportResult, ConfigProviderProfilesResult, ConfigProviderSavePayload, ConfigProviderSaveResult, ConfigProviderSummary, ConfigProviderSwitchProfilePayload, ConfigProviderSwitchProfileResult, ConfigProviderValidationPayload, ConfigProviderValidationResult } from '@/types';
 
 const BACKEND_BASE_PORT = 1920;
 const MAX_PORT_TRIES = 10;
@@ -7,10 +7,77 @@ const MAX_PORT_TRIES = 10;
 let cachedApiUrl: string | null = null;
 let resolvingApiUrl: Promise<string> | null = null;
 
+type LocalNetworkFetchInit = RequestInit & { targetAddressSpace?: 'local' };
+
+function normalizeHostname(hostname: string): string {
+    return hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+}
+
+function isLoopbackHost(hostname: string): boolean {
+    return hostname === 'localhost' || hostname === '::1' || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isLocalNetworkHost(hostname: string): boolean {
+    if (hostname.endsWith('.local')) return true;
+
+    const ipv4Parts = hostname.split('.');
+    if (ipv4Parts.length === 4) {
+        const octets = ipv4Parts.map((part) => Number(part));
+        if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+            return false;
+        }
+
+        const [first, second] = octets;
+        return first === 10 ||
+            (first === 172 && second >= 16 && second <= 31) ||
+            (first === 192 && second === 168) ||
+            (first === 169 && second === 254);
+    }
+
+    return hostname.startsWith('fc') || hostname.startsWith('fd') || hostname.startsWith('fe80:');
+}
+
+function getTargetAddressSpace(url: string): 'local' | undefined {
+    if (typeof window === 'undefined' || window.location.protocol !== 'https:') {
+        return undefined;
+    }
+
+    try {
+        const hostname = normalizeHostname(new URL(url).hostname);
+        if (isLoopbackHost(hostname)) {
+            return 'local';
+        }
+        if (isLocalNetworkHost(hostname)) {
+            return 'local';
+        }
+    } catch {}
+
+    return undefined;
+}
+
+async function fetchWithTimeout(url: string, timeout: number, init: LocalNetworkFetchInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const targetAddressSpace = getTargetAddressSpace(url);
+
+    try {
+        return await fetch(url, {
+            ...init,
+            signal: controller.signal,
+            ...(targetAddressSpace ? { targetAddressSpace } : {}),
+        } as LocalNetworkFetchInit);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 async function probeBackendUrl(url: string): Promise<string | null> {
     try {
-        await axios.get(`${url}/health`, { timeout: 500 });
-        return url;
+        const response = await fetchWithTimeout(`${url}/health`, 500, {
+            cache: 'no-store',
+            mode: 'cors',
+        });
+        return response.ok ? url : null;
     } catch {
         return null;
     }
@@ -58,6 +125,7 @@ const DEFAULT_API_URL = 'http://127.0.0.1:1920/api';
 
 const api = axios.create({
   baseURL: envApiUrl || DEFAULT_API_URL,
+  adapter: 'fetch',
   headers: {
     'Content-Type': 'application/json',
     'X-Client-Version': CLIENT_VERSION,
@@ -71,12 +139,22 @@ api.interceptors.request.use(async (config) => {
   } catch {
     config.baseURL = config.baseURL || envApiUrl || DEFAULT_API_URL;
   }
+
+  const requestUrl = new URL(config.url ?? '', config.baseURL).toString();
+  const targetAddressSpace = getTargetAddressSpace(requestUrl);
+  if (targetAddressSpace) {
+    config.fetchOptions = {
+      ...(config.fetchOptions ?? {}),
+      targetAddressSpace,
+    };
+  }
+
   return config;
 });
 
 export const PROTOCOL_URL = 'opencodestudio://launch';
 
-export const MIN_SERVER_VERSION = '2.2.2';
+export const MIN_SERVER_VERSION = '2.4.2';
 
 export async function getApiBaseUrl(): Promise<string> {
   try {
@@ -114,8 +192,12 @@ export interface VersionCheck {
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    await api.get('/health', { timeout: 3000 });
-    return true;
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetchWithTimeout(`${baseUrl}/health`, 3000, {
+      cache: 'no-store',
+      mode: 'cors',
+    });
+    return response.ok;
   } catch {
     return false;
   }
@@ -123,7 +205,15 @@ export async function checkHealth(): Promise<boolean> {
 
 export async function checkVersion(): Promise<VersionCheck> {
   try {
-    const { data } = await api.get<HealthResponse>('/health', { timeout: 3000 });
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetchWithTimeout(`${baseUrl}/health`, 3000, {
+      cache: 'no-store',
+      mode: 'cors',
+    });
+    if (!response.ok) {
+      return { connected: false, version: null, isCompatible: false, minRequired: MIN_SERVER_VERSION };
+    }
+    const data = await response.json() as HealthResponse;
     const version = data.version || null;
     const isCompatible = version ? compareVersions(version, MIN_SERVER_VERSION) : false;
     return { connected: true, version, isCompatible, minRequired: MIN_SERVER_VERSION };
@@ -143,6 +233,8 @@ export function buildProtocolUrl(action: string, params?: Record<string, string>
   }
   return url;
 }
+
+const configProviderRoute = (id: ConfigProviderId, suffix = '') => `/config-providers/${encodeURIComponent(id)}${suffix}`;
 
 export interface PendingAction {
   type: 'install-mcp' | 'import-skill' | 'import-plugin';
@@ -206,7 +298,7 @@ export async function getDebugInfo() {
   }
 }
 
-export async function getDebugPaths(): Promise<any> {
+export async function getDebugPaths(): Promise<PathsInfo> {
   const { data } = await api.get('/paths');
   return data;
 }
@@ -335,8 +427,8 @@ export async function getCommands(): Promise<Record<string, { template: string }
   return data;
 }
 
-export async function getModels(): Promise<{ providers: any[]; models: any[] }> {
-  const { data } = await api.get<{ providers: any[]; models: any[] }>('/models');
+export async function getModels(): Promise<{ providers: unknown[]; models: unknown[] }> {
+  const { data } = await api.get<{ providers: unknown[]; models: unknown[] }>('/models');
   return data;
 }
 
@@ -362,7 +454,8 @@ export async function saveCommand(name: string, template: string): Promise<void>
 export async function deleteCommand(name: string): Promise<void> {
   const config = await getConfig();
   if (config.command) {
-      const { [name]: removed, ...rest } = config.command;
+      const rest = { ...config.command };
+      delete rest[name];
       await saveConfig({ ...config, command: rest });
   }
 }
@@ -463,6 +556,56 @@ export interface BulkFetchResponse {
 
 export async function bulkFetchUrls(urls: string[]): Promise<BulkFetchResponse> {
   const { data } = await api.post<BulkFetchResponse>('/bulk-fetch', { urls });
+  return data;
+}
+
+export async function getConfigProviders(): Promise<ConfigProviderSummary[]> {
+  const { data } = await api.get<ConfigProviderSummary[]>('/config-providers');
+  return data;
+}
+
+export async function getConfigProvider(id: ConfigProviderId): Promise<ConfigProviderDetail> {
+  const { data } = await api.get<ConfigProviderDetail>(configProviderRoute(id));
+  return data;
+}
+
+export async function validateConfigProvider(id: ConfigProviderId, payload: ConfigProviderValidationPayload = {}): Promise<ConfigProviderValidationResult> {
+  const { data } = await api.post<ConfigProviderValidationResult>(configProviderRoute(id, '/validate'), payload);
+  return data;
+}
+
+export async function saveConfigProvider(id: ConfigProviderId, payload: ConfigProviderSavePayload): Promise<ConfigProviderSaveResult> {
+  const { data } = await api.post<ConfigProviderSaveResult>(configProviderRoute(id, '/save'), payload);
+  return data;
+}
+
+export async function createConfigProvider(id: ConfigProviderId, payload: ConfigProviderCreatePayload = {}): Promise<ConfigProviderCreateResult> {
+  const { data } = await api.post<ConfigProviderCreateResult>(configProviderRoute(id, '/create'), payload);
+  return data;
+}
+
+export async function importConfigProvider(id: ConfigProviderId, payload: ConfigProviderImportPayload = {}): Promise<ConfigProviderImportResult> {
+  const { data } = await api.post<ConfigProviderImportResult>(configProviderRoute(id, '/import'), payload);
+  return data;
+}
+
+export async function exportConfigProvider(id: ConfigProviderId): Promise<ConfigProviderExportResult> {
+  const { data } = await api.get<ConfigProviderExportResult>(configProviderRoute(id, '/export'));
+  return data;
+}
+
+export async function getConfigProviderProfiles(id: ConfigProviderId): Promise<ConfigProviderProfilesResult> {
+  const { data } = await api.get<ConfigProviderProfilesResult>(configProviderRoute(id, '/profiles'));
+  return data;
+}
+
+export async function createConfigProviderProfile(id: ConfigProviderId, payload: ConfigProviderCreateProfilePayload): Promise<ConfigProviderCreateProfileResult> {
+  const { data } = await api.post<ConfigProviderCreateProfileResult>(configProviderRoute(id, '/profiles'), payload);
+  return data;
+}
+
+export async function switchConfigProviderProfile(id: ConfigProviderId, payload: ConfigProviderSwitchProfilePayload): Promise<ConfigProviderSwitchProfileResult> {
+  const { data } = await api.post<ConfigProviderSwitchProfileResult>(configProviderRoute(id, '/profiles/switch'), payload);
   return data;
 }
 
@@ -723,8 +866,6 @@ export async function activateProfile(name: string): Promise<{ success: boolean 
   const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
   return data;
 }
-
-import type { OhMyPreferences, OhMyConfigResponse, GitHubBackupStatus, GitHubBackupResult, GitHubBackupConfig } from '@/types';
 
 export async function getOhMyConfig(): Promise<OhMyConfigResponse> {
   const { data } = await api.get<OhMyConfigResponse>('/ohmyopencode');

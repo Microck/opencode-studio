@@ -1,13 +1,14 @@
 {
   "name": "opencode-studio-server",
-  "version": "2.3.0",
+  "version": "2.4.4",
   "private": false,
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm start",
     "client": "cd client-next && npm run dev",
     "build": "cd client-next && npm run build",
-    "postinstall": "cd server && npm install && cd ../client-next && npm install"
+    "postinstall": "cd server && npm install && cd ../client-next && npm install",
+    "release-server": "cd server && npm publish"
   },
   "dependencies": {
     "concurrently": "^8.2.2"

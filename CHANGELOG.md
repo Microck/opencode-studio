@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.4] - 2026-07-22
+
+### Security
+- **Profile Path Traversal**: Reject profile names containing path separators or traversal sequences to prevent arbitrary filesystem delete/create/symlink. `safeName` validation now requires names to resolve to a direct child of `PROFILES_DIR`, rejecting `.`, `..`, path separators, absolute and empty names (#55, fixes #54).
+- **Localhost Binding**: Bind the server listener to `127.0.0.1` so unauthenticated profile/auth endpoints are not reachable from the network.
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [2.4.3] - 2026-07-16
+
+### Added
+- **Korean Translation**: Add Korean language support to OpenCode Studio (#52).
+
+### Fixed
+- **JSONC Configuration**: Load OpenCode configuration files containing comments and trailing commas (#53).
+
+## [2.4.2] - 2026-07-08
+
+### Security
+- **Resource Names**: Validate config-backed resource names (skills, plugins, agents, auth profiles) before file reads/writes/deletes. Rejects path traversal attempts (`../escape`) and malformed restore payloads (#51).
+
+### Added
+- **i18n**: Internationalization support with Chinese translation + OMO agents (#21).
+- **Provider Config**: Provider-based config management system (#29).
+- **Custom Provider Models**: Client-side editor for custom provider model lists.
+
+### Fixed
+- **Skills Path**: Use `skills/` (plural) for skill directory paths (#43).
+- **Sidebar**: Prevent greedy active state for nested routes (#45).
+- **Server Startup**: Block duplicate server startup with lock file (#37).
+- **Logs**: Show recent log entries immediately on `/logs` (#38).
+- **Usage Stats**: Restore `/usage` stats with SQLite source and JSON fallback (#36). Guard `node:sqlite` require for Node <22.5.
+- **Server Packaging**: Ensure server package includes all dependencies; declare `jsonc-parser` as runtime dependency (#41). Use npm workspaces instead of nested postinstall.
+- **Hosted Backend**: Support hosted frontend with local backend access via loopback address space annotations. Route local backend API calls through fetch.
+
+### Changed
+- **Backend Requirement**: Minimum backend version 2.4.2.
+- **Server Package**: Renamed to `opencode-studio-server`.
+- **Docs**: Added AI contribution disclosure policy. Split Chinese README into `README_CN.md`.
+
 ## [2.3.0] - 2026-05-09
 
 ### Fixed

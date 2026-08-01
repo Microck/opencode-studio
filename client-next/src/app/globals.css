@@ -119,15 +119,6 @@
   }
 }
 
-@keyframes crime-tape-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
 @keyframes content-slide-up {
   0% {
     transform: translateY(60px);

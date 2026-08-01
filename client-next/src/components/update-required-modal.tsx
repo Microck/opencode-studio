@@ -16,7 +16,7 @@ export function UpdateRequiredModal({ currentVersion, minVersion }: UpdateRequir
   const [copied, setCopied] = useState(false);
   const [shuttingDown, setShuttingDown] = useState(false);
   const [serverStopped, setServerStopped] = useState(false);
-  const updateCommand = "npm install -g opencode-studio-server@2.2.1";
+  const updateCommand = "npm install -g opencode-studio-server@2.4.2";
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(updateCommand);

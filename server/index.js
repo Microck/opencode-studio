@@ -5,8 +5,19 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+let DatabaseSync;
+try { ({ DatabaseSync } = require('node:sqlite')); } catch {}
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
+const configProviders = require('./lib/config-providers');
+const { corsOptions, setLocalNetworkAccessHeaders } = require('./lib/cors-policy');
+const {
+    assertSafeBackupResourceNames,
+    isSafeAgentName,
+    isSafeAuthProfileName,
+    isSafePluginName,
+    isSafeSkillName,
+} = require('./lib/resource-names');
 
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
@@ -18,6 +29,7 @@ const ERROR_CODES = {
   INVALID_PERMISSION: "Invalid permission value. Must be ask, allow, or deny.",
   MISSING_AGENT_NAME: "Missing agent name",
   INVALID_AGENT_NAME: "Invalid agent name",
+  INVALID_PLUGIN_NAME: "Invalid plugin name",
   NO_CONFIG_PATH: "No config path found",
   INVALID_NAME_OR_DURATION: "Invalid name or duration",
   INVALID_STATE: "Invalid state",
@@ -36,6 +48,7 @@ const ERROR_CODES = {
   NO_CONFIG_FOR_PLUGIN: "No active config to create plugin",
   NO_AUTH_FOR_PROVIDER: "No current auth for provider",
   PROFILE_NOT_FOUND: "Profile not found",
+  INVALID_AUTH_PROFILE_NAME: "Invalid auth profile name",
   FAILED_OPEN_TERMINAL: "Failed to open terminal",
   NO_TERMINAL: "No terminal emulator found",
   NO_ACCOUNTS_IN_POOL: "No accounts in pool",
@@ -64,6 +77,14 @@ function compareVersions(current, minimum) {
         if (cv < mv) return -1;
     }
     return 0;
+}
+
+function sendErrorResponse(res, err) {
+    const status = err.statusCode || err.status || 500;
+    res.status(status).json({
+        error: err.message,
+        ...(err.code && { code: err.code }),
+    });
 }
 
 // Atomic file write: write to temp file then rename to prevent corruption
@@ -130,31 +151,8 @@ app.use((req, res, next) => {
     next();
 });
 
-const ALLOWED_ORIGINS = [
-        'http://192.168.10.100:1080',
-    /^http:\/\/192\.168\..+:108\d$/,
-    /^http:\/\/192\.168\.10\.\d{1,3}:108\d$/,
-    'http://localhost:1080',
-    'http://127.0.0.1:1080',
-    /^http:\/\/localhost:108\d$/,
-    /^http:\/\/127\.0\.0\.1:108\d$/,
-    'https://opencode-studio.vercel.app',
-    'https://opencode.micr.dev',
-    'https://opencode-studio.micr.dev',
-    /\.vercel\.app$/,
-    /\.micr\.dev$/,
-];
-
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        const allowed = ALLOWED_ORIGINS.some(o =>
-            o instanceof RegExp ? o.test(origin) : o === origin
-        );
-        callback(null, allowed);
-    },
-    credentials: true,
-}));
+app.use(setLocalNetworkAccessHeaders);
+app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
     const clientVersion = req.headers['x-client-version'];
@@ -177,6 +175,81 @@ const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'st
 const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
 const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
 const LOG_DIR = path.join(HOME_DIR, '.local', 'share', 'opencode', 'log');
+const SERVER_LOCK_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'server.lock.json');
+
+let lockFileDescriptor = null;
+
+function isProcessRunning(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function releaseServerLock() {
+    if (lockFileDescriptor !== null) {
+        try { fs.closeSync(lockFileDescriptor); } catch {}
+        lockFileDescriptor = null;
+    }
+    if (fs.existsSync(SERVER_LOCK_PATH)) {
+        try { fs.unlinkSync(SERVER_LOCK_PATH); } catch {}
+    }
+}
+
+function setupServerLockCleanup() {
+    process.once('exit', releaseServerLock);
+    process.once('SIGINT', () => {
+        releaseServerLock();
+        process.exit(0);
+    });
+    process.once('SIGTERM', () => {
+        releaseServerLock();
+        process.exit(0);
+    });
+    process.once('uncaughtException', (err) => {
+        releaseServerLock();
+        throw err;
+    });
+    process.once('unhandledRejection', (reason) => {
+        releaseServerLock();
+        throw reason;
+    });
+}
+
+function ensureSingleServerInstance() {
+    const lockDir = path.dirname(SERVER_LOCK_PATH);
+    if (!fs.existsSync(lockDir)) fs.mkdirSync(lockDir, { recursive: true });
+
+    const lockData = JSON.stringify({ pid: process.pid, createdAt: Date.now() }, null, 2);
+
+    try {
+        lockFileDescriptor = fs.openSync(SERVER_LOCK_PATH, 'wx');
+        fs.writeFileSync(lockFileDescriptor, lockData, 'utf8');
+        setupServerLockCleanup();
+        return true;
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+
+        try {
+            const raw = fs.readFileSync(SERVER_LOCK_PATH, 'utf8');
+            const existing = JSON.parse(raw);
+            if (isProcessRunning(existing.pid)) {
+                console.error(`Another opencode-studio server is already running (PID ${existing.pid}). Aborting startup.`);
+                return false;
+            }
+        } catch {}
+
+        try { fs.unlinkSync(SERVER_LOCK_PATH); } catch {}
+
+        lockFileDescriptor = fs.openSync(SERVER_LOCK_PATH, 'wx');
+        fs.writeFileSync(lockFileDescriptor, lockData, 'utf8');
+        setupServerLockCleanup();
+        return true;
+    }
+}
 
 const LOG_BUFFER_SIZE = 100;
 const logBuffer = [];
@@ -242,8 +315,14 @@ function setupLogWatcher() {
             fileSize = fs.statSync(filePath).size;
         } catch {}
 
-        // Tail from end initially
-        let start = Math.max(0, fileSize - 10000); 
+        // Tail from end initially so /logs isn't empty on first connect
+        const start = Math.max(0, fileSize - 10000);
+        if (fileSize > 0) {
+            try {
+                const initialChunk = fs.readFileSync(filePath, 'utf8').slice(start);
+                initialChunk.split('\n').forEach(processLogLine);
+            } catch {}
+        }
         
         const checkFile = () => {
             try {
@@ -256,8 +335,7 @@ function setupLogWatcher() {
                     });
                     
                     stream.on('data', (chunk) => {
-                        const lines = chunk.split('\n');
-                        lines.forEach(processLogLine);
+                        chunk.split('\n').forEach(processLogLine);
                     });
                     
                     fileSize = stat.size;
@@ -699,11 +777,6 @@ const getSkillDirs = () => {
     const dirs = [];
 
     for (const root of roots) {
-        const skillDir = path.join(root, 'skill');
-        if (fs.existsSync(skillDir)) {
-            dirs.push({ path: skillDir, source: 'skill-dir', root });
-        }
-
         const skillsDir = path.join(root, 'skills');
         if (fs.existsSync(skillsDir)) {
             try {
@@ -1026,7 +1099,7 @@ const loadConfig = () => {
     const configPath = getConfigPath();
     if (!configPath || !fs.existsSync(configPath)) return null;
     try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = configProviders.loadConfigFileSync(configPath);
         const studioConfig = loadStudioConfig();
         if (studioConfig.activeGooglePlugin === 'antigravity' && !config.small_model) {
             config.small_model = "google/gemini-3-flash";
@@ -1440,7 +1513,7 @@ app.post('/api/agents', (req, res) => {
     try {
         const { name, config: agentConfig, source, scope } = req.body || {};
         if (!name || typeof name !== 'string') return res.status(400).json({ error: ERROR_CODES.MISSING_AGENT_NAME, code: 'MISSING_AGENT_NAME' });
-        if (!/^[a-zA-Z0-9 _-]+$/.test(name)) return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        if (!isSafeAgentName(name)) return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
 
         const config = loadConfig() || {};
         if (!config.agent) config.agent = {};
@@ -1495,6 +1568,9 @@ app.put('/api/agents/:name', (req, res) => {
     try {
         const { name } = req.params;
         const { config: agentConfig } = req.body || {};
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
 
         const normalizedConfig = { ...(agentConfig || {}) };
         if (normalizedConfig.permissions && !normalizedConfig.permission) {
@@ -1539,6 +1615,10 @@ app.put('/api/agents/:name', (req, res) => {
 app.delete('/api/agents/:name', (req, res) => {
     try {
         const { name } = req.params;
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
+
         const config = loadConfig() || {};
 
         if (config.agent && config.agent[name]) {
@@ -1561,6 +1641,10 @@ app.delete('/api/agents/:name', (req, res) => {
 app.post('/api/agents/:name/toggle', (req, res) => {
     try {
         const { name } = req.params;
+        if (!isSafeAgentName(name)) {
+            return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
+
         const studio = loadStudioConfig();
         const disabled = new Set(studio.disabledAgents || []);
         if (disabled.has(name)) disabled.delete(name); else disabled.add(name);
@@ -1701,6 +1785,7 @@ app.get('/api/backup', (req, res) => {
 app.post('/api/restore', (req, res) => {
     try {
         const { studioConfig, opencodeConfig, skills, plugins } = req.body;
+        assertSafeBackupResourceNames(req.body || {});
         
         if (studioConfig) saveStudioConfig(studioConfig);
         if (opencodeConfig) saveConfig(opencodeConfig);
@@ -1725,7 +1810,7 @@ app.post('/api/restore', (req, res) => {
         
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -1798,6 +1883,8 @@ function buildBackupData() {
 }
 
 function restoreFromBackup(backup, studio) {
+    assertSafeBackupResourceNames(backup || {});
+
     if (backup.studioConfig) {
         const merged = { 
             ...backup.studioConfig, 
@@ -1993,7 +2080,7 @@ app.post('/api/sync/pull', async (req, res) => {
         
         res.json({ success: true, timestamp: backup.timestamp, skills: (backup.skills || []).length, plugins: (backup.plugins || []).length });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -2042,7 +2129,7 @@ app.post('/api/sync/auto', async (req, res) => {
         
         res.json({ action: 'none', reason: 'local is current' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendErrorResponse(res, err);
     }
 });
 
@@ -2066,13 +2153,635 @@ function saveOhMyOpenCodeConfig(config) {
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
+function getProviderSearchRoots() {
+    return getSearchRoots();
+}
+
+function detectConfigProviders() {
+    return configProviders.detectProviders({
+        roots: getProviderSearchRoots()
+    });
+}
+
+function getProviderByIdOrNull(providerId) {
+    const providers = detectConfigProviders();
+    return providers.find((provider) => provider.id === providerId) || null;
+}
+
+function parseProviderInput(body = {}) {
+    const hasRaw = typeof body.raw === 'string';
+    const hasConfig = body.config && typeof body.config === 'object' && !Array.isArray(body.config);
+
+    if (hasRaw) {
+        try {
+            const parsed = configProviders.parseJsonText(body.raw);
+            return {
+                ok: true,
+                raw: body.raw,
+                config: parsed,
+                diagnostics: []
+            };
+        } catch (error) {
+            return {
+                ok: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'INVALID_JSONC_INPUT',
+                    message: 'Malformed JSON/JSONC payload',
+                    details: { error: error.message }
+                }]
+            };
+        }
+    }
+
+    if (hasConfig) {
+        return {
+            ok: true,
+            raw: JSON.stringify(body.config, null, 2),
+            config: body.config,
+            diagnostics: []
+        };
+    }
+
+    return {
+        ok: false,
+        diagnostics: [{
+            severity: 'error',
+            code: 'INVALID_PROVIDER_PAYLOAD',
+            message: 'Request body must include either raw (string) or config (object)'
+        }]
+    };
+}
+
+function getExpectedRevision(body = {}) {
+    const hash = configProviders.getExpectedRevisionHash(body);
+    return hash ? { hash } : null;
+}
+
+function getCurrentRevisionForPath(targetPath) {
+    if (!targetPath || !fs.existsSync(targetPath)) return null;
+    const raw = configProviders.readConfigTextSync(targetPath, 'utf8');
+    const stats = fs.statSync(targetPath);
+    return configProviders.buildContentRevision({ content: raw, stats });
+}
+
+function compareExpectedRevision(targetPath, body = {}) {
+    const expected = getExpectedRevision(body);
+    if (!expected || !expected.hash) return { ok: true, current: getCurrentRevisionForPath(targetPath) };
+
+    const current = getCurrentRevisionForPath(targetPath);
+    if (configProviders.isStaleRevision({ expectedHash: expected.hash, currentRevision: current })) {
+        return {
+            ok: false,
+            status: 409,
+            diagnostics: [{
+                severity: 'error',
+                code: 'STALE_WRITE',
+                message: 'Config changed since it was last read',
+                details: { expectedRevision: expected, currentRevision: current }
+            }]
+        };
+    }
+
+    return { ok: true, current };
+}
+
+function validatePathWritable(pathToWrite) {
+    try {
+        const resolvedPath = path.resolve(pathToWrite);
+        if (fs.existsSync(resolvedPath)) {
+            const stats = fs.lstatSync(resolvedPath);
+            if (stats.isSymbolicLink()) {
+                return {
+                    ok: false,
+                    diagnostics: [{
+                        severity: 'error',
+                        code: 'UNSAFE_PROVIDER_PATH',
+                        message: 'Refusing to write through symlink provider path',
+                        details: { path: resolvedPath }
+                    }]
+                };
+            }
+            fs.accessSync(resolvedPath, fs.constants.W_OK);
+            return { ok: true };
+        }
+
+        const parentDir = path.dirname(resolvedPath);
+        fs.mkdirSync(parentDir, { recursive: true });
+        fs.accessSync(parentDir, fs.constants.W_OK);
+        return { ok: true };
+    } catch (error) {
+        return {
+            ok: false,
+            diagnostics: [{
+                severity: 'error',
+                code: 'PROVIDER_PATH_NOT_WRITABLE',
+                message: 'Provider path is not writable',
+                details: { path: pathToWrite, error: error.message }
+            }]
+        };
+    }
+}
+
+function parseAndValidateProviderPayload(provider, body = {}) {
+    const parsed = parseProviderInput(body);
+    if (!parsed.ok) return parsed;
+
+    const diagnostics = [...(provider?.diagnostics || [])];
+    const hasBlockingProviderDiagnostic = diagnostics.some((d) => d && d.severity === 'error');
+    if (hasBlockingProviderDiagnostic) {
+        return { ok: false, diagnostics };
+    }
+
+    if (provider && provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENCODE_SLIM) {
+        const preset = parsed.config && parsed.config.preset;
+        if (preset !== undefined && !configProviders.isPlainObject(preset)) {
+            diagnostics.push({
+                severity: 'error',
+                code: 'UNSUPPORTED_SLIM_PRESET_SHAPE',
+                message: 'Slim preset must be an object when provided',
+                details: { receivedType: Array.isArray(preset) ? 'array' : typeof preset }
+            });
+        }
+    }
+
+    if (diagnostics.some((d) => d && d.severity === 'error')) {
+        return { ok: false, diagnostics };
+    }
+
+    return {
+        ok: true,
+        raw: parsed.raw,
+        config: parsed.config,
+        diagnostics
+    };
+}
+
+function buildWriteContent({ provider, body = {}, parsed, targetPath }) {
+    if (typeof body.raw === 'string') {
+        return { raw: parsed.raw, config: parsed.config };
+    }
+
+    const incomingConfig = parsed.config;
+    let existingConfig = {};
+    if (targetPath && fs.existsSync(targetPath)) {
+        try {
+            const existingRaw = configProviders.readConfigTextSync(targetPath, 'utf8');
+            existingConfig = configProviders.parseJsonText(existingRaw);
+        } catch {
+            existingConfig = {};
+        }
+    }
+
+    const mergedConfig = configProviders.deepMergePreservingUnknown(existingConfig, incomingConfig);
+    return {
+        raw: JSON.stringify(mergedConfig, null, 2),
+        config: mergedConfig
+    };
+}
+
+function loadProviderDetails(provider) {
+    if (!provider || !provider.activePath || !provider.exists) {
+        return {
+            config: null,
+            raw: null,
+            revision: null,
+            diagnostics: provider ? provider.diagnostics : []
+        };
+    }
+
+    try {
+        const raw = configProviders.readConfigTextSync(provider.activePath, 'utf8');
+        const stats = fs.statSync(provider.activePath);
+        const config = configProviders.parseJsonText(raw);
+        const revision = configProviders.buildContentRevision({ content: raw, stats });
+        return {
+            config,
+            raw,
+            revision,
+            diagnostics: provider.diagnostics || []
+        };
+    } catch (error) {
+        return {
+            config: null,
+            raw: null,
+            revision: null,
+            diagnostics: [
+                ...(provider.diagnostics || []),
+                {
+                    severity: 'error',
+                    code: 'PROVIDER_READ_FAILED',
+                    message: `Failed to load provider config for ${provider.id}`,
+                    details: { error: error.message, path: provider.activePath }
+                }
+            ]
+        };
+    }
+}
+
+function requireOpenAgentProvider(provider) {
+    if (!provider) {
+        return {
+            ok: false,
+            status: 404,
+            payload: { error: 'Provider not found' }
+        };
+    }
+    if (provider.id !== configProviders.PROVIDER_IDS.OH_MY_OPENAGENT) {
+        return {
+            ok: false,
+            status: 400,
+            payload: {
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILES_ONLY',
+                    message: 'Multiple config files are only supported for Oh My OpenAgent'
+                }]
+            }
+        };
+    }
+    return { ok: true };
+}
+
+function buildOpenAgentProfileRecord(provider, profilePath, activeRevision) {
+    const raw = configProviders.readConfigTextSync(profilePath, 'utf8');
+    const stats = fs.statSync(profilePath);
+    const revision = configProviders.buildContentRevision({ content: raw, stats });
+    const diagnostics = [];
+    try {
+        configProviders.parseJsonText(raw);
+    } catch (error) {
+        diagnostics.push({
+            severity: 'error',
+            code: 'MALFORMED_OPENAGENT_PROFILE',
+            message: `Malformed OpenAgent profile config: ${profilePath}`,
+            details: { path: profilePath, error: error.message }
+        });
+    }
+
+    return {
+        name: path.basename(profilePath).replace(/\.jsonc?$/i, ''),
+        path: profilePath,
+        active: !!activeRevision && activeRevision.hash === revision.hash,
+        revision,
+        diagnostics
+    };
+}
+
+function listOpenAgentProfiles(provider) {
+    const activePath = configProviders.getOpenAgentDefaultActivePath(provider);
+    const activeRevision = getCurrentRevisionForPath(activePath);
+    const profilePaths = configProviders.listOpenAgentProfilePaths(provider);
+    return profilePaths.map((profilePath) => buildOpenAgentProfileRecord(provider, profilePath, activeRevision));
+}
+
+function resolveOpenAgentProfileSelection(provider, body = {}) {
+    const requestedPath = typeof body.path === 'string' ? body.path : null;
+    if (requestedPath) {
+        const normalized = configProviders.normalizePath(requestedPath);
+        if (configProviders.isOpenAgentProfilePath(provider, normalized) && fs.existsSync(normalized)) {
+            return { ok: true, path: normalized };
+        }
+    }
+
+    if (typeof body.name === 'string') {
+        const profilePath = configProviders.getOpenAgentProfilePath(provider, body.name);
+        if (profilePath && fs.existsSync(profilePath)) return { ok: true, path: profilePath };
+    }
+
+    return {
+        ok: false,
+        diagnostics: [{
+            severity: 'error',
+            code: 'OPENAGENT_PROFILE_NOT_FOUND',
+            message: 'Selected OpenAgent config profile was not found',
+            details: {
+                path: requestedPath,
+                name: typeof body.name === 'string' ? body.name : null,
+                expectedPaths: configProviders.listOpenAgentProfilePaths(provider)
+            }
+        }]
+    };
+}
+
+function resolveSavePath(provider, requestedPath) {
+    return configProviders.resolveProviderWritePath({
+        provider,
+        requestedPath
+    });
+}
+
+app.get('/api/config-providers', (req, res) => {
+    try {
+        const providers = detectConfigProviders();
+        res.json(providers.map((provider) => ({
+            id: provider.id,
+            displayName: provider.displayName,
+            paths: provider.paths,
+            exists: provider.exists,
+            activePath: provider.activePath,
+            capabilities: provider.capabilities,
+            diagnostics: provider.diagnostics || []
+        })));
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+        const details = loadProviderDetails(provider);
+        res.json({
+            id: provider.id,
+            displayName: provider.displayName,
+            paths: provider.paths,
+            exists: provider.exists,
+            activePath: provider.activePath,
+            capabilities: provider.capabilities,
+            diagnostics: details.diagnostics,
+            config: details.config,
+            raw: details.raw,
+            revision: details.revision
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id/profiles', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        res.json({
+            profileDir: configProviders.getOpenAgentProfileDir(provider),
+            activePath: configProviders.getOpenAgentDefaultActivePath(provider),
+            profiles: listOpenAgentProfiles(provider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/profiles', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        const profilePath = configProviders.getOpenAgentProfilePath(provider, req.body && req.body.name);
+        if (!profilePath) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILE_NAME_REQUIRED',
+                    message: 'OpenAgent config profile name is required'
+                }]
+            });
+        }
+
+        const content = typeof req.body?.raw === 'string' ? req.body.raw : '{}\n';
+        const parsed = parseAndValidateProviderPayload(provider, { raw: content });
+        if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+
+        const pathSafety = validatePathWritable(profilePath);
+        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+
+        const createResult = configProviders.createFileIfMissingSync(profilePath, parsed.raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        res.json({
+            success: true,
+            created: createResult.created,
+            profile: buildOpenAgentProfileRecord(updatedProvider, profilePath, getCurrentRevisionForPath(configProviders.getOpenAgentDefaultActivePath(updatedProvider))),
+            profiles: listOpenAgentProfiles(updatedProvider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/profiles/switch', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        const guard = requireOpenAgentProvider(provider);
+        if (!guard.ok) return res.status(guard.status).json(guard.payload);
+
+        const selected = resolveOpenAgentProfileSelection(provider, req.body || {});
+        if (!selected.ok) return res.status(400).json({ success: false, diagnostics: selected.diagnostics });
+
+        const raw = configProviders.readConfigTextSync(selected.path, 'utf8');
+        const parsed = parseAndValidateProviderPayload(provider, { raw });
+        if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+
+        const activePath = configProviders.getOpenAgentDefaultActivePath(provider);
+        const pathSafety = validatePathWritable(activePath);
+        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+
+        configProviders.writeConfigTextAtomicSync(activePath, raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        const updatedDetails = loadProviderDetails(updatedProvider);
+        res.json({
+            success: true,
+            path: activePath,
+            selectedPath: selected.path,
+            diagnostics: updatedDetails.diagnostics || [],
+            revision: updatedDetails.revision,
+            profiles: listOpenAgentProfiles(updatedProvider)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/validate', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ valid: false, diagnostics: parsed.diagnostics });
+        }
+
+        res.json({
+            valid: true,
+            diagnostics: parsed.diagnostics || [],
+            config: parsed.config
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/save', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const revisionCheck = compareExpectedRevision(pathDecision.path, req.body || {});
+        if (!revisionCheck.ok) {
+            return res.status(revisionCheck.status || 409).json({ success: false, diagnostics: revisionCheck.diagnostics });
+        }
+
+        const writePayload = buildWriteContent({
+            provider,
+            body: req.body || {},
+            parsed,
+            targetPath: pathDecision.path
+        });
+
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        const updatedDetails = loadProviderDetails(updatedProvider);
+        res.json({
+            success: true,
+            id: provider.id,
+            path: pathDecision.path,
+            exists: true,
+            diagnostics: updatedProvider.diagnostics || [],
+            revision: updatedDetails.revision || getCurrentRevisionForPath(pathDecision.path)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/create', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const content = typeof req.body?.raw === 'string' ? req.body.raw : '{}\n';
+        const parsed = parseAndValidateProviderPayload(provider, { raw: content });
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const createResult = configProviders.createFileIfMissingSync(pathDecision.path, parsed.raw, 'utf8');
+        res.json({ success: true, created: createResult.created, path: pathDecision.path });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/config-providers/:id/import', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+
+        const providerMatch = configProviders.validateImportProviderMatch({
+            routeProviderId: provider.id,
+            payload: req.body || {}
+        });
+        if (!providerMatch.ok) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [providerMatch.diagnostic]
+            });
+        }
+
+        const parsed = parseAndValidateProviderPayload(provider, req.body || {});
+        if (!parsed.ok) {
+            return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        const pathDecision = resolveSavePath(provider, req.body && req.body.path);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+
+        const pathSafety = validatePathWritable(pathDecision.path);
+        if (!pathSafety.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        }
+
+        const revisionCheck = compareExpectedRevision(pathDecision.path, req.body || {});
+        if (!revisionCheck.ok) {
+            return res.status(revisionCheck.status || 409).json({ success: false, diagnostics: revisionCheck.diagnostics });
+        }
+
+        const writePayload = buildWriteContent({
+            provider,
+            body: req.body || {},
+            parsed,
+            targetPath: pathDecision.path
+        });
+
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        res.json({
+            success: true,
+            imported: true,
+            id: provider.id,
+            providerId: provider.id,
+            path: pathDecision.path,
+            revision: getCurrentRevisionForPath(pathDecision.path)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/config-providers/:id/export', (req, res) => {
+    try {
+        const provider = getProviderByIdOrNull(req.params.id);
+        if (!provider) return res.status(404).json({ error: 'Provider not found' });
+        const details = loadProviderDetails(provider);
+        res.json({
+            id: provider.id,
+            providerId: provider.id,
+            path: provider.activePath,
+            exists: provider.exists,
+            raw: details.raw,
+            config: details.config,
+            revision: details.revision,
+            diagnostics: details.diagnostics
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/ohmyopencode', (req, res) => {
-    const ohMyPath = getOhMyOpenCodeConfigPath();
-    const exists = ohMyPath && fs.existsSync(ohMyPath);
-    const config = exists ? loadOhMyOpenCodeConfig() : null;
+    const provider = getProviderByIdOrNull(configProviders.PROVIDER_IDS.OH_MY_OPENAGENT);
+    const details = provider ? loadProviderDetails(provider) : { config: null, diagnostics: [] };
+    const ohMyPath = provider
+        ? (provider.activePath || getOhMyOpenCodeConfigPath())
+        : getOhMyOpenCodeConfigPath();
+    const exists = !!(provider && provider.exists);
+    const config = exists ? details.config : null;
     const studio = loadStudioConfig();
     const preferences = studio.ohmy || { agents: {} };
-    res.json({ path: ohMyPath, exists, config, preferences });
+    res.json({ path: ohMyPath, exists, config, preferences, warnings: details.diagnostics.length > 0 ? details.diagnostics : undefined });
 });
 
 app.post('/api/ohmyopencode', (req, res) => {
@@ -2086,7 +2795,9 @@ app.post('/api/ohmyopencode', (req, res) => {
         studio.ohmy = preferences;
         saveStudioConfig(studio);
         
-        const currentConfig = loadOhMyOpenCodeConfig() || {};
+        const provider = getProviderByIdOrNull(configProviders.PROVIDER_IDS.OH_MY_OPENAGENT);
+        const details = provider ? loadProviderDetails(provider) : { config: null };
+        const currentConfig = details.config || {};
         const warnings = [];
         
         for (const [agentName, agentPrefs] of Object.entries(preferences.agents)) {
@@ -2110,9 +2821,17 @@ app.post('/api/ohmyopencode', (req, res) => {
             }
         }
         
-        saveOhMyOpenCodeConfig(currentConfig);
+        const legacyOhMyPath = getOhMyOpenCodeConfigPath();
+        const saveTargetProvider = (provider && provider.activePath)
+            ? provider
+            : { activePath: legacyOhMyPath, paths: [legacyOhMyPath].filter(Boolean) };
+        const pathDecision = resolveSavePath(saveTargetProvider);
+        if (!pathDecision.ok) {
+            return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
+        }
+        configProviders.writeConfigTextAtomicSync(pathDecision.path, JSON.stringify(currentConfig, null, 2), 'utf8');
         
-        const ohMyPath = getOhMyOpenCodeConfigPath();
+        const ohMyPath = pathDecision.path;
         triggerGitHubAutoSync();
         res.json({ 
             success: true, 
@@ -2445,7 +3164,7 @@ app.post('/api/github/autosync', async (req, res) => {
 
 const getActiveSkillDir = () => {
     const cp = getConfigPath();
-    return cp ? path.join(path.dirname(cp), 'skill') : null;
+    return cp ? path.join(path.dirname(cp), 'skills') : null;
 };
 
 app.get('/api/skills', (req, res) => {
@@ -2493,7 +3212,7 @@ app.get('/api/skills', (req, res) => {
 
 app.get('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2514,7 +3233,7 @@ app.get('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2535,7 +3254,7 @@ app.post('/api/skills/:name', (req, res) => {
              // Fallback to first available global dir if no active config
              const roots = getSearchRoots();
              const globalRoot = roots.find(r => r.includes('.config') || r.includes('opencode'));
-             if (globalRoot) targetDir = path.join(globalRoot, 'skill', name);
+             if (globalRoot) targetDir = path.join(globalRoot, 'skills', name);
              else return res.status(404).json({ error: ERROR_CODES.NO_CONFIG_FOR_SKILL, code: 'NO_CONFIG_FOR_SKILL' });
         } else {
             targetDir = path.join(activeDir, name);
@@ -2554,7 +3273,7 @@ app.post('/api/skills/:name', (req, res) => {
 
 app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
-    if (!/^[a-zA-Z0-9_-s]+$/.test(name)) {
+    if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
@@ -2582,6 +3301,10 @@ app.delete('/api/skills/:name', (req, res) => {
 
 app.post('/api/skills/:name/toggle', (req, res) => {
     const { name } = req.params;
+    if (!isSafeSkillName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
+    }
+
     const studio = loadStudioConfig();
     studio.disabledSkills = studio.disabledSkills || [];
     
@@ -2654,6 +3377,9 @@ app.get('/api/plugins', (req, res) => {
 
 app.get('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -2676,6 +3402,9 @@ app.get('/api/plugins/:name', (req, res) => {
 app.post('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     const { content } = req.body;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -2712,6 +3441,9 @@ app.post('/api/plugins/:name', (req, res) => {
 
 app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
+    if (!isSafePluginName(name)) {
+        return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
 
     let deleted = false;
     for (const dirInfo of getPluginDirs()) {
@@ -2878,6 +3610,12 @@ const listAuthProfiles = (p, activePlugin) => {
     } catch { return []; }
 };
 
+function rejectInvalidAuthProfileName(res, name) {
+    if (isSafeAuthProfileName(name)) return false;
+    res.status(400).json({ error: ERROR_CODES.INVALID_AUTH_PROFILE_NAME, code: 'INVALID_AUTH_PROFILE_NAME' });
+    return true;
+}
+
 app.get('/api/auth/providers', (req, res) => {
     const providers = [
         { id: 'google', name: 'Google', type: 'oauth', description: 'Google Gemini API' },
@@ -3009,6 +3747,7 @@ app.post('/api/auth/profiles/:provider', (req, res) => {
     }
 
     const profileName = name || auth[provider].email || `profile-${Date.now()}`;
+    if (rejectInvalidAuthProfileName(res, profileName)) return;
     const profilePath = path.join(dir, `${profileName}.json`);
     atomicWriteFileSync(profilePath, JSON.stringify(auth[provider], null, 2));
 
@@ -3033,6 +3772,7 @@ app.post('/api/auth/profiles/:provider/:name/activate', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
     const dir = getProfileDir(provider, activePlugin);
     const profilePath = path.join(dir, `${name}.json`);
     if (!fs.existsSync(profilePath)) return res.status(404).json({ error: ERROR_CODES.PROFILE_NOT_FOUND, code: 'PROFILE_NOT_FOUND' });
@@ -3149,6 +3889,7 @@ app.delete('/api/auth/profiles/:provider/:name', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
     const dir = getProfileDir(provider, activePlugin);
     const profilePath = path.join(dir, `${name}.json`);
     console.log(`[Auth] Target path: ${profilePath}, Exists: ${fs.existsSync(profilePath)}`);
@@ -3262,6 +4003,8 @@ app.put('/api/auth/profiles/:provider/:name', (req, res) => {
         ? ('google.antigravity')
         : provider;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+    if (rejectInvalidAuthProfileName(res, newName)) return;
     const dir = getProfileDir(provider, activePlugin);
     const oldPath = path.join(dir, `${name}.json`);
     const newPath = path.join(dir, `${newName}.json`);
@@ -3490,6 +4233,10 @@ function importCurrentAuthToPool(provider) {
     }
 
     const name = email || creds.accountId || creds.id || 'primary';
+    if (!isSafeAuthProfileName(name)) {
+        console.warn(`[Auth] Skipping ${provider} pool sync for invalid profile name.`);
+        return;
+    }
     const profileDir = path.join(AUTH_PROFILES_DIR, provider);
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
@@ -3549,6 +4296,10 @@ function importCurrentGoogleAuthToPool() {
     if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
 
     const email = creds.email;
+    if (!isSafeAuthProfileName(email)) {
+        console.warn('[Auth] Skipping Google pool sync for invalid profile name.');
+        return;
+    }
     const profilePath = path.join(profileDir, `${email}.json`);
 
     // Check if we need to sync (new account or updated tokens/metadata)
@@ -3643,6 +4394,10 @@ function syncAntigravityPool() {
     const seen = new Set();
     allAccounts.forEach((account, idx) => {
         const name = account.email || `account-${idx + 1}`;
+        if (!isSafeAuthProfileName(name)) {
+            console.warn('[Pool] Skipping Antigravity account with invalid profile name.');
+            return;
+        }
         seen.add(name);
         const profilePath = path.join(profileDir, `${name}.json`);
         if (!fs.existsSync(profilePath)) {
@@ -3905,6 +4660,8 @@ app.put('/api/auth/pool/:name/cooldown', (req, res) => {
     const { name } = req.params;
     let { duration, provider = 'google', rule } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     if (rule) {
         const studio = loadStudioConfig();
         const r = (studio.cooldownRules || []).find(cr => cr.name === rule);
@@ -3936,6 +4693,8 @@ app.delete('/api/auth/pool/:name/cooldown', (req, res) => {
     const { name } = req.params;
     const provider = req.query.provider || 'google';
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -3955,6 +4714,8 @@ app.post('/api/auth/pool/:name/usage', (req, res) => {
     const { name } = req.params;
     const { provider = 'google' } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -3982,6 +4743,8 @@ app.put('/api/auth/pool/:name/metadata', (req, res) => {
     const { name } = req.params;
     const { provider = 'google', email, createdAt, projectId, tier } = req.body;
     
+    if (rejectInvalidAuthProfileName(res, name)) return;
+
     const activePlugin = getActiveGooglePlugin();
     const namespace = provider === 'google'
         ? ('google.antigravity')
@@ -4088,141 +4851,249 @@ app.post('/api/profiles/:name/activate', (req, res) => {
 // END ACCOUNT POOL MANAGEMENT
 // ============================================
 
+function emptyUsageStats() {
+    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
+}
+
+function getUsageDataCandidates(cp) {
+    const home = os.homedir();
+    return [
+        path.dirname(cp),
+        path.join(home, '.local', 'share', 'opencode'),
+        path.join(home, '.opencode'),
+        process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
+        path.join(home, 'AppData', 'Local', 'opencode')
+    ].filter(Boolean);
+}
+
+function getUsageTimeBounds(range, from, to) {
+    const now = Date.now();
+    let min = 0;
+    let max = 0;
+    if (range === '24h') min = now - 86400000;
+    else if (range === '7d') min = now - 604800000;
+    else if (range === '30d') min = now - 2592000000;
+    else if (range === '3m') min = now - 7776000000;
+    else if (range === '6m') min = now - 15552000000;
+    else if (range === '1y') min = now - 31536000000;
+    if (from) min = from;
+    if (to) max = to;
+    return { min, max };
+}
+
+function getTimeKey(createdAt, granularity) {
+    const d = new Date(createdAt);
+    if (granularity === 'hourly') return d.toISOString().substring(0, 13) + ':00:00Z';
+    if (granularity === 'weekly') {
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff)).toISOString().split('T')[0];
+    }
+    if (granularity === 'monthly') return d.toISOString().substring(0, 7) + '-01';
+    return d.toISOString().split('T')[0];
+}
+
+function createStatsAccumulator() {
+    return { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
+}
+
+function appendUsage(stats, projectInfo, msg, granularity) {
+    if (msg.role !== 'assistant' || !msg.tokens) return;
+    const c = msg.cost || 0;
+    const it = msg.tokens.input || 0;
+    const ot = msg.tokens.output || 0;
+    const t = it + ot;
+    const createdAt = msg.time?.created;
+    if (!createdAt) return;
+
+    const tk = getTimeKey(createdAt, granularity);
+    const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
+    const pid = projectInfo.id;
+    const pname = projectInfo.name;
+
+    stats.totalCost += c;
+    stats.totalTokens += t;
+
+    if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    stats.byModel[mid].cost += c;
+    stats.byModel[mid].tokens += t;
+    stats.byModel[mid].inputTokens += it;
+    stats.byModel[mid].outputTokens += ot;
+
+    if (!stats.byProject[pid]) stats.byProject[pid] = { name: pname, id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    stats.byProject[pid].cost += c;
+    stats.byProject[pid].tokens += t;
+    stats.byProject[pid].inputTokens += it;
+    stats.byProject[pid].outputTokens += ot;
+
+    if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
+    const te = stats.byTime[tk];
+    te.cost += c;
+    te.tokens += t;
+    te.inputTokens += it;
+    te.outputTokens += ot;
+    if (!te[mid]) te[mid] = 0;
+    te[mid] += c;
+
+    const kIn = `${mid}_input`;
+    const kOut = `${mid}_output`;
+    te[kIn] = (te[kIn] || 0) + it;
+    te[kOut] = (te[kOut] || 0) + ot;
+}
+
+function finalizeUsageStats(stats) {
+    return {
+        totalCost: stats.totalCost,
+        totalTokens: stats.totalTokens,
+        byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
+        byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
+        byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
+    };
+}
+
+function tryReadUsageFromSqlite(opts) {
+    if (!DatabaseSync) return null;
+    const { dbPath, projectIdFilter, min, max, granularity } = opts;
+    let db;
+    try {
+        db = new DatabaseSync(dbPath, { readonly: true });
+        const rows = db.prepare(`
+            SELECT m.data AS message_data, m.time_created AS message_time_created,
+                   s.project_id AS session_project_id,
+                   p.id AS project_id, p.name AS project_name, p.worktree AS project_worktree
+            FROM message m
+            LEFT JOIN session s ON s.id = m.session_id
+            LEFT JOIN project p ON p.id = s.project_id
+        `).all();
+
+        const stats = createStatsAccumulator();
+        for (const row of rows) {
+            let msg;
+            try {
+                msg = JSON.parse(row.message_data);
+            } catch {
+                continue;
+            }
+            if (!msg.time) msg.time = {};
+            if (!msg.time.created) msg.time.created = row.message_time_created;
+            if (!msg.time.created) continue;
+
+            const pid = row.project_id || row.session_project_id || 'unknown';
+            if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
+            if (min > 0 && msg.time.created < min) continue;
+            if (max > 0 && msg.time.created > max) continue;
+
+            const fallbackName = row.project_worktree ? path.basename(row.project_worktree) : 'Unassigned';
+            const pname = row.project_name || fallbackName;
+            appendUsage(stats, { id: pid, name: pname }, msg, granularity);
+        }
+
+        return finalizeUsageStats(stats);
+    } finally {
+        if (db) {
+            try { db.close(); } catch {}
+        }
+    }
+}
+
+async function readUsageFromLegacyJson(opts) {
+    const { dataCandidates, projectIdFilter, min, max, granularity } = opts;
+    let md = null;
+    let sd = null;
+
+    for (const d of dataCandidates) {
+        const mdp = path.join(d, 'storage', 'message');
+        const sdp = path.join(d, 'storage', 'session');
+        if (fs.existsSync(mdp)) {
+            md = mdp;
+            sd = sdp;
+            break;
+        }
+    }
+
+    if (!md) return emptyUsageStats();
+
+    const pmap = new Map();
+    if (fs.existsSync(sd)) {
+        const sessionDirs = await fs.promises.readdir(sd);
+        await Promise.all(sessionDirs.map(async d => {
+            const fp = path.join(sd, d);
+            try {
+                const fpStats = await fs.promises.stat(fp);
+                if (fpStats.isDirectory()) {
+                    const files = await fs.promises.readdir(fp);
+                    await Promise.all(files.map(async f => {
+                        if (f.startsWith('ses_') && f.endsWith('.json')) {
+                            try {
+                                const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
+                                pmap.set(f.replace('.json', ''), {
+                                    name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'),
+                                    id: m.projectID || d
+                                });
+                            } catch {}
+                        }
+                    }));
+                }
+            } catch {}
+        }));
+    }
+
+    const stats = createStatsAccumulator();
+    const seen = new Set();
+    const sessionDirs = await fs.promises.readdir(md);
+    await Promise.all(sessionDirs.map(async s => {
+        if (!s.startsWith('ses_')) return;
+        const sp = path.join(md, s);
+        try {
+            const spStats = await fs.promises.stat(sp);
+            if (spStats.isDirectory()) {
+                const files = await fs.promises.readdir(sp);
+                for (const f of files) {
+                    if (!f.endsWith('.json')) continue;
+                    const fullPath = path.join(sp, f);
+                    if (seen.has(fullPath)) continue;
+                    seen.add(fullPath);
+                    try {
+                        const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
+                        const pid = pmap.get(s)?.id || 'unknown';
+                        if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
+                        if (!msg.time?.created) continue;
+                        if (min > 0 && msg.time.created < min) continue;
+                        if (max > 0 && msg.time.created > max) continue;
+                        appendUsage(stats, { id: pid, name: pmap.get(s)?.name || 'Unassigned' }, msg, granularity);
+                    } catch {}
+                }
+            }
+        } catch {}
+    }));
+
+    return finalizeUsageStats(stats);
+}
+
 app.get('/api/usage', async (req, res) => {
     try {
-        const {projectId: fid, granularity = 'daily', range = '30d'} = req.query;
+        const { projectId: projectIdFilter, granularity = 'daily', range = '30d' } = req.query;
         const cp = getConfigPath();
-        if (!cp) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-        
-        const home = os.homedir();
-        const dataCandidates = [
-            path.dirname(cp),
-            path.join(home, '.local', 'share', 'opencode'),
-            path.join(home, '.opencode'),
-            process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
-            path.join(home, 'AppData', 'Local', 'opencode')
-        ].filter(Boolean);
+        if (!cp) return res.json(emptyUsageStats());
 
-        let md = null;
-        let sd = null;
+        const dataCandidates = getUsageDataCandidates(cp);
+        const from = Number(req.query.from || 0);
+        const to = Number(req.query.to || 0);
+        const { min, max } = getUsageTimeBounds(range, from, to);
 
         for (const d of dataCandidates) {
-            const mdp = path.join(d, 'storage', 'message');
-            const sdp = path.join(d, 'storage', 'session');
-            if (fs.existsSync(mdp)) {
-                md = mdp;
-                sd = sdp;
+            const dbPath = path.join(d, 'opencode.db');
+            if (!fs.existsSync(dbPath)) continue;
+            try {
+                return res.json(tryReadUsageFromSqlite({ dbPath, projectIdFilter, min, max, granularity }));
+            } catch (error) {
+                console.warn('[Usage] Failed reading SQLite usage DB, falling back to legacy JSON:', error?.message || error);
                 break;
             }
         }
 
-        if (!md) return res.json({ totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] });
-
-        const pmap = new Map();
-        if (fs.existsSync(sd)) {
-            const sessionDirs = await fs.promises.readdir(sd);
-            await Promise.all(sessionDirs.map(async d => {
-                const fp = path.join(sd, d);
-                try {
-                    const stats = await fs.promises.stat(fp);
-                    if (stats.isDirectory()) {
-                        const files = await fs.promises.readdir(fp);
-                        await Promise.all(files.map(async f => {
-                            if (f.startsWith('ses_') && f.endsWith('.json')) {
-                                try {
-                                    const m = JSON.parse(await fs.promises.readFile(path.join(fp, f), 'utf8'));
-                                    pmap.set(f.replace('.json', ''), { 
-                                        name: m.directory ? path.basename(m.directory) : (m.projectID ? m.projectID.substring(0, 8) : 'Unknown'), 
-                                        id: m.projectID || d 
-                                    });
-                                } catch {}
-                            }
-                        }));
-                    }
-                } catch {}
-            }));
-        }
-
-        const stats = { totalCost: 0, totalTokens: 0, byModel: {}, byTime: {}, byProject: {} };
-        const seen = new Set();
-        const now = Date.now();
-        const from = Number(req.query.from || 0);
-        const to = Number(req.query.to || 0);
-        let min = 0;
-        let max = 0;
-        if (range === '24h') min = now - 86400000;
-        else if (range === '7d') min = now - 604800000;
-        else if (range === '30d') min = now - 2592000000;
-        else if (range === '3m') min = now - 7776000000;
-        else if (range === '6m') min = now - 15552000000;
-        else if (range === '1y') min = now - 31536000000;
-        if (from) min = from;
-        if (to) max = to;
-
-        const sessionDirs = await fs.promises.readdir(md);
-        await Promise.all(sessionDirs.map(async s => {
-            if (!s.startsWith('ses_')) return;
-            const sp = path.join(md, s);
-            try {
-                const spStats = await fs.promises.stat(sp);
-                if (spStats.isDirectory()) {
-                    const files = await fs.promises.readdir(sp);
-                    for (const f of files) {
-                        if (!f.endsWith('.json')) continue;
-                        const fullPath = path.join(sp, f);
-                        if (seen.has(fullPath)) continue;
-                        seen.add(fullPath);
-                        
-                        try {
-                            const msg = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
-                            const pid = pmap.get(s)?.id || 'unknown';
-                            if (fid && fid !== 'all' && pid !== fid) continue;
-                            if (min > 0 && msg.time.created < min) continue;
-                            if (max > 0 && msg.time.created > max) continue;
-                            
-                            if (msg.role === 'assistant' && msg.tokens) {
-                                const c = msg.cost || 0, it = msg.tokens.input || 0, ot = msg.tokens.output || 0, t = it + ot;
-                                const d = new Date(msg.time.created);
-                                let tk;
-                                if (granularity === 'hourly') tk = d.toISOString().substring(0, 13) + ':00:00Z';
-                                else if (granularity === 'weekly') {
-                                    const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                    tk = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                                } else if (granularity === 'monthly') tk = d.toISOString().substring(0, 7) + '-01';
-                                else tk = d.toISOString().split('T')[0];
-
-                                const mid = msg.modelID || (msg.model && (msg.model.modelID || msg.model.id)) || 'unknown';
-                                stats.totalCost += c; stats.totalTokens += t;
-                                
-                                if (!stats.byModel[mid]) stats.byModel[mid] = { name: mid, id: mid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byModel[mid].cost += c; stats.byModel[mid].tokens += t; stats.byModel[mid].inputTokens += it; stats.byModel[mid].outputTokens += ot;
-
-                                if (!stats.byProject[pid]) stats.byProject[pid] = { name: pmap.get(s)?.name || 'Unassigned', id: pid, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                stats.byProject[pid].cost += c; stats.byProject[pid].tokens += t; stats.byProject[pid].inputTokens += it; stats.byProject[pid].outputTokens += ot;
-
-                                if (!stats.byTime[tk]) stats.byTime[tk] = { date: tk, name: tk, id: tk, cost: 0, tokens: 0, inputTokens: 0, outputTokens: 0 };
-                                const te = stats.byTime[tk];
-                                te.cost += c; te.tokens += t; te.inputTokens += it; te.outputTokens += ot;
-                                if (!te[mid]) te[mid] = 0;
-                                te[mid] += c;
-                                
-                                const kIn = `${mid}_input`, kOut = `${mid}_output`;
-                                te[kIn] = (te[kIn] || 0) + it;
-                                te[kOut] = (te[kOut] || 0) + ot;
-                            }
-                        } catch {}
-                    }
-                }
-            } catch {}
-        }));
-
-        res.json({
-            totalCost: stats.totalCost,
-            totalTokens: stats.totalTokens,
-            byModel: Object.values(stats.byModel).sort((a, b) => b.cost - a.cost),
-            byDay: Object.values(stats.byTime).sort((a, b) => a.name.localeCompare(b.name)).map(v => ({ ...v, date: v.name })),
-            byProject: Object.values(stats.byProject).sort((a, b) => b.cost - a.cost)
-        });
+        const legacy = await readUsageFromLegacyJson({ dataCandidates, projectIdFilter, min, max, granularity });
+        return res.json(legacy);
     } catch (error) {
         console.error('Usage API error:', error);
         res.status(500).json({ error: ERROR_CODES.FAILED_FETCH_USAGE, code: 'FAILED_FETCH_USAGE' });
@@ -4422,6 +5293,9 @@ app.post('/api/auth/google/start', async (req, res) => {
             const profileDir = path.join(AUTH_PROFILES_DIR, namespace);
             if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
             const profileName = email || `google-${Date.now()}`;
+            if (!isSafeAuthProfileName(profileName)) {
+                throw new Error('Invalid auth profile name');
+            }
             const profilePath = path.join(profileDir, `${profileName}.json`);
             
             console.log(`[Auth] Saving profile to: ${profilePath}`);
@@ -4620,7 +5494,7 @@ app.post('/api/presets/:id/apply', (req, res) => {
     const config = loadConfig() || {};
     const cp = getConfigPath();
     const configDir = path.dirname(cp);
-    const skillDir = path.join(configDir, 'skill');
+    const skillDir = path.join(configDir, 'skills');
     const pluginDir = path.join(configDir, 'plugin');
     
     // Skills
@@ -4683,11 +5557,15 @@ app.post('/api/presets/:id/apply', (req, res) => {
 
 // Start watcher on server start
 async function startServer() {
+    if (!ensureSingleServerInstance()) {
+        process.exit(1);
+    }
+
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
     const port = await findAvailablePort(DEFAULT_PORT);
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
+    app.listen(port, '127.0.0.1', () => {
+        console.log(`Server running at http://127.0.0.1:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
             const studio = loadStudioConfig();

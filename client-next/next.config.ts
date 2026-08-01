@@ -20,7 +20,7 @@ const securityHeaders = [
   },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
+    value: "camera=(), microphone=(), geolocation=(), local-network=(self), loopback-network=(self), local-network-access=(self)",
   },
 ];
 

@@ -1,0 +1,45 @@
+
+# local-backend
+- label: hosted studio pages request local network access before loading the local backend
+  command: grep -q 'local-network-access=(self)' client-next/next.config.ts && grep -q 'targetAddressSpace' client-next/src/lib/api.ts
+  tags: [implemented]
+- label: local backend allows private network access preflights from hosted studio origins
+  command: node --test server/lib/cors-policy.test.js
+  tags: [implemented]
+- label: hosted studio pages require backend version 2.4.2 or newer for local network access
+  command: grep -q "MIN_SERVER_VERSION = '2.4.2'" client-next/src/lib/api.ts && grep -q 'opencode-studio-server@2.4.2' client-next/src/components/app-shell.tsx client-next/src/components/update-required-modal.tsx && grep -q '"version": "2.4.2"' package.json server/package.json
+  tags: [implemented]
+- label: hosted studio pages allow fine-grained local-network and loopback-network permissions for browser local backend requests
+  command: grep -q 'local-network=(self)' client-next/next.config.ts && grep -q 'loopback-network=(self)' client-next/next.config.ts
+  tags: [implemented]
+- label: browser fetches to loopback local backends use the Chrome-supported local target address space annotation
+  command: grep -q "type LocalNetworkFetchInit = RequestInit & { targetAddressSpace?: 'local' };" client-next/src/lib/api.ts && grep -q "return 'local';" client-next/src/lib/api.ts && ! grep -q "'loopback'" client-next/src/lib/api.ts
+  tags: [implemented]
+- label: browser Axios API calls to local backends use the fetch adapter with the local target address space annotation
+  command: grep -q "adapter: 'fetch'" client-next/src/lib/api.ts && grep -q 'config.fetchOptions' client-next/src/lib/api.ts && grep -q 'targetAddressSpace' client-next/src/lib/api.ts
+  tags: [implemented]
+- label: local development pages do not add local network target address space annotations when calling the local backend
+  command: grep -q 'window.location.protocol !== .https:.' client-next/src/lib/api.ts && grep -q 'return undefined;' client-next/src/lib/api.ts
+  tags: [implemented]
+- label: the config API loads opencode.jsonc files containing comments and trailing commas
+  command: cd server && npx vitest run lib/config-providers.test.js
+  tags: [implemented]
+
+# custom-providers
+- label: settings exposes a graphical custom providers and models editor
+  command: grep -q 'CustomProviderModelEditor' client-next/src/app/settings/page.tsx && grep -q 'useTranslations("settings.customProviders")' client-next/src/components/custom-provider-model-editor.tsx
+  tags: [spec, implemented]
+- label: custom model edits can set default model, small model, and provider-scoped models
+  command: grep -q 'model:' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'small_model:' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'models:' client-next/src/components/custom-provider-model-editor.tsx
+  tags: [spec, implemented]
+- label: custom provider edits save to the canonical top-level provider config
+  command: grep -q 'provider:' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'config.provider' client-next/src/components/custom-provider-model-editor.tsx
+  tags: [spec, implemented]
+- label: custom provider saves preserve unedited OpenCode provider and model fields
+  command: grep -q 'source: provider' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'source: model' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'provider.source' client-next/src/components/custom-provider-model-editor.tsx && grep -q 'model.source' client-next/src/components/custom-provider-model-editor.tsx
+  tags: [spec, implemented]
+
+# releases
+- label: the 2.4.3 release publishes JSONC configuration support and Korean translation
+  command: grep -q '"version": "2.4.3"' package.json server/package.json && grep -q '## \[2.4.3\] - 2026-07-16' CHANGELOG.md && grep -q 'JSONC Configuration' CHANGELOG.md && grep -q 'Korean Translation' CHANGELOG.md
+  tags: [implemented]

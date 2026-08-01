@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const locales = [
-  { code: "en", label: "English" },
-  { code: "zh-CN", label: "中文" },
+  { code: "en", label: "English", triggerLabel: "EN" },
+  { code: "zh-CN", label: "중文", triggerLabel: "中" },
+  { code: "ko", label: "한국어", triggerLabel: "한" },
 ] as const;
 
 export function LanguageSwitcher() {
@@ -29,7 +30,7 @@ export function LanguageSwitcher() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8">
           <span className="text-xs font-medium">
-            {currentLocale === "zh-CN" ? "中" : "EN"}
+            {currentLocale === "zh-CN" ? "中" : currentLocale === "ko" ? "한" : "EN"}
           </span>
           <span className="sr-only">Switch language</span>
         </Button>
