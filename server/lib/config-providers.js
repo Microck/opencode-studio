@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const jsoncParser = require('jsonc-parser');
 
@@ -25,6 +26,8 @@ const PROVIDER_RULES = Object.freeze({
         id: PROVIDER_IDS.OH_MY_OPENAGENT,
         displayName: 'Oh My OpenAgent',
         basenames: Object.freeze([
+            'omo.jsonc',
+            'omo.json',
             'oh-my-openagent.json',
             'oh-my-openagent.jsonc',
             'oh-my-opencode.json',
@@ -41,6 +44,19 @@ const PROVIDER_RULES = Object.freeze({
 });
 
 const OPENAGENT_PROFILE_DIRNAME = 'oh-my-openagent-configs';
+
+const OMO_BASENAMES = Object.freeze(['omo.jsonc', 'omo.json']);
+
+const OPENAGENT_LEGACY_BASENAMES = Object.freeze([
+    'oh-my-openagent.json',
+    'oh-my-openagent.jsonc',
+    'oh-my-opencode.json',
+    'oh-my-opencode.jsonc'
+]);
+
+const MAX_OMO_PROJECT_SCAN_DEPTH = 256;
+
+const OMO_PROFILE_DIR_SUFFIX_RE = /(?:^|[\\/])profiles[\\/]([^\\/]+)[\\/]*$/;
 
 const CONTRACT_METHOD_NAMES = Object.freeze([
     'detect',
@@ -283,27 +299,156 @@ const createProviderDetectionResult = ({ id, displayName, candidates, existing, 
     diagnostics
 });
 
+const isSymlinkedPathSync = (targetPath) => {
+    try {
+        return fs.lstatSync(targetPath).isSymbolicLink();
+    } catch {
+        return false;
+    }
+};
+
+const realpathOrSelfSync = (targetPath) => {
+    try {
+        return fs.realpathSync(targetPath);
+    } catch {
+        return targetPath;
+    }
+};
+
+const findLoadableOmoConfigPathInDir = (dirPath) => {
+    const omoDir = path.join(dirPath, '.omo');
+    if (isSymlinkedPathSync(omoDir)) return null;
+    for (const basename of OMO_BASENAMES) {
+        const candidate = path.join(omoDir, basename);
+        if (isFileSync(candidate) && !isSymlinkedPathSync(candidate)) return candidate;
+    }
+    return null;
+};
+
+// Mirrors plugin findProjectConfigPathsFarthestFirst: walk up from cwd (max 256
+// layers), skip symlinked .omo dirs, stop at $HOME (exclusive), then reverse so
+// the farthest ancestor comes first. Returns the .omo directory roots that
+// actually contain a loadable omo.jsonc/omo.json.
+const findProjectOmoRootsFarthestFirst = ({ cwd = process.cwd(), homeDir = os.homedir() } = {}) => {
+    const startDir = normalizePath(cwd);
+    const homeBoundary = normalizePath(homeDir);
+    const realHomeBoundary = realpathOrSelfSync(homeBoundary);
+    const nearestFirst = [];
+    let currentDir = startDir;
+    for (let depth = 0; depth < MAX_OMO_PROJECT_SCAN_DEPTH; depth += 1) {
+        const normalizedCurrentDir = normalizePath(currentDir);
+        if (normalizedCurrentDir === homeBoundary || realpathOrSelfSync(normalizedCurrentDir) === realHomeBoundary) {
+            break;
+        }
+        const configPath = findLoadableOmoConfigPathInDir(currentDir);
+        if (configPath) nearestFirst.push(normalizePath(path.dirname(configPath)));
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) break;
+        currentDir = parentDir;
+    }
+    return nearestFirst.reverse();
+};
+
+// User-level ~/.omo first, then project-level .omo roots farthest-first.
+// Reusable by server/index.js for wiring omo roots into the caller-supplied roots.
+const getOmoSearchRoots = ({ cwd = process.cwd(), homeDir = os.homedir() } = {}) => {
+    const userRoot = normalizePath(path.join(homeDir, '.omo'));
+    const projectRoots = findProjectOmoRootsFarthestFirst({ cwd, homeDir });
+    return uniqNormalizedPaths([userRoot, ...projectRoots]);
+};
+
+const buildOmoRootCandidates = (omoRoots) => {
+    const candidates = [];
+    for (const root of omoRoots) {
+        for (const basename of OMO_BASENAMES) {
+            candidates.push(toAbsolutePath(root, basename));
+        }
+    }
+    return uniqNormalizedPaths(candidates);
+};
+
+const isOmoBasename = (basename) => OMO_BASENAMES.includes(basename);
+
+// Returns only the "[opencode]" block of an omo config file (never the whole file).
+const getOmoConfigBlock = (filePath) => {
+    if (!filePath || !isFileSync(filePath)) return {};
+    try {
+        const parsed = parseJsonText(fs.readFileSync(filePath, 'utf8'));
+        if (!isPlainObject(parsed)) return {};
+        const block = parsed['[opencode]'];
+        return isPlainObject(block) ? block : {};
+    } catch {
+        return {};
+    }
+};
+
+const profileName = (value) => (value === '' ? undefined : value);
+
+// Mirrors plugin profileNameFromOpenCodeConfigDir: extract profile name from the
+// "/profiles/<name>" suffix of OPENCODE_CONFIG_DIR (not the bare basename).
+const profileNameFromOpenCodeConfigDir = (configDirPath) => {
+    if (typeof configDirPath !== 'string') return undefined;
+    const match = configDirPath.match(OMO_PROFILE_DIR_SUFFIX_RE);
+    return profileName(match ? match[1] : undefined);
+};
+
+// Mirrors plugin resolveOmoProfileName: OMO_PROFILE > OCX_PROFILE > OPENCODE_CONFIG_DIR profile suffix.
+const getResolvedActiveProfile = (options = {}) => {
+    const env = options.env ?? process.env;
+    return (
+        profileName(options.profile) ??
+        profileName(env.OMO_PROFILE) ??
+        profileName(env.OCX_PROFILE) ??
+        profileNameFromOpenCodeConfigDir(env.OPENCODE_CONFIG_DIR)
+    );
+};
+
 const detectSingleProvider = (rule, options = {}) => {
     const roots = resolveRoots({ roots: options.roots, customPaths: options.customPaths });
     const candidates = buildCandidatesForRule(rule, roots);
-    const existing = findExistingPaths(candidates);
+    let existing = findExistingPaths(candidates);
     const diagnostics = [];
-
-    if (existing.length > 1) {
-        diagnostics.push(createDiagnostic({
-            severity: 'warning',
-            code: 'DUPLICATE_PROVIDER_CONFIG',
-            message: `Multiple config files detected for ${rule.displayName}`,
-            details: { paths: existing }
-        }));
-    }
+    let activePath = existing[0] || null;
 
     if (rule.id === PROVIDER_IDS.OH_MY_OPENAGENT) {
-        const hasPrimary = existing.some((p) => {
+        const omoRoots = getOmoSearchRoots();
+        const omoRootSet = new Set(omoRoots.map((root) => normalizePath(root)));
+
+        const omoExisting = findExistingPaths(buildOmoRootCandidates(omoRoots));
+
+        const omoOutsideRoots = [];
+        const legacyExisting = [];
+        for (const p of existing) {
+            if (isOmoBasename(getPathBasenameAnySeparator(p))) {
+                if (!omoRootSet.has(normalizePath(path.dirname(p)))) omoOutsideRoots.push(p);
+            } else {
+                legacyExisting.push(p);
+            }
+        }
+
+        if (omoOutsideRoots.length > 0) {
+            diagnostics.push(createDiagnostic({
+                severity: 'warning',
+                code: 'OPENAGENT_OMO_OUTSIDE_ROOT',
+                message: 'Detected omo.jsonc outside an omo search root; ignoring it',
+                details: { paths: omoOutsideRoots, omoRoots }
+            }));
+        }
+
+        if (legacyExisting.length > 1) {
+            diagnostics.push(createDiagnostic({
+                severity: 'warning',
+                code: 'DUPLICATE_PROVIDER_CONFIG',
+                message: `Multiple config files detected for ${rule.displayName}`,
+                details: { paths: legacyExisting }
+            }));
+        }
+
+        const hasPrimary = legacyExisting.some((p) => {
             const basename = getPathBasenameAnySeparator(p);
             return basename === 'oh-my-openagent.json' || basename === 'oh-my-openagent.jsonc';
         });
-        const hasLegacy = existing.some((p) => {
+        const hasLegacy = legacyExisting.some((p) => {
             const basename = getPathBasenameAnySeparator(p);
             return basename === 'oh-my-opencode.json' || basename === 'oh-my-opencode.jsonc';
         });
@@ -312,12 +457,29 @@ const detectSingleProvider = (rule, options = {}) => {
                 severity: 'warning',
                 code: 'OPENAGENT_ALIAS_DUPLICATE',
                 message: 'Detected both oh-my-openagent and legacy oh-my-opencode config aliases',
-                details: { paths: existing }
+                details: { paths: legacyExisting }
             }));
         }
-    }
 
-    const activePath = existing[0] || null;
+        activePath = omoExisting[0] || legacyExisting[0] || null;
+        if (activePath && OPENAGENT_LEGACY_BASENAMES.includes(getPathBasenameAnySeparator(activePath))) {
+            diagnostics.push(createDiagnostic({
+                severity: 'warning',
+                code: 'OPENAGENT_LEGACY_CONFIG',
+                message: 'Using legacy oh-my-openagent/oh-my-opencode config; prefer omo.jsonc in an omo root',
+                details: { path: activePath }
+            }));
+        }
+
+        existing = uniqNormalizedPaths([...omoExisting, ...legacyExisting]);
+    } else if (existing.length > 1) {
+        diagnostics.push(createDiagnostic({
+            severity: 'warning',
+            code: 'DUPLICATE_PROVIDER_CONFIG',
+            message: `Multiple config files detected for ${rule.displayName}`,
+            details: { paths: existing }
+        }));
+    }
     diagnostics.push(...parseConfigForDiagnostics(activePath, { parseJsonc: options.parseJsonc }));
 
     if (rule.id === PROVIDER_IDS.OH_MY_OPENCODE_SLIM && activePath) {
@@ -570,6 +732,9 @@ module.exports = {
     getOpenAgentProfilePath,
     isOpenAgentProfilePath,
     listOpenAgentProfilePaths,
+    getOmoSearchRoots,
+    getOmoConfigBlock,
+    getResolvedActiveProfile,
     createProviderDetectionResult,
     detectSingleProvider,
     detectProviders,
