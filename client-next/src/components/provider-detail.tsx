@@ -107,8 +107,7 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
 
   const [exporting, setExporting] = useState(false);
   const [profiles, setProfiles] = useState<ConfigProviderProfile[]>([]);
-  const [profileDir, setProfileDir] = useState<string | null>(null);
-  const [selectedProfilePath, setSelectedProfilePath] = useState("");
+  const [selectedProfileName, setSelectedProfileName] = useState("");
   const [switchingProfile, setSwitchingProfile] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileName, setProfileName] = useState("");
@@ -118,16 +117,14 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
   const loadProfiles = useCallback(async () => {
     if (!isOpenAgent) {
       setProfiles([]);
-      setProfileDir(null);
-      setSelectedProfilePath("");
+      setSelectedProfileName("");
       return;
     }
 
     const result = await getConfigProviderProfiles(providerId);
     setProfiles(result.profiles ?? []);
-    setProfileDir(result.profileDir ?? null);
     const activeProfile = result.profiles?.find((profile) => profile.active);
-    setSelectedProfilePath(activeProfile?.path ?? result.profiles?.[0]?.path ?? "");
+    setSelectedProfileName(activeProfile?.name ?? result.profiles?.[0]?.name ?? "");
   }, [isOpenAgent, providerId]);
 
   const loadDetail = useCallback(async () => {
@@ -340,7 +337,7 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
         raw: rawText || "{}\n",
       });
       setProfiles(result.profiles ?? []);
-      setSelectedProfilePath(result.profile.path);
+      setSelectedProfileName(profileName);
       setShowProfileDialog(false);
       setProfileName("");
       toast.success("OpenAgent config profile created");
@@ -355,10 +352,10 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
   };
 
   const handleSwitchProfile = async () => {
-    if (!selectedProfilePath || hasChanges) return;
+    if (!selectedProfileName || hasChanges) return;
     try {
       setSwitchingProfile(true);
-      const result = await switchConfigProviderProfile(providerId, { path: selectedProfilePath });
+      const result = await switchConfigProviderProfile(providerId, { name: selectedProfileName });
       setProfiles(result.profiles ?? []);
       setDiagnostics(result.diagnostics ?? []);
       toast.success("OpenAgent config switched");
@@ -514,7 +511,6 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
                   <Label className="text-sm font-medium">OpenAgent Config Profiles</Label>
                   <p className="text-xs text-muted-foreground">
                     Save named OpenAgent config files and switch the active plugin config by copying one into place.
-                    {profileDir && <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono">{profileDir}</code>}
                   </p>
                 </div>
                 <Button
@@ -528,13 +524,13 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
                 </Button>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Select value={selectedProfilePath} onValueChange={setSelectedProfilePath} disabled={profiles.length === 0}>
+                <Select value={selectedProfileName} onValueChange={setSelectedProfileName} disabled={profiles.length === 0}>
                   <SelectTrigger data-testid="openagent-profile-select">
                     <SelectValue placeholder="No saved profiles" />
                   </SelectTrigger>
                   <SelectContent>
                     {profiles.map((profile) => (
-                      <SelectItem key={profile.path} value={profile.path}>
+                      <SelectItem key={profile.name} value={profile.name}>
                         {profile.name}{profile.active ? " (active)" : ""}
                       </SelectItem>
                     ))}
@@ -543,7 +539,7 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
                 <Button
                   variant="outline"
                   onClick={handleSwitchProfile}
-                  disabled={!selectedProfilePath || hasChanges || switchingProfile}
+                  disabled={!selectedProfileName || hasChanges || switchingProfile}
                   data-testid="openagent-profile-switch"
                 >
                   {switchingProfile ? "Switching..." : "Switch Active Config"}

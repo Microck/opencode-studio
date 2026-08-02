@@ -93,7 +93,7 @@ function ProvidersTab() {
         <AlertIcon className="h-4 w-4" />
         <AlertDescription className="text-sm">
           Each provider manages its own config file. Import and export only work within the same provider.
-          OpenAgent keeps legacy oh-my-opencode naming without automatic migration.
+          OpenAgent: OMO 配置块（profiles.&lt;name&gt;），切换会把选中 profile 合并进当前配置并移除该 profile 块。
           Slim validates tui.json as a companion file.
           Remote shell install and sync are not available.
           <span className="block mt-1 flex flex-wrap gap-x-3 gap-y-0.5">

@@ -202,14 +202,11 @@ export interface ConfigProviderProfile {
   name: string;
   path: string;
   active: boolean;
-  revision: ConfigProviderRevision;
-  diagnostics: ConfigProviderDiagnostic[];
 }
 
 export interface ConfigProviderProfilesResult {
-  profileDir: string | null;
-  activePath: string | null;
   profiles: ConfigProviderProfile[];
+  activePath: string | null;
 }
 
 export interface ConfigProviderCreateProfilePayload {
