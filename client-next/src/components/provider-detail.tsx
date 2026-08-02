@@ -510,7 +510,7 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
                 <div className="space-y-1">
                   <Label className="text-sm font-medium">OpenAgent Config Profiles</Label>
                   <p className="text-xs text-muted-foreground">
-                    Save named OpenAgent config files and switch the active plugin config by copying one into place.
+                    OMO 配置块（profiles.&lt;name&gt;），切换会把选中 profile 合并进当前配置并移除该 profile 块。
                   </p>
                 </div>
                 <Button
