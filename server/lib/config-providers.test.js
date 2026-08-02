@@ -337,3 +337,92 @@ describe('provider write/import helper semantics', () => {
         expect(withAllowedPath).toEqual({ ok: true, path: candidatePath });
     });
 });
+
+describe('omo config detection and [opencode] block reading', () => {
+    it('selects omo.jsonc from an omo root over a legacy openagent config', () => {
+        const tempDir = makeTempDir();
+        const omoRoot = path.join(tempDir, '.omo');
+        fs.mkdirSync(omoRoot, { recursive: true });
+        const omoPath = path.join(omoRoot, 'omo.jsonc');
+        const legacyPath = path.join(tempDir, 'oh-my-openagent.json');
+        fs.writeFileSync(omoPath, '{ "[opencode]": { "theme": "dark" } }');
+        fs.writeFileSync(legacyPath, '{"a":1}');
+
+        const detect = () => providers.detectProviders({ roots: [tempDir] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        const withOmo = detect();
+        expect(withOmo.activePath).toBe(omoPath);
+        expect(withOmo.diagnostics.some((d) => d.code === 'OPENAGENT_LEGACY_CONFIG')).toBe(false);
+
+        fs.unlinkSync(omoPath);
+        const legacyOnly = detect();
+        expect(legacyOnly.activePath).toBe(legacyPath);
+        const legacyDiagnostic = legacyOnly.diagnostics.find((d) => d.code === 'OPENAGENT_LEGACY_CONFIG');
+        expect(legacyDiagnostic).toBeTruthy();
+        expect(legacyDiagnostic.severity).toBe('warning');
+        expect(legacyDiagnostic.details.path).toBe(legacyPath);
+    });
+
+    it('prefers the ~/.omo user root over another omo root when both hold omo.jsonc', () => {
+        const homeDir = makeTempDir();
+        const otherRoot = makeTempDir();
+        const userOmoDir = path.join(homeDir, '.omo');
+        const otherOmoDir = path.join(otherRoot, '.omo');
+        fs.mkdirSync(userOmoDir, { recursive: true });
+        fs.mkdirSync(otherOmoDir, { recursive: true });
+        const userOmoPath = path.join(userOmoDir, 'omo.jsonc');
+        const otherOmoPath = path.join(otherOmoDir, 'omo.jsonc');
+        fs.writeFileSync(userOmoPath, '{ "[opencode]": { "theme": "user" } }');
+        fs.writeFileSync(otherOmoPath, '{ "[opencode]": { "theme": "other" } }');
+
+        const openAgent = providers.detectProviders({ roots: [userOmoDir, otherOmoDir] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        expect(openAgent.activePath).toBe(userOmoPath);
+        expect(providers.getOmoConfigBlock(openAgent.activePath)).toEqual({ theme: 'user' });
+    });
+
+    it('extracts only the [opencode] block from an omo config file', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, [
+            '{',
+            '  // omo config carries plugin metadata plus the [opencode] block',
+            '  "plugin": { "version": "1.0.0" },',
+            '  "[opencode]": {',
+            '    "theme": "dark",',
+            '    "model": "fast",',
+            '  },',
+            '}'
+        ].join('\n'));
+
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({ theme: 'dark', model: 'fast' });
+    });
+
+    it('returns {} without throwing for omo.jsonc missing the [opencode] block', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, '{ "plugin": { "version": "1.0.0" } }');
+
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({});
+    });
+
+    it('warns and never selects omo.jsonc found outside omo search roots', () => {
+        const homeDir = makeTempDir();
+        const outsideRoot = path.join(homeDir, '.config', 'opencode');
+        fs.mkdirSync(outsideRoot, { recursive: true });
+        const omoPath = path.join(outsideRoot, 'omo.jsonc');
+        fs.writeFileSync(omoPath, '{ "[opencode]": { "theme": "dark" } }');
+
+        const openAgent = providers.detectProviders({ roots: [outsideRoot] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        expect(openAgent.activePath).toBeNull();
+        expect(openAgent.exists).toBe(false);
+        const outsideDiagnostic = openAgent.diagnostics.find((d) => d.code === 'OPENAGENT_OMO_OUTSIDE_ROOT');
+        expect(outsideDiagnostic).toBeTruthy();
+        expect(outsideDiagnostic.severity).toBe('warning');
+        expect(outsideDiagnostic.details.paths).toEqual([omoPath]);
+    });
+});
