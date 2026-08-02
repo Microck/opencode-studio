@@ -367,6 +367,27 @@ const buildOmoRootCandidates = (omoRoots) => {
     return uniqNormalizedPaths(candidates);
 };
 
+// Derive omo candidate roots from the caller-provided search scope when one is
+// given (caller roots that are `.omo` dirs are used directly; other caller roots
+// contribute their `root/.omo` subdir only when it holds a loadable omo config).
+// Fall back to the homedir-based getOmoSearchRoots() only when the caller scoped
+// nothing, so caller-scoped detection never leaks the real ~/.omo into results.
+const resolveOmoCandidateRoots = ({ roots = [], customPaths = [] } = {}) => {
+    const callerRoots = uniqNormalizedPaths([...(roots || []), ...(customPaths || [])]);
+    if (callerRoots.length === 0) return getOmoSearchRoots();
+    const omoRoots = [];
+    for (const root of callerRoots) {
+        if (getPathBasenameAnySeparator(root) === '.omo') {
+            omoRoots.push(root);
+            continue;
+        }
+        if (findLoadableOmoConfigPathInDir(root)) {
+            omoRoots.push(normalizePath(path.join(root, '.omo')));
+        }
+    }
+    return uniqNormalizedPaths(omoRoots);
+};
+
 const isOmoBasename = (basename) => OMO_BASENAMES.includes(basename);
 
 // Returns only the "[opencode]" block of an omo config file (never the whole file).
@@ -411,7 +432,7 @@ const detectSingleProvider = (rule, options = {}) => {
     let activePath = existing[0] || null;
 
     if (rule.id === PROVIDER_IDS.OH_MY_OPENAGENT) {
-        const omoRoots = getOmoSearchRoots();
+        const omoRoots = resolveOmoCandidateRoots({ roots, customPaths: options.customPaths });
         const omoRootSet = new Set(omoRoots.map((root) => normalizePath(root)));
 
         const omoExisting = findExistingPaths(buildOmoRootCandidates(omoRoots));
