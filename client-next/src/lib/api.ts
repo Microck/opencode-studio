@@ -844,6 +844,8 @@ export async function applyPreset(id: string, mode: 'exclusive' | 'additive'): P
 
 export interface ProfileList {
   profiles: string[];
+  /** Names of display-only legacy profile dirs (read-only, NOT in profiles as omo blocks) */
+  legacy: string[];
   active: string | null;
 }
 

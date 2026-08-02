@@ -69,7 +69,7 @@ test('listProfiles reports empty state when no profiles exist', (t) => {
     const home = makeTempHome(t);
     writeOmo(home, { '[opencode]': {} });
     const pm = loadProfileManager(home);
-    assert.deepStrictEqual(pm.listProfiles(), { profiles: [], active: null });
+    assert.deepStrictEqual(pm.listProfiles(), { profiles: [], legacy: [], active: null });
 });
 
 test('createProfile writes the profile block into omo.jsonc', (t) => {
@@ -167,6 +167,97 @@ test('active precedence OMO_PROFILE > OCX_PROFILE > OPENCODE_CONFIG_DIR (MINOR-8
     assert.strictEqual(pm.listProfiles().active, 'b');
     pm = loadProfileManager(home, { OPENCODE_CONFIG_DIR: '/x/profiles/c' });
     assert.strictEqual(pm.listProfiles().active, 'c');
+});
+
+// ---------------------------------------------------------------------------
+// Task 7b regression fix: legacy profile dirs (pre-Todo-7 symlink mechanism)
+// must surface in listProfiles() as READ-ONLY display entries. They are never
+// deleted/renamed/activated — only omo.jsonc blocks are operable.
+// ---------------------------------------------------------------------------
+
+function makeLegacyDirs(home, names) {
+    const dir = path.join(home, '.config', 'opencode-profiles');
+    for (const name of names) {
+        fs.mkdirSync(path.join(dir, name), { recursive: true });
+    }
+    return dir;
+}
+
+function writeLegacyConfig(dir, name) {
+    const file = path.join(dir, name, 'opencode.json');
+    fs.writeFileSync(file, '{"schema":"legacy"}', 'utf8');
+    return file;
+}
+
+test('listProfiles merges omo blocks and legacy dirs, omo wins on collision', (t) => {
+    const home = makeTempHome(t);
+    // 'work' exists BOTH as an omo block and a legacy dir -> counted once, omo wins.
+    writeOmo(home, { profiles: { work: { '[opencode]': {} }, new: { '[opencode]': {} } } });
+    const legacyDir = makeLegacyDirs(home, ['work', 'legacyA', 'legacyB', '.omo', 'backup-2026']);
+    fs.writeFileSync(path.join(legacyDir, 'draft.zip'), 'not a profile', 'utf8');
+    for (const name of ['work', 'legacyA', 'legacyB']) {
+        writeLegacyConfig(legacyDir, name);
+    }
+
+    const pm = loadProfileManager(home);
+    const result = pm.listProfiles();
+    assert.deepStrictEqual(result.profiles, ['work', 'new', 'legacyA', 'legacyB']);
+    assert.deepStrictEqual(result.legacy, ['legacyA', 'legacyB']);
+});
+
+test('legacy-only dirs listed even when no omo.jsonc profiles exist', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['default', 'deepseek']);
+    for (const name of ['default', 'deepseek']) {
+        writeLegacyConfig(legacyDir, name);
+    }
+    const pm = loadProfileManager(home);
+    const result = pm.listProfiles();
+    assert.deepStrictEqual(result.profiles, ['deepseek', 'default']);
+    assert.deepStrictEqual(result.legacy, ['deepseek', 'default']);
+    assert.strictEqual(result.active, null);
+});
+
+test('deleteProfile refuses legacy-only names and leaves the dir intact', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['legacyA']);
+    const configFile = writeLegacyConfig(legacyDir, 'legacyA');
+
+    const pm = loadProfileManager(home, { OMO_PROFILE: 'other' });
+    assert.throws(() => pm.deleteProfile('legacyA'), /legacy 目录，只读/);
+    assert.ok(fs.existsSync(configFile), 'legacy config file survives refused delete');
+    assert.strictEqual(fs.readFileSync(configFile, 'utf8'), '{"schema":"legacy"}');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['legacyA'], 'still listed after refused delete');
+});
+
+test('activateProfile refuses legacy-only names and leaves the dir intact', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['legacyA']);
+    const configFile = writeLegacyConfig(legacyDir, 'legacyA');
+
+    const pm = loadProfileManager(home);
+    assert.throws(() => pm.activateProfile('legacyA'), /legacy 目录，只读/);
+    assert.ok(fs.existsSync(configFile), 'legacy config file survives refused activate');
+    assert.strictEqual(fs.readFileSync(configFile, 'utf8'), '{"schema":"legacy"}');
+});
+
+test('legacy dirs are never deleted by any operation (AC8-style guard)', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { profiles: { work: { '[opencode]': {} } } });
+    const legacyDir = makeLegacyDirs(home, ['work', 'keep-me']);
+    // 'work' is also a legacy dir on disk — deleting the omo block must NOT
+    // touch the directory; 'keep-me' is legacy-only and must survive everything.
+    writeLegacyConfig(legacyDir, 'work');
+    const keepFile = writeLegacyConfig(legacyDir, 'keep-me');
+
+    const pm = loadProfileManager(home, { OMO_PROFILE: 'other' });
+    assert.deepStrictEqual(pm.deleteProfile('work'), { success: true, removed: true });
+    assert.ok(fs.existsSync(path.join(legacyDir, 'work')), 'legacy dir not deleted by omo block delete');
+    assert.ok(fs.existsSync(keepFile), 'legacy-only dir intact after omo block delete');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['keep-me', 'work'], 'both still listed as legacy');
 });
 
 test('activateProfile rejects non-[opencode] top-level keys and preserves profile + file (M-C)', (t) => {

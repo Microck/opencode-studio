@@ -163,6 +163,7 @@ export default function ProfilesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {data?.profiles.map((profile) => {
           const isActive = data.active === profile;
+          const isLegacy = data.legacy.includes(profile);
           return (
             <Card key={profile} className={`hover-lift transition-all ${isActive ? 'border-primary shadow-md bg-primary/5' : ''}`}>
               <CardHeader className="pb-3">
@@ -174,13 +175,18 @@ export default function ProfilesPage() {
                     <div>
                       <CardTitle className="text-lg">{profile}</CardTitle>
                       {isActive && <Badge className="mt-1">{t('active')}</Badge>}
+                      {isLegacy && <Badge variant="secondary" className="mt-1">只读 legacy</Badge>}
                     </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-2 mt-4">
-                  {isActive ? (
+                  {isLegacy ? (
+                    <Button disabled className="w-full" variant="outline">
+                      只读 legacy，不可切换/删除
+                    </Button>
+                  ) : isActive ? (
                     <Button disabled className="w-full" variant="secondary">
                        <Check className="h-4 w-4 mr-2" />
                       {t('current')}
@@ -197,7 +203,7 @@ export default function ProfilesPage() {
                     </Button>
                   )}
                   
-                  {profile !== 'default' && !isActive && (
+                  {!isLegacy && profile !== 'default' && !isActive && (
                     <Button 
                       variant="ghost" 
                       size="icon" 
