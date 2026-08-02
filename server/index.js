@@ -727,6 +727,17 @@ const getPaths = () => {
 };
 
 const getOhMyOpenCodeConfigPath = () => {
+    // OMO-specific resolution ONLY (Todo 5) — must NOT touch getPaths()
+    // candidates: getPaths().current feeds 20+ opencode config reads/writes
+    // (loadConfig/saveConfig, /api/config, backup/restore), and saveConfig's
+    // whole-file JSON.stringify would overwrite omo.jsonc (C-A data loss).
+    // ~/.omo/omo.jsonc first, then ~/.omo/omo.json, then legacy fallback.
+    const omoDir = path.join(os.homedir(), '.omo');
+    const omoJsonc = path.join(omoDir, 'omo.jsonc');
+    const omoJson = path.join(omoDir, 'omo.json');
+    if (fs.existsSync(omoJsonc)) return omoJsonc;
+    if (fs.existsSync(omoJson)) return omoJson;
+    // Legacy fallback (deprioritized): oh-my-openagent.json / oh-my-opencode.json
     const cp = getConfigPath();
     if (!cp) return null;
     const dir = path.dirname(cp);
@@ -2148,6 +2159,7 @@ function loadOhMyOpenCodeConfig() {
 }
 
 function saveOhMyOpenCodeConfig(config) {
+    // TODO: unused — do not wire to omo.jsonc (whole-file overwrite would corrupt); route through writeOmoBlock if ever reused
     const configPath = getOhMyOpenCodeConfigPath();
     if (!configPath) throw new Error('No opencode config path found');
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
@@ -2159,7 +2171,12 @@ function getProviderSearchRoots() {
 
 function detectConfigProviders() {
     return configProviders.detectProviders({
-        roots: getProviderSearchRoots()
+        // MINOR-8: omo roots FIRST — guarantees E1 activePath prefers
+        // ~/.omo/omo.jsonc. If omo roots were appended after getSearchRoots(),
+        // cwd's legacy oh-my-openagent.json would become existing[0]
+        // (config-providers.js:320) and silently re-activate the C1 failure
+        // class in legacy-present environments.
+        roots: [...configProviders.getOmoSearchRoots(), ...getSearchRoots()]
     });
 }
 
@@ -5589,7 +5606,10 @@ module.exports = {
     savePoolMetadata,
     loadStudioConfig,
     saveStudioConfig,
-    buildAccountPool
+    buildAccountPool,
+    getPaths,
+    getSearchRoots,
+    getOhMyOpenCodeConfigPath
 };
 app.get('/api/prompts/global', (req, res) => {
     const cp = getConfigPath();
