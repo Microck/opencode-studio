@@ -403,6 +403,26 @@ const getOmoConfigBlock = (filePath) => {
     }
 };
 
+const OMO_SCHEMA_URL = 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json';
+
+// Skeleton created when an omo.jsonc does not exist yet (MINOR-1 missing-file
+// contract): comment header + $schema (MINOR-b, matches the real ~/.omo/omo.jsonc)
+// + empty [opencode] block, so writeOmoBlock can always edit a well-formed doc.
+const OMO_SKELETON_JSONC = `// OMO configuration
+{
+  "$schema": "${OMO_SCHEMA_URL}",
+  "[opencode]": {}
+}
+`;
+
+// Matches the plugin's FORMATTING_OPTIONS so newly inserted omo.jsonc nodes use
+// the same 2-space style as the real ~/.omo/omo.jsonc.
+const OMO_JSONC_FORMATTING_OPTIONS = Object.freeze({
+    eol: '\n',
+    insertSpaces: true,
+    tabSize: 2
+});
+
 const profileName = (value) => (value === '' ? undefined : value);
 
 // Mirrors plugin profileNameFromOpenCodeConfigDir: extract profile name from the
@@ -422,6 +442,130 @@ const getResolvedActiveProfile = (options = {}) => {
         profileName(env.OCX_PROFILE) ??
         profileNameFromOpenCodeConfigDir(env.OPENCODE_CONFIG_DIR)
     );
+};
+
+const assertOmoPath = (filePath) => {
+    const targetPath = normalizePath(filePath);
+    if (!targetPath) throw new Error('omo config path is required');
+    return targetPath;
+};
+
+// Parses a block key into a jsonc-parser path: '[opencode]' -> ['[opencode]'],
+// 'profiles.<name>.[opencode]' -> ['profiles', sanitizedName, '[opencode]'].
+// Null for anything else. Names go through sanitizeConfigProfileName, so dots
+// inside a name never collide with the '.' path separators of the key string.
+const parseOmoBlockKeyPath = (key) => {
+    if (typeof key !== 'string' || key.trim() === '') return null;
+    const trimmed = key.trim();
+    if (trimmed === '[opencode]') return ['[opencode]'];
+    const match = trimmed.match(/^profiles\.(.+)\.\[opencode\]$/);
+    if (!match) return null;
+    const safeName = sanitizeConfigProfileName(match[1]);
+    if (!safeName) return null;
+    return ['profiles', safeName, '[opencode]'];
+};
+
+// Surgically writes `block` into an omo.jsonc via jsonc-parser modify/applyEdits:
+// only the targeted node changes, so the comment header, $schema, _migrations and
+// every other block survive (C2 data protection — never whole-file rewrites).
+// Missing file -> skeleton created first (MINOR-1); write is atomic through
+// atomicWriteTextSync (MINOR-c: temp file + rename, a crash cannot corrupt omo.jsonc).
+const writeOmoBlock = (filePath, block, key = '[opencode]') => {
+    const targetPath = assertOmoPath(filePath);
+    if (!isPlainObject(block)) {
+        throw new Error(`omo block must be a plain object, got ${typeof block}`);
+    }
+    const blockPath = parseOmoBlockKeyPath(key);
+    if (!blockPath) {
+        throw new Error(`Invalid omo block key: ${JSON.stringify(key)} (expected "[opencode]" or "profiles.<name>.[opencode]")`);
+    }
+
+    const existed = pathExistsSync(targetPath);
+    if (existed && !isFileSync(targetPath)) {
+        throw new Error(`omo config path is not a file: ${targetPath}`);
+    }
+
+    let text;
+    if (existed) {
+        text = fs.readFileSync(targetPath, 'utf8');
+        if (!isPlainObject(parseJsonText(text))) {
+            throw new Error(`omo config root must be a JSONC object: ${targetPath}`);
+        }
+    } else {
+        text = OMO_SKELETON_JSONC;
+    }
+
+    const edits = jsoncParser.modify(text, blockPath, block, {
+        formattingOptions: OMO_JSONC_FORMATTING_OPTIONS
+    });
+    atomicWriteTextSync(targetPath, jsoncParser.applyEdits(text, edits), 'utf8');
+    return { path: targetPath, created: !existed };
+};
+
+// Keys of config.profiles (missing/malformed file -> []).
+const listOmoProfiles = (filePath) => {
+    if (typeof filePath !== 'string' || !isFileSync(filePath)) return [];
+    try {
+        const parsed = parseJsonText(fs.readFileSync(filePath, 'utf8'));
+        if (!isPlainObject(parsed) || !isPlainObject(parsed.profiles)) return [];
+        return Object.keys(parsed.profiles);
+    } catch {
+        return [];
+    }
+};
+
+// Whole profiles.<name> object, or null (missing/malformed file, invalid name,
+// absent profile). Read-side never throws, matching getOmoConfigBlock.
+const getOmoProfile = (filePath, name) => {
+    if (typeof filePath !== 'string' || !isFileSync(filePath)) return null;
+    const safeName = sanitizeConfigProfileName(name);
+    if (!safeName) return null;
+    try {
+        const parsed = parseJsonText(fs.readFileSync(filePath, 'utf8'));
+        if (!isPlainObject(parsed) || !isPlainObject(parsed.profiles)) return null;
+        const profile = parsed.profiles[safeName];
+        return isPlainObject(profile) ? profile : null;
+    } catch {
+        return null;
+    }
+};
+
+// Writes profiles.<name>.[opencode] as one surgical jsonc edit, preserving any
+// sibling keys of the profile. Invalid profile name -> throws (m-3 decision,
+// aligned with getOpenAgentProfilePath's null -> 400 path in server/index.js).
+const setOmoProfile = (filePath, name, block) => {
+    const safeName = sanitizeConfigProfileName(name);
+    if (!safeName) {
+        throw new Error(`Invalid omo profile name: ${JSON.stringify(name)}`);
+    }
+    return writeOmoBlock(filePath, block, `profiles.${safeName}.[opencode]`);
+};
+
+// Removes profiles.<name> via jsonc modify with an undefined value (jsonc-parser
+// deletion semantics, verified empirically). Missing file or absent profile is a
+// no-op; invalid profile name -> throws.
+const deleteOmoProfile = (filePath, name) => {
+    const safeName = sanitizeConfigProfileName(name);
+    if (!safeName) {
+        throw new Error(`Invalid omo profile name: ${JSON.stringify(name)}`);
+    }
+    const targetPath = assertOmoPath(filePath);
+    if (!isFileSync(targetPath)) {
+        return { path: targetPath, removed: false };
+    }
+    const text = fs.readFileSync(targetPath, 'utf8');
+    const parsed = parseJsonText(text);
+    if (!isPlainObject(parsed)) {
+        throw new Error(`omo config root must be a JSONC object: ${targetPath}`);
+    }
+    const removed = isPlainObject(parsed.profiles) && Object.prototype.hasOwnProperty.call(parsed.profiles, safeName);
+    const edits = jsoncParser.modify(text, ['profiles', safeName], undefined, {
+        formattingOptions: OMO_JSONC_FORMATTING_OPTIONS
+    });
+    if (edits.length > 0) {
+        atomicWriteTextSync(targetPath, jsoncParser.applyEdits(text, edits), 'utf8');
+    }
+    return { path: targetPath, removed };
 };
 
 const detectSingleProvider = (rule, options = {}) => {
@@ -756,6 +900,11 @@ module.exports = {
     getOmoSearchRoots,
     getOmoConfigBlock,
     getResolvedActiveProfile,
+    writeOmoBlock,
+    listOmoProfiles,
+    getOmoProfile,
+    setOmoProfile,
+    deleteOmoProfile,
     createProviderDetectionResult,
     detectSingleProvider,
     detectProviders,
