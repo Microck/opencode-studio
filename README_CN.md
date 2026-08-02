@@ -186,6 +186,12 @@ opencode-studio/
 - OpenCode 配置: `~/.config/opencode/`
 - Studio 数据: `~/.config/opencode-studio/`
 - 配置环境: `~/.config/opencode-profiles/`
+- OMO 配置: `~/.omo/omo.jsonc`（缺省时依次回退 `~/.omo/omo.json`、旧版 `oh-my-openagent.json` / `oh-my-opencode.json`）
+
+OMO 配置说明：
+- 当前生效的 OMO 配置保存在 `~/.omo/omo.jsonc` 的 `[opencode]` 块中；已保存的配置文件以 `profiles.<名字>.[opencode]` 块存放在同一文件内。
+- 切换 profile 会把选中配置**合并（bake）进当前 `[opencode]` 块并移除该 profile 块**——不做符号链接或文件复制。
+- `~/.omo/omo.jsonc` 不属于 `getPaths()` 的 OpenCode 配置候选列表：服务器不会把它当作普通 OpenCode 配置整文件覆盖写入，对其写入一律采用 jsonc 保留式修改（`//` 注释、`$schema`、`_migrations` 等其余内容原样保留）。
 
 ---
 
@@ -200,7 +206,7 @@ opencode-studio/
 | "Launch Backend" 不工作 | 先运行 `npm install -g opencode-studio-server` |
 | 协议处理未注册 | 以管理员运行 `opencode-studio-server --register` |
 | GitHub 同步不工作 | 先运行 `gh auth login` |
-| Agents 不显示 (OMO) | 确保 `oh-my-openagent.json` 存在且包含 `agents` 字段 |
+| Agents 不显示 (OMO) | 确保 `~/.omo/omo.jsonc` 存在且 `[opencode]` 块包含 `agents` 字段 |
 
 ---
 
