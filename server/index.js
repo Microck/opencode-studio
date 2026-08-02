@@ -5038,6 +5038,14 @@ app.post('/api/profiles/:name/activate', (req, res) => {
     }
 });
 
+app.post('/api/profiles/:name/import-legacy', (req, res) => {
+    try {
+        res.json(profileManager.importLegacyProfile(req.params.name));
+    } catch (e) {
+        res.status(400).json({ error: e.message, ...(e.code && { code: e.code }) });
+    }
+});
+
 // ============================================
 // END ACCOUNT POOL MANAGEMENT
 // ============================================

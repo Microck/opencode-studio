@@ -175,7 +175,7 @@ export default function ProfilesPage() {
                     <div>
                       <CardTitle className="text-lg">{profile}</CardTitle>
                       {isActive && <Badge className="mt-1">{t('active')}</Badge>}
-                      {isLegacy && <Badge variant="secondary" className="mt-1">只读 legacy</Badge>}
+                      {isLegacy && <Badge variant="secondary" className="mt-1">legacy 环境</Badge>}
                     </div>
                   </div>
                 </div>
@@ -183,8 +183,14 @@ export default function ProfilesPage() {
               <CardContent>
                 <div className="flex gap-2 mt-4">
                   {isLegacy ? (
-                    <Button disabled className="w-full" variant="outline">
-                      只读 legacy，不可切换/删除
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => handleActivate(profile)}
+                      disabled={activating === profile}
+                    >
+                       <Play className="h-4 w-4 mr-2" />
+                      导入并激活
                     </Button>
                   ) : isActive ? (
                     <Button disabled className="w-full" variant="secondary">
@@ -192,9 +198,9 @@ export default function ProfilesPage() {
                       {t('current')}
                     </Button>
                   ) : (
-                    <Button 
-                      className="w-full" 
-                      variant="outline" 
+                    <Button
+                      className="w-full"
+                      variant="outline"
                       onClick={() => handleActivate(profile)}
                       disabled={activating === profile}
                     >
@@ -204,7 +210,7 @@ export default function ProfilesPage() {
                   )}
                   
                   {!isLegacy && profile !== 'default' && !isActive && (
-                    <Button 
+                    <Button
                       variant="ghost" 
                       size="icon" 
                       className="text-muted-foreground hover:text-destructive"

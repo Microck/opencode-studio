@@ -25,6 +25,8 @@ test('safeName accepts direct-child names', () => {
 // but the PATH constant is frozen at load — hence the require.cache clearing.
 // ---------------------------------------------------------------------------
 
+const { parseJsonText } = require('./lib/config-providers');
+
 function makeTempHome(t) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-test-'));
     fs.mkdirSync(path.join(home, '.omo'), { recursive: true });
@@ -232,16 +234,17 @@ test('deleteProfile refuses legacy-only names and leaves the dir intact', (t) =>
     assert.deepStrictEqual(pm.listProfiles().legacy, ['legacyA'], 'still listed after refused delete');
 });
 
-test('activateProfile refuses legacy-only names and leaves the dir intact', (t) => {
+test('activateProfile on a legacy-only name without omo config throws import error, dir intact', (t) => {
     const home = makeTempHome(t);
     writeOmo(home, { '[opencode]': {} });
     const legacyDir = makeLegacyDirs(home, ['legacyA']);
     const configFile = writeLegacyConfig(legacyDir, 'legacyA');
 
     const pm = loadProfileManager(home);
-    assert.throws(() => pm.activateProfile('legacyA'), /legacy 目录，只读/);
-    assert.ok(fs.existsSync(configFile), 'legacy config file survives refused activate');
+    assert.throws(() => pm.activateProfile('legacyA'), /没有可导入的 omo 配置/);
+    assert.ok(fs.existsSync(configFile), 'legacy config file survives failed import');
     assert.strictEqual(fs.readFileSync(configFile, 'utf8'), '{"schema":"legacy"}');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['legacyA'], 'still legacy-only after failed import');
 });
 
 test('legacy dirs are never deleted by any operation (AC8-style guard)', (t) => {
@@ -271,4 +274,133 @@ test('activateProfile rejects non-[opencode] top-level keys and preserves profil
     assert.throws(() => pm.activateProfile('work'), /无法 bake|agents/);
     assert.strictEqual(fs.readFileSync(omoFile, 'utf8'), before, 'file byte-identical after reject');
     assert.deepStrictEqual(pm.listProfiles().profiles, ['work'], 'profile still present');
+});
+
+// ---------------------------------------------------------------------------
+// Task 7c: legacy profile activation. importLegacyProfile reads a legacy dir's
+// omo config (omo.jsonc [opencode] block, or the bare oh-my-openagent.json
+// block) into profiles.<name>, and activateProfile auto-imports legacy-only
+// names before baking. Legacy dirs are READ-ONLY — never deleted or renamed.
+// ---------------------------------------------------------------------------
+
+const LEGACY_SCHEMA_URL = 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json';
+
+function writeLegacyOmoJsonc(legacyDir, name, block) {
+    const file = path.join(legacyDir, name, 'omo.jsonc');
+    const doc = JSON.stringify({ $schema: LEGACY_SCHEMA_URL, '[opencode]': block }, null, 2);
+    fs.writeFileSync(file, doc, 'utf8');
+    return { file, doc };
+}
+
+function writeLegacyBareJson(legacyDir, name, block) {
+    const file = path.join(legacyDir, name, 'oh-my-openagent.json');
+    const doc = JSON.stringify(block, null, 2);
+    fs.writeFileSync(file, doc, 'utf8');
+    return { file, doc };
+}
+
+test('importLegacyProfile imports the [opencode] block, preserving header and $schema', (t) => {
+    const home = makeTempHome(t);
+    const omoFile = path.join(home, '.omo', 'omo.jsonc');
+    fs.writeFileSync(omoFile, `// OMO configuration
+{
+  "$schema": "${LEGACY_SCHEMA_URL}",
+  "_migrations": ["m1"],
+  "[opencode]": { "model": "old" }
+}
+`, 'utf8');
+    const legacyDir = makeLegacyDirs(home, ['deepseek']);
+    const legacy = writeLegacyOmoJsonc(legacyDir, 'deepseek', {
+        agents: { atlas: { enabled: true, model: 'deepseek/deepseek-v4-pro' } },
+        sisyphus_agent: { replace_plan: true }
+    });
+
+    const pm = loadProfileManager(home);
+    assert.deepStrictEqual(pm.importLegacyProfile('deepseek'), { success: true, imported: true, name: 'deepseek' });
+
+    const raw = fs.readFileSync(omoFile, 'utf8');
+    assert.ok(raw.startsWith('// OMO configuration\n'), 'comment header preserved');
+    assert.ok(raw.includes('omo.schema.json'), '$schema preserved');
+    assert.ok(raw.includes('_migrations'), '_migrations preserved');
+    const parsed = parseJsonText(raw);
+    assert.strictEqual(parsed['[opencode]'].model, 'old', 'top-level [opencode] untouched');
+    assert.strictEqual(parsed.profiles.deepseek['[opencode]'].agents.atlas.model, 'deepseek/deepseek-v4-pro', 'agents imported');
+    assert.deepStrictEqual(pm.listProfiles().profiles, ['deepseek'], 'now an omo profile');
+    assert.deepStrictEqual(pm.listProfiles().legacy, [], 'no longer legacy-only');
+    assert.strictEqual(fs.readFileSync(legacy.file, 'utf8'), legacy.doc, 'legacy source file byte-identical');
+});
+
+test('importLegacyProfile reads the bare oh-my-openagent.json block as fallback', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['default']);
+    const legacy = writeLegacyBareJson(legacyDir, 'default', { model: 'gpt-5', agents: { atlas: { enabled: true } } });
+
+    const pm = loadProfileManager(home);
+    assert.deepStrictEqual(pm.importLegacyProfile('default'), { success: true, imported: true, name: 'default' });
+    const parsed = JSON.parse(fs.readFileSync(path.join(home, '.omo', 'omo.jsonc'), 'utf8'));
+    assert.strictEqual(parsed.profiles.default['[opencode]'].model, 'gpt-5', 'whole bare doc imported as block');
+    assert.strictEqual(parsed.profiles.default['[opencode]'].agents.atlas.enabled, true);
+    assert.deepStrictEqual(pm.listProfiles().profiles, ['default']);
+    assert.strictEqual(fs.readFileSync(legacy.file, 'utf8'), legacy.doc, 'legacy file untouched');
+});
+
+test('importLegacyProfile throws on missing/invalid legacy dirs and artifact names', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['backup-2026', 'empty']);
+
+    const pm = loadProfileManager(home);
+    assert.throws(() => pm.importLegacyProfile('backup-2026'), /没有可导入的 omo 配置/, 'artifact dir rejected');
+    writeLegacyConfig(legacyDir, 'empty');
+    assert.throws(() => pm.importLegacyProfile('empty'), /没有可导入的 omo 配置/, 'dir with only opencode.json rejected');
+    assert.throws(() => pm.importLegacyProfile('missing-dir'), /没有可导入的 omo 配置/, 'no dir at all rejected');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['empty'], 'nothing imported (backup-* is an artifact name)');
+});
+
+test('importLegacyProfile throws when the omo profile already exists', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { profiles: { work: { '[opencode]': { model: 'x' } } } });
+    const legacyDir = makeLegacyDirs(home, ['work']);
+    writeLegacyOmoJsonc(legacyDir, 'work', { model: 'new' });
+
+    const pm = loadProfileManager(home);
+    assert.throws(() => pm.importLegacyProfile('work'), /已存在，请先删除或直接切换/);
+    const parsed = JSON.parse(fs.readFileSync(path.join(home, '.omo', 'omo.jsonc'), 'utf8'));
+    assert.strictEqual(parsed.profiles.work['[opencode]'].model, 'x', 'existing profile untouched');
+});
+
+test('importLegacyProfile throws on an empty [opencode] block', (t) => {
+    const home = makeTempHome(t);
+    writeOmo(home, { '[opencode]': {} });
+    const legacyDir = makeLegacyDirs(home, ['empty']);
+    writeLegacyOmoJsonc(legacyDir, 'empty', {});
+    const pm = loadProfileManager(home);
+    assert.throws(() => pm.importLegacyProfile('empty'), /没有可导入的 omo 配置|为空/);
+    const parsed = JSON.parse(fs.readFileSync(path.join(home, '.omo', 'omo.jsonc'), 'utf8'));
+    assert.ok(!parsed.profiles || Object.keys(parsed.profiles).length === 0, 'no profile imported');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['empty'], 'still legacy-only');
+});
+
+test('activateProfile auto-imports a legacy-only name, bakes it, legacy dir untouched', (t) => {
+    const home = makeTempHome(t);
+    const omoFile = writeOmo(home, {
+        '[opencode]': { model: 'old', nested: { keep: 1 } }
+    });
+    const legacyDir = makeLegacyDirs(home, ['deepseek']);
+    const legacy = writeLegacyOmoJsonc(legacyDir, 'deepseek', {
+        agents: { atlas: { enabled: true, model: 'deepseek/deepseek-v4-pro' } },
+        sisyphus_agent: { replace_plan: true }
+    });
+
+    const pm = loadProfileManager(home);
+    assert.deepStrictEqual(pm.activateProfile('deepseek'), { success: true, message: '已激活 deepseek' });
+
+    const parsed = JSON.parse(fs.readFileSync(omoFile, 'utf8'));
+    assert.strictEqual(parsed['[opencode]'].model, 'old', 'non-conflicting top-level key preserved');
+    assert.strictEqual(parsed['[opencode]'].agents.atlas.model, 'deepseek/deepseek-v4-pro', 'agents merged into top-level');
+    assert.strictEqual(parsed['[opencode]'].sisyphus_agent.replace_plan, true, 'sisyphus_agent merged');
+    assert.ok(!parsed.profiles || !parsed.profiles.deepseek, 'imported profile removed after bake');
+    assert.strictEqual(fs.readFileSync(legacy.file, 'utf8'), legacy.doc, 'legacy dir file byte-identical');
+    assert.deepStrictEqual(pm.listProfiles().legacy, ['deepseek'], 'dir still listed as legacy (untouched)');
 });
