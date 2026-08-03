@@ -791,8 +791,15 @@ const getSkillDirs = () => {
         const skillsDir = path.join(root, 'skills');
         if (fs.existsSync(skillsDir)) {
             try {
+                // statSync follows symlinks, so symlink-to-directory packages
+                // are accepted (Dirent.isDirectory() would filter them out);
+                // broken symlinks yield undefined and are skipped.
                 const packages = fs.readdirSync(skillsDir, { withFileTypes: true })
-                    .filter(d => d.isDirectory());
+                    .filter(pkg => {
+                        const p = path.join(skillsDir, pkg.name);
+                        const st = fs.statSync(p, { throwIfNoEntry: false });
+                        return st?.isDirectory();
+                    });
                 for (const pkg of packages) {
                     const nestedSkillsDir = path.join(skillsDir, pkg.name, 'skills');
                     if (fs.existsSync(nestedSkillsDir)) {
@@ -3358,6 +3365,31 @@ const getActiveSkillDir = () => {
     return cp ? path.join(path.dirname(cp), 'skills') : null;
 };
 
+// Returns the package entry (skillsDir/<name>) when the skill resolves to a
+// symlinked package — checked on the package entry, NOT dirInfo.path: for
+// nested packages dirInfo.path goes THROUGH the symlink (its final component
+// lives inside the target dir), so lstatSync on dirInfo.path would miss it,
+// while rmSync(recursive)/writeFile would resolve the intermediate symlink
+// and hit legacy dirs.
+const findSymlinkSkillEntry = (name) => {
+    for (const dirInfo of getSkillDirs()) {
+        const matchesName = dirInfo.isFlat
+            ? (dirInfo.package === name || path.basename(dirInfo.path) === name)
+            : fs.existsSync(path.join(dirInfo.path, name, 'SKILL.md'));
+        if (!matchesName) continue;
+
+        const pkgEntry = path.join(dirInfo.root, 'skills', dirInfo.package);
+        let st = null;
+        try {
+            st = fs.lstatSync(pkgEntry);
+        } catch (e) {
+            // entry vanished mid-flight — treat as not a symlink
+        }
+        if (st?.isSymbolicLink()) return pkgEntry;
+    }
+    return null;
+};
+
 app.get('/api/skills', (req, res) => {
     const studio = loadStudioConfig();
     const disabledSkills = studio.disabledSkills || [];
@@ -3428,6 +3460,16 @@ app.post('/api/skills/:name', (req, res) => {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
+    // Symlink skills are read-only: reject before the edit loop AND before
+    // the create-new fallback (flat symlink skills would otherwise get a
+    // duplicate copy created in the active dir). Check the package entry
+    // (skillsDir/<name>), not dirInfo.path — for nested packages dirInfo.path
+    // goes through the symlink and lstat would miss it, while rmSync/writeFile
+    // would resolve the intermediate symlink into legacy dirs.
+    if (findSymlinkSkillEntry(name)) {
+        return res.status(403).json({ error: 'symlink skill is read-only' });
+    }
+
     let targetDir = null;
 
     // Check if editing existing
@@ -3466,6 +3508,12 @@ app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
     if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
+    }
+
+    // Symlink skills are read-only: never rmSync through a symlink into
+    // legacy dirs.
+    if (findSymlinkSkillEntry(name)) {
+        return res.status(403).json({ error: 'symlink skill is read-only' });
     }
 
     let deleted = false;
