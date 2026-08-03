@@ -251,6 +251,19 @@ const sanitizeConfigProfileName = (name) => {
     return safe || null;
 };
 
+// omo-key sanitizer: preserves Unicode/spaces (unlike sanitizeConfigProfileName);
+// returns null (never throws) so read paths return null and write paths throw.
+const sanitizeOmoKey = (name) => {
+    if (typeof name !== 'string') return null;
+    const value = name.trim().replace(/\.(jsonc?|JSONC?)$/, '');
+    if (!value) return null;
+    if (value === '.' || value === '..') return null;
+    if (!/[\p{L}\p{N}]/u.test(value)) return null;
+    if (value.includes('/') || value.includes('\\')) return null;
+    if (value.split('.').some((segment) => segment === '')) return null;
+    return value;
+};
+
 const getOpenAgentProfileDir = (provider) => {
     if (!provider || provider.id !== PROVIDER_IDS.OH_MY_OPENAGENT) return null;
     const basePath = provider.activePath || (Array.isArray(provider.paths) ? provider.paths[0] : null);
@@ -460,7 +473,7 @@ const parseOmoBlockKeyPath = (key) => {
     if (trimmed === '[opencode]') return ['[opencode]'];
     const match = trimmed.match(/^profiles\.(.+)\.\[opencode\]$/);
     if (!match) return null;
-    const safeName = sanitizeConfigProfileName(match[1]);
+    const safeName = sanitizeOmoKey(match[1]);
     if (!safeName) return null;
     return ['profiles', safeName, '[opencode]'];
 };
@@ -518,7 +531,7 @@ const listOmoProfiles = (filePath) => {
 // absent profile). Read-side never throws, matching getOmoConfigBlock.
 const getOmoProfile = (filePath, name) => {
     if (typeof filePath !== 'string' || !isFileSync(filePath)) return null;
-    const safeName = sanitizeConfigProfileName(name);
+    const safeName = sanitizeOmoKey(name);
     if (!safeName) return null;
     try {
         const parsed = parseJsonText(fs.readFileSync(filePath, 'utf8'));
@@ -534,7 +547,7 @@ const getOmoProfile = (filePath, name) => {
 // sibling keys of the profile. Invalid profile name -> throws (m-3 decision,
 // aligned with getOpenAgentProfilePath's null -> 400 path in server/index.js).
 const setOmoProfile = (filePath, name, block) => {
-    const safeName = sanitizeConfigProfileName(name);
+    const safeName = sanitizeOmoKey(name);
     if (!safeName) {
         throw new Error(`Invalid omo profile name: ${JSON.stringify(name)}`);
     }
@@ -545,7 +558,7 @@ const setOmoProfile = (filePath, name, block) => {
 // deletion semantics, verified empirically). Missing file or absent profile is a
 // no-op; invalid profile name -> throws.
 const deleteOmoProfile = (filePath, name) => {
-    const safeName = sanitizeConfigProfileName(name);
+    const safeName = sanitizeOmoKey(name);
     if (!safeName) {
         throw new Error(`Invalid omo profile name: ${JSON.stringify(name)}`);
     }
@@ -892,6 +905,7 @@ module.exports = {
     parseConfigForDiagnostics,
     getPathBasenameAnySeparator,
     sanitizeConfigProfileName,
+    sanitizeOmoKey,
     getOpenAgentProfileDir,
     getOpenAgentDefaultActivePath,
     getOpenAgentProfilePath,
