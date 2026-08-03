@@ -5791,6 +5791,10 @@ module.exports = {
     buildAccountPool,
     getPaths,
     getSearchRoots,
+    getSkillDirs,
+    loadAggregatedConfig,
+    aggregatePlugins,
+    detectConfigProviders,
     getOhMyOpenCodeConfigPath
 };
 app.get('/api/prompts/global', (req, res) => {
