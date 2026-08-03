@@ -19,7 +19,7 @@ findAvailablePort(DEFAULT_PORT).then(port => {
     process.env.PORT = port.toString();
     console.log(`Starting Next.js on port ${port}`);
 
-    const dev = spawn('npx', ['next', 'dev'], {
+    const dev = spawn('npx', ['next', 'dev', '--hostname', '0.0.0.0'], {
         stdio: 'inherit',
         shell: true
     });
