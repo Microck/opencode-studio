@@ -118,6 +118,7 @@ const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
 
 const app = express();
 const DEFAULT_PORT = 1920;
+const HOST = process.env.HOST || '127.0.0.1';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 function findAvailablePort(startPort) {
@@ -5874,8 +5875,8 @@ async function startServer() {
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
     const port = await findAvailablePort(DEFAULT_PORT);
-    app.listen(port, '127.0.0.1', () => {
-        console.log(`Server running at http://127.0.0.1:${port}`);
+    app.listen(port, HOST, () => {
+        console.log(`Server running at http://${HOST}:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
             const studio = loadStudioConfig();
