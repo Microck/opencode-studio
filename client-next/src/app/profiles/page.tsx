@@ -195,7 +195,7 @@ export default function ProfilesPage() {
                   ) : isActive ? (
                     <Button disabled className="w-full" variant="secondary">
                        <Check className="h-4 w-4 mr-2" />
-                      {t('current')}
+                      {t('activeConsumed')}
                     </Button>
                   ) : (
                     <Button

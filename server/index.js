@@ -492,6 +492,7 @@ function loadStudioConfig() {
         disabledPlugins: [],
         disabledAgents: [],
         activeProfiles: {},
+        activeOmoProfile: null,
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
         presets: [],
@@ -663,6 +664,24 @@ function saveStudioConfig(config) {
         console.error('Failed to save studio config:', err);
         return false;
     }
+}
+
+// Persisted active-omo-profile marker: activation consumes a legacy profile
+// (import+bake+delete), so omo.jsonc no longer names it; this key survives
+// restarts and never touches the `activeProfiles` auth key.
+function readStudioMarker() {
+    return loadStudioConfig().activeOmoProfile ?? null;
+}
+
+// saveStudioConfig swallows write errors and returns false — throw on false so
+// callers can emit an explicit 500 instead of faking persistence.
+function writeStudioMarker(name) {
+    const config = loadStudioConfig();
+    config.activeOmoProfile = name;
+    if (!saveStudioConfig(config)) {
+        throw new Error('Failed to persist active omo profile marker');
+    }
+    return true;
 }
 
 const getWslDistributions = () => {
@@ -5090,7 +5109,14 @@ app.post('/api/auth/pool/quota/limit', (req, res) => {
 });
 
 app.get('/api/profiles', (req, res) => {
-    res.json(profileManager.listProfiles());
+    const result = profileManager.listProfiles();
+    const marker = readStudioMarker();
+    const legacy = marker ? result.legacy.filter((name) => name !== marker) : result.legacy;
+    res.json({
+        ...result,
+        legacy,
+        active: result.active || marker
+    });
 });
 
 app.post('/api/profiles', (req, res) => {
@@ -5111,7 +5137,13 @@ app.delete('/api/profiles/:name', (req, res) => {
 
 app.post('/api/profiles/:name/activate', (req, res) => {
     try {
-        res.json(profileManager.activateProfile(req.params.name));
+        const result = profileManager.activateProfile(req.params.name);
+        try {
+            writeStudioMarker(req.params.name);
+        } catch (markerErr) {
+            return res.status(500).json({ error: `Failed to persist active profile marker: ${markerErr.message}` });
+        }
+        res.json(result);
     } catch (e) {
         res.status(400).json({ error: e.message, ...(e.code && { code: e.code }) });
     }
