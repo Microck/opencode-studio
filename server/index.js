@@ -1239,6 +1239,20 @@ const loadAggregatedConfig = () => {
                 }
             }
         }
+
+        // `plugin` (singular) is the official opencode npm-plugin key; merged with `plugins` above, deduped by name.
+        if (config.plugin && Array.isArray(config.plugin)) {
+            for (const plugin of config.plugin) {
+                const name = typeof plugin === 'string' ? plugin : plugin.name || plugin.npm;
+                if (name && !aggregated.plugins.find((p) => p.name === name)) {
+                    aggregated.plugins.push({
+                        name,
+                        source: 'json-config',
+                        type: 'npm'
+                    });
+                }
+            }
+        }
     });
 
     return aggregated;
@@ -3596,6 +3610,11 @@ const aggregatePlugins = () => {
     return Array.from(pluginMap.values());
 };
 
+const isDisplayOnlyNpmPlugin = (name) => {
+    const plugin = aggregatePlugins().find(p => p.name === name);
+    return !!plugin && plugin.source === 'json-config' && !plugin.path;
+};
+
 app.get('/api/plugins', (req, res) => {
     try {
         const plugins = aggregatePlugins();
@@ -3644,6 +3663,9 @@ app.post('/api/plugins/:name', (req, res) => {
     if (!isSafePluginName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
     }
+    if (isDisplayOnlyNpmPlugin(name)) {
+        return res.status(400).json({ error: 'npm plugin is display-only' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -3682,6 +3704,9 @@ app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     if (!isSafePluginName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
+    if (isDisplayOnlyNpmPlugin(name)) {
+        return res.status(400).json({ error: 'npm plugin is display-only' });
     }
 
     let deleted = false;
