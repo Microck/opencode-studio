@@ -2191,13 +2191,19 @@ function getProviderSearchRoots() {
 }
 
 function detectConfigProviders() {
+    // C7: exclude the server's own cwd from *detection* candidates — when the
+    // server is started from a project dir (e.g. `server/`), that dir's
+    // opencode.json is a dev artifact, not a user config. Only the
+    // getSearchRoots() spread is filtered; getOmoSearchRoots() stays intact
+    // (see MINOR-8 below — omo-first ordering is load-bearing for E1).
+    const searchRoots = getSearchRoots().filter(r => r !== path.resolve(process.cwd()));
     return configProviders.detectProviders({
         // MINOR-8: omo roots FIRST — guarantees E1 activePath prefers
         // ~/.omo/omo.jsonc. If omo roots were appended after getSearchRoots(),
         // cwd's legacy oh-my-openagent.json would become existing[0]
         // (config-providers.js:320) and silently re-activate the C1 failure
         // class in legacy-present environments.
-        roots: [...configProviders.getOmoSearchRoots(), ...getSearchRoots()]
+        roots: [...configProviders.getOmoSearchRoots(), ...searchRoots]
     });
 }
 
