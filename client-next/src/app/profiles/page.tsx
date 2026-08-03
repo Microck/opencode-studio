@@ -175,7 +175,7 @@ export default function ProfilesPage() {
                     <div>
                       <CardTitle className="text-lg">{profile}</CardTitle>
                       {isActive && <Badge className="mt-1">{t('active')}</Badge>}
-                      {isLegacy && <Badge variant="secondary" className="mt-1">legacy 环境</Badge>}
+                      {isLegacy && <Badge variant="secondary" className="mt-1">{t('legacyEnv')}</Badge>}
                     </div>
                   </div>
                 </div>
@@ -190,7 +190,7 @@ export default function ProfilesPage() {
                       disabled={activating === profile}
                     >
                        <Play className="h-4 w-4 mr-2" />
-                      导入并激活
+                      {t('importAndActivate')}
                     </Button>
                   ) : isActive ? (
                     <Button disabled className="w-full" variant="secondary">
