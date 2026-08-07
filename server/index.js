@@ -4975,6 +4975,7 @@ function tryReadUsageFromSqlite(opts) {
             conditions.push('m.time_created <= ?');
             params.push(max);
         }
+        conditions.push('json_valid(m.data)');
         conditions.push('m.id > ?');
         params.push('');
 
