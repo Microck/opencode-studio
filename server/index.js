@@ -4957,35 +4957,83 @@ function tryReadUsageFromSqlite(opts) {
     let db;
     try {
         db = new DatabaseSync(dbPath, { readonly: true });
-        const rows = db.prepare(`
-            SELECT m.data AS message_data, m.time_created AS message_time_created,
+
+        // Extract only the usage fields in SQL instead of loading full message
+        // payloads into the V8 heap. opencode DBs can hold hundreds of
+        // thousands of rows and messages up to hundreds of MB each; JSON.parsing
+        // them all used to blow past the heap limit on /api/usage. Rows are
+        // still read in keyset-paginated batches so memory stays bounded no
+        // matter how large the database grows. Time bounds are pushed into SQL
+        // because message.time_created mirrors data.time.created.
+        const conditions = [];
+        const params = [];
+        if (min > 0) {
+            conditions.push('m.time_created >= ?');
+            params.push(min);
+        }
+        if (max > 0) {
+            conditions.push('m.time_created <= ?');
+            params.push(max);
+        }
+        conditions.push('m.id > ?');
+        params.push('');
+
+        const stmt = db.prepare(`
+            SELECT m.id AS message_id,
+                   m.time_created AS message_time_created,
+                   json_extract(m.data, '$.role') AS msg_role,
+                   json_extract(m.data, '$.cost') AS msg_cost,
+                   json_type(m.data, '$.tokens') AS msg_tokens_type,
+                   json_extract(m.data, '$.tokens.input') AS msg_tokens_input,
+                   json_extract(m.data, '$.tokens.output') AS msg_tokens_output,
+                   json_extract(m.data, '$.time.created') AS msg_time_created,
+                   json_extract(m.data, '$.modelID') AS msg_model_id,
+                   json_extract(m.data, '$.model.modelID') AS msg_model_model_id,
+                   json_extract(m.data, '$.model.id') AS msg_model_nested_id,
                    s.project_id AS session_project_id,
                    p.id AS project_id, p.name AS project_name, p.worktree AS project_worktree
             FROM message m
             LEFT JOIN session s ON s.id = m.session_id
             LEFT JOIN project p ON p.id = s.project_id
-        `).all();
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY m.id
+            LIMIT ?
+        `);
 
         const stats = createStatsAccumulator();
-        for (const row of rows) {
-            let msg;
-            try {
-                msg = JSON.parse(row.message_data);
-            } catch {
-                continue;
+        const BATCH_SIZE = 2000;
+        while (true) {
+            const rows = stmt.all(...params, BATCH_SIZE);
+            if (rows.length === 0) break;
+            for (const row of rows) {
+                // Reconstruct only the fields appendUsage reads. If the JSON is
+                // malformed json_extract yields NULLs, which makes this row a
+                // no-op exactly like the old JSON.parse catch-continue did.
+                const msg = {
+                    role: row.msg_role,
+                    cost: row.msg_cost,
+                    tokens: (row.msg_tokens_type === 'object' || row.msg_tokens_type === 'array') ? { input: row.msg_tokens_input, output: row.msg_tokens_output } : null,
+                    time: { created: row.msg_time_created },
+                    modelID: row.msg_model_id,
+                    model: (row.msg_model_model_id !== null || row.msg_model_nested_id !== null)
+                        ? { modelID: row.msg_model_model_id, id: row.msg_model_nested_id }
+                        : undefined
+                };
+                if (!msg.time) msg.time = {};
+                if (!msg.time.created) msg.time.created = row.message_time_created;
+                if (!msg.time.created) continue;
+
+                const pid = row.project_id || row.session_project_id || 'unknown';
+                if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
+                if (min > 0 && msg.time.created < min) continue;
+                if (max > 0 && msg.time.created > max) continue;
+
+                const fallbackName = row.project_worktree ? path.basename(row.project_worktree) : 'Unassigned';
+                const pname = row.project_name || fallbackName;
+                appendUsage(stats, { id: pid, name: pname }, msg, granularity);
             }
-            if (!msg.time) msg.time = {};
-            if (!msg.time.created) msg.time.created = row.message_time_created;
-            if (!msg.time.created) continue;
-
-            const pid = row.project_id || row.session_project_id || 'unknown';
-            if (projectIdFilter && projectIdFilter !== 'all' && pid !== projectIdFilter) continue;
-            if (min > 0 && msg.time.created < min) continue;
-            if (max > 0 && msg.time.created > max) continue;
-
-            const fallbackName = row.project_worktree ? path.basename(row.project_worktree) : 'Unassigned';
-            const pname = row.project_name || fallbackName;
-            appendUsage(stats, { id: pid, name: pname }, msg, granularity);
+            params[params.length - 1] = rows[rows.length - 1].message_id;
+            if (rows.length < BATCH_SIZE) break;
         }
 
         return finalizeUsageStats(stats);
