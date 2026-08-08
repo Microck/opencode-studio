@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.5] - 2026-08-08
+
+### Fixed
+- **Usage Stats Memory**: Read only the metadata needed by the usage tab in bounded SQLite batches, preventing backend heap exhaustion on large OpenCode databases (#57).
+
 ## [2.4.4] - 2026-07-22
 
 ### Security
