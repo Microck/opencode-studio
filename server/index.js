@@ -118,6 +118,7 @@ const atomicWriteFileSync = (filePath, data, options = 'utf8') => {
 
 const app = express();
 const DEFAULT_PORT = 1920;
+const HOST = process.env.HOST || '127.0.0.1';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 function findAvailablePort(startPort) {
@@ -492,6 +493,7 @@ function loadStudioConfig() {
         disabledPlugins: [],
         disabledAgents: [],
         activeProfiles: {},
+        activeOmoProfile: null,
         activeGooglePlugin: 'gemini',
         availableGooglePlugins: [],
         presets: [],
@@ -665,6 +667,24 @@ function saveStudioConfig(config) {
     }
 }
 
+// Persisted active-omo-profile marker: activation consumes a legacy profile
+// (import+bake+delete), so omo.jsonc no longer names it; this key survives
+// restarts and never touches the `activeProfiles` auth key.
+function readStudioMarker() {
+    return loadStudioConfig().activeOmoProfile ?? null;
+}
+
+// saveStudioConfig swallows write errors and returns false — throw on false so
+// callers can emit an explicit 500 instead of faking persistence.
+function writeStudioMarker(name) {
+    const config = loadStudioConfig();
+    config.activeOmoProfile = name;
+    if (!saveStudioConfig(config)) {
+        throw new Error('Failed to persist active omo profile marker');
+    }
+    return true;
+}
+
 const getWslDistributions = () => {
     try {
         const { execSync } = require('child_process');
@@ -727,6 +747,17 @@ const getPaths = () => {
 };
 
 const getOhMyOpenCodeConfigPath = () => {
+    // OMO-specific resolution ONLY (Todo 5) — must NOT touch getPaths()
+    // candidates: getPaths().current feeds 20+ opencode config reads/writes
+    // (loadConfig/saveConfig, /api/config, backup/restore), and saveConfig's
+    // whole-file JSON.stringify would overwrite omo.jsonc (C-A data loss).
+    // ~/.omo/omo.jsonc first, then ~/.omo/omo.json, then legacy fallback.
+    const omoDir = path.join(os.homedir(), '.omo');
+    const omoJsonc = path.join(omoDir, 'omo.jsonc');
+    const omoJson = path.join(omoDir, 'omo.json');
+    if (fs.existsSync(omoJsonc)) return omoJsonc;
+    if (fs.existsSync(omoJson)) return omoJson;
+    // Legacy fallback (deprioritized): oh-my-openagent.json / oh-my-opencode.json
     const cp = getConfigPath();
     if (!cp) return null;
     const dir = path.dirname(cp);
@@ -780,8 +811,15 @@ const getSkillDirs = () => {
         const skillsDir = path.join(root, 'skills');
         if (fs.existsSync(skillsDir)) {
             try {
+                // statSync follows symlinks, so symlink-to-directory packages
+                // are accepted (Dirent.isDirectory() would filter them out);
+                // broken symlinks yield undefined and are skipped.
                 const packages = fs.readdirSync(skillsDir, { withFileTypes: true })
-                    .filter(d => d.isDirectory());
+                    .filter(pkg => {
+                        const p = path.join(skillsDir, pkg.name);
+                        const st = fs.statSync(p, { throwIfNoEntry: false });
+                        return st?.isDirectory();
+                    });
                 for (const pkg of packages) {
                     const nestedSkillsDir = path.join(skillsDir, pkg.name, 'skills');
                     if (fs.existsSync(nestedSkillsDir)) {
@@ -1217,6 +1255,20 @@ const loadAggregatedConfig = () => {
                         name,
                         source: 'json-config',
                         type: typeof plugin === 'object' && plugin.npm ? 'npm' : 'file'
+                    });
+                }
+            }
+        }
+
+        // `plugin` (singular) is the official opencode npm-plugin key; merged with `plugins` above, deduped by name.
+        if (config.plugin && Array.isArray(config.plugin)) {
+            for (const plugin of config.plugin) {
+                const name = typeof plugin === 'string' ? plugin : plugin.name || plugin.npm;
+                if (name && !aggregated.plugins.find((p) => p.name === name)) {
+                    aggregated.plugins.push({
+                        name,
+                        source: 'json-config',
+                        type: 'npm'
                     });
                 }
             }
@@ -2148,6 +2200,7 @@ function loadOhMyOpenCodeConfig() {
 }
 
 function saveOhMyOpenCodeConfig(config) {
+    // TODO: unused — do not wire to omo.jsonc (whole-file overwrite would corrupt); route through writeOmoBlock if ever reused
     const configPath = getOhMyOpenCodeConfigPath();
     if (!configPath) throw new Error('No opencode config path found');
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
@@ -2158,8 +2211,19 @@ function getProviderSearchRoots() {
 }
 
 function detectConfigProviders() {
+    // C7: exclude the server's own cwd from *detection* candidates — when the
+    // server is started from a project dir (e.g. `server/`), that dir's
+    // opencode.json is a dev artifact, not a user config. Only the
+    // getSearchRoots() spread is filtered; getOmoSearchRoots() stays intact
+    // (see MINOR-8 below — omo-first ordering is load-bearing for E1).
+    const searchRoots = getSearchRoots().filter(r => r !== path.resolve(process.cwd()));
     return configProviders.detectProviders({
-        roots: getProviderSearchRoots()
+        // MINOR-8: omo roots FIRST — guarantees E1 activePath prefers
+        // ~/.omo/omo.jsonc. If omo roots were appended after getSearchRoots(),
+        // cwd's legacy oh-my-openagent.json would become existing[0]
+        // (config-providers.js:320) and silently re-activate the C1 failure
+        // class in legacy-present environments.
+        roots: [...configProviders.getOmoSearchRoots(), ...searchRoots]
     });
 }
 
@@ -2340,6 +2404,67 @@ function buildWriteContent({ provider, body = {}, parsed, targetPath }) {
     };
 }
 
+// ============================================
+// OMO BLOCK SEMANTICS (Todo 6)
+// ============================================
+
+const OMO_CONFIG_BASENAMES = ['omo.jsonc', 'omo.json'];
+
+function isOmoConfigPath(targetPath) {
+    return OMO_CONFIG_BASENAMES.includes(path.basename(targetPath || ''));
+}
+
+// MAJOR-B: OMO payload gate, applied to the INCOMING payload itself (before any
+// wrap into {"[opencode]": block}). Rejects non-plain-object payloads (array/
+// string — defense in depth: parseProviderInput already rejects those) and
+// payloads carrying document-level control keys ([opencode]/profiles/$schema/
+// _migrations — the user pasted a whole omo doc). Keys INSIDE the [opencode]
+// block are unconstrained by design (plugin: [opencode] = record(string,
+// unknown)), so no whitelist is applied there. Failure -> 400, nothing written.
+function gateOmoBlockPayload(config) {
+    const controlKeys = ['[opencode]', 'profiles', '$schema', '_migrations'];
+    if (!configProviders.isPlainObject(config)) {
+        return {
+            ok: false,
+            diagnostics: [{
+                severity: 'error',
+                code: 'OMO_PAYLOAD_NOT_PLAIN_OBJECT',
+                message: `OMO config payload must be a plain object, got ${Array.isArray(config) ? 'array' : typeof config}`
+            }]
+        };
+    }
+    const present = controlKeys.filter((key) => Object.prototype.hasOwnProperty.call(config, key));
+    if (present.length > 0) {
+        return {
+            ok: false,
+            diagnostics: [{
+                severity: 'error',
+                code: 'OMO_DOCUMENT_LEVEL_KEYS',
+                message: 'OMO payload contains document-level control keys; send the bare [opencode] block instead',
+                details: { keys: present }
+            }]
+        };
+    }
+    return { ok: true };
+}
+
+// M-F: response shape { profiles: [{name, path, active}], activePath }.
+// active comes from getResolvedActiveProfile() (Todo 1 env chain:
+// OMO_PROFILE > OCX_PROFILE > OPENCODE_CONFIG_DIR suffix) — never reimplemented.
+function buildOmoProfilesResponse(provider) {
+    const activePath = provider ? provider.activePath : null;
+    const activeName = configProviders.getResolvedActiveProfile() || null;
+    const names = activePath ? configProviders.listOmoProfiles(activePath) : [];
+    return {
+        profiles: names.map((name) => ({
+            name,
+            path: activePath,
+            active: name === activeName
+        })),
+        activePath
+    };
+}
+
 function loadProviderDetails(provider) {
     if (!provider || !provider.activePath || !provider.exists) {
         return {
@@ -2353,11 +2478,27 @@ function loadProviderDetails(provider) {
     try {
         const raw = configProviders.readConfigTextSync(provider.activePath, 'utf8');
         const stats = fs.statSync(provider.activePath);
-        const config = configProviders.parseJsonText(raw);
         const revision = configProviders.buildContentRevision({ content: raw, stats });
+        // OMO block semantics: expose ONLY the [opencode] block. MINOR-1 pins raw
+        // to the BARE block JSON (JSON.stringify(block, null, 2)) — the editor
+        // sends detail.raw straight back on save (provider-detail.tsx:197-200),
+        // so a whole-doc raw would trip the MAJOR-B control-key gate. revision
+        // stays the WHOLE-FILE hash (M3: compareExpectedRevision/
+        // getCurrentRevisionForPath hash the whole file; a block-level hash
+        // would 409 on every save). Legacy (non-omo) paths keep whole-file
+        // semantics.
+        let config;
+        let detailRaw;
+        if (provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENAGENT && isOmoConfigPath(provider.activePath)) {
+            config = configProviders.getOmoConfigBlock(provider.activePath);
+            detailRaw = JSON.stringify(config, null, 2);
+        } else {
+            config = configProviders.parseJsonText(raw);
+            detailRaw = raw;
+        }
         return {
             config,
-            raw,
+            raw: detailRaw,
             revision,
             diagnostics: provider.diagnostics || []
         };
@@ -2517,11 +2658,7 @@ app.get('/api/config-providers/:id/profiles', (req, res) => {
         const guard = requireOpenAgentProvider(provider);
         if (!guard.ok) return res.status(guard.status).json(guard.payload);
 
-        res.json({
-            profileDir: configProviders.getOpenAgentProfileDir(provider),
-            activePath: configProviders.getOpenAgentDefaultActivePath(provider),
-            profiles: listOpenAgentProfiles(provider)
-        });
+        res.json(buildOmoProfilesResponse(provider));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -2533,32 +2670,48 @@ app.post('/api/config-providers/:id/profiles', (req, res) => {
         const guard = requireOpenAgentProvider(provider);
         if (!guard.ok) return res.status(guard.status).json(guard.payload);
 
-        const profilePath = configProviders.getOpenAgentProfilePath(provider, req.body && req.body.name);
-        if (!profilePath) {
+        const name = req.body && req.body.name;
+        if (typeof name !== 'string' || name === '') {
             return res.status(400).json({
                 success: false,
                 diagnostics: [{
                     severity: 'error',
                     code: 'OPENAGENT_PROFILE_NAME_REQUIRED',
-                    message: 'OpenAgent config profile name is required'
+                    message: 'OpenAgent profile name is required'
                 }]
             });
         }
 
-        const content = typeof req.body?.raw === 'string' ? req.body.raw : '{}\n';
-        const parsed = parseAndValidateProviderPayload(provider, { raw: content });
+        const payload = (typeof req.body?.raw === 'string' || (req.body?.config && typeof req.body.config === 'object'))
+            ? req.body
+            : { raw: '{}\n' };
+        const parsed = parseAndValidateProviderPayload(provider, payload);
         if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
 
-        const pathSafety = validatePathWritable(profilePath);
-        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
+        const gate = gateOmoBlockPayload(parsed.config);
+        if (!gate.ok) return res.status(400).json({ success: false, diagnostics: gate.diagnostics });
 
-        const createResult = configProviders.createFileIfMissingSync(profilePath, parsed.raw, 'utf8');
-        const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
+        let writeResult;
+        try {
+            // setOmoProfile writes profiles.<name>.[opencode] surgically (Todo 3)
+            // — never copies a file.
+            writeResult = configProviders.setOmoProfile(provider.activePath, name, parsed.config);
+        } catch (error) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILE_CREATE_FAILED',
+                    message: error.message
+                }]
+            });
+        }
+
         res.json({
             success: true,
-            created: createResult.created,
-            profile: buildOpenAgentProfileRecord(updatedProvider, profilePath, getCurrentRevisionForPath(configProviders.getOpenAgentDefaultActivePath(updatedProvider))),
-            profiles: listOpenAgentProfiles(updatedProvider)
+            created: writeResult.created,
+            path: writeResult.path,
+            profiles: buildOmoProfilesResponse(provider).profiles
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -2571,27 +2724,42 @@ app.post('/api/config-providers/:id/profiles/switch', (req, res) => {
         const guard = requireOpenAgentProvider(provider);
         if (!guard.ok) return res.status(guard.status).json(guard.payload);
 
-        const selected = resolveOpenAgentProfileSelection(provider, req.body || {});
-        if (!selected.ok) return res.status(400).json({ success: false, diagnostics: selected.diagnostics });
+        const name = req.body && req.body.name;
+        if (typeof name !== 'string' || name === '') {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILE_NAME_REQUIRED',
+                    message: 'OpenAgent profile name is required'
+                }]
+            });
+        }
 
-        const raw = configProviders.readConfigTextSync(selected.path, 'utf8');
-        const parsed = parseAndValidateProviderPayload(provider, { raw });
-        if (!parsed.ok) return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        let result;
+        try {
+            // M2/MINOR-a: bake-only activation fully delegated to profileManager;
+            // M-C foreign-key rejection fires exactly once, there — not here.
+            result = profileManager.activateProfile(name);
+        } catch (error) {
+            return res.status(400).json({
+                success: false,
+                diagnostics: [{
+                    severity: 'error',
+                    code: 'OPENAGENT_PROFILE_ACTIVATE_FAILED',
+                    message: error.message
+                }]
+            });
+        }
 
-        const activePath = configProviders.getOpenAgentDefaultActivePath(provider);
-        const pathSafety = validatePathWritable(activePath);
-        if (!pathSafety.ok) return res.status(400).json({ success: false, diagnostics: pathSafety.diagnostics });
-
-        configProviders.writeConfigTextAtomicSync(activePath, raw, 'utf8');
         const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
         const updatedDetails = loadProviderDetails(updatedProvider);
         res.json({
             success: true,
-            path: activePath,
-            selectedPath: selected.path,
+            ...result,
             diagnostics: updatedDetails.diagnostics || [],
             revision: updatedDetails.revision,
-            profiles: listOpenAgentProfiles(updatedProvider)
+            profiles: buildOmoProfilesResponse(updatedProvider).profiles
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -2650,7 +2818,29 @@ app.post('/api/config-providers/:id/save', (req, res) => {
             targetPath: pathDecision.path
         });
 
-        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        if (provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENAGENT && isOmoConfigPath(pathDecision.path)) {
+            // MAJOR-B: gate the incoming payload itself (before any wrap).
+            const gate = gateOmoBlockPayload(parsed.config);
+            if (!gate.ok) {
+                return res.status(400).json({ success: false, diagnostics: gate.diagnostics });
+            }
+            // M3 round-trip: getOmoConfigBlock reads config["[opencode]"], so the
+            // bare editor block must be written under "[opencode]" or the next
+            // read loses the edit. raw -> replace the block (editor WYSIWYG);
+            // config -> deep-merge into the existing block so sibling agents and
+            // their enabled keys survive (mirrors buildWriteContent scoped to the
+            // block instead of the whole file).
+            let block = parsed.config;
+            if (typeof req.body?.raw !== 'string') {
+                block = configProviders.deepMergePreservingUnknown(
+                    configProviders.getOmoConfigBlock(pathDecision.path),
+                    parsed.config
+                );
+            }
+            configProviders.writeOmoBlock(pathDecision.path, block, '[opencode]');
+        } else {
+            configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        }
         const updatedProvider = getProviderByIdOrNull(provider.id) || provider;
         const updatedDetails = loadProviderDetails(updatedProvider);
         res.json({
@@ -2685,6 +2875,27 @@ app.post('/api/config-providers/:id/create', (req, res) => {
         const parsed = parseAndValidateProviderPayload(provider, { raw: content });
         if (!parsed.ok) {
             return res.status(400).json({ success: false, diagnostics: parsed.diagnostics });
+        }
+
+        if (provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENAGENT && isOmoConfigPath(pathDecision.path)) {
+            // MAJOR-A: OMO create delegates Todo 3's skeleton creation —
+            // writeOmoBlock writes the skeleton (comment header + $schema +
+            // {"[opencode]": {}}) when the file is missing, then lands the
+            // block. An existing file is rejected with 400 (never overwrite).
+            if (fs.existsSync(pathDecision.path)) {
+                return res.status(400).json({
+                    success: false,
+                    diagnostics: [{
+                        severity: 'error',
+                        code: 'OMO_CONFIG_EXISTS',
+                        message: 'OMO config file already exists'
+                    }]
+                });
+            }
+            const gate = gateOmoBlockPayload(parsed.config);
+            if (!gate.ok) return res.status(400).json({ success: false, diagnostics: gate.diagnostics });
+            configProviders.writeOmoBlock(pathDecision.path, parsed.config, '[opencode]');
+            return res.json({ success: true, created: true, path: pathDecision.path });
         }
 
         const createResult = configProviders.createFileIfMissingSync(pathDecision.path, parsed.raw, 'utf8');
@@ -2737,7 +2948,22 @@ app.post('/api/config-providers/:id/import', (req, res) => {
             targetPath: pathDecision.path
         });
 
-        configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        if (provider.id === configProviders.PROVIDER_IDS.OH_MY_OPENAGENT && isOmoConfigPath(pathDecision.path)) {
+            // MAJOR-A: OMO import never whole-file overwrites (C2). Gate first
+            // (same as save), then MINOR-5 merge into the existing block so
+            // existing agents survive.
+            const gate = gateOmoBlockPayload(parsed.config);
+            if (!gate.ok) {
+                return res.status(400).json({ success: false, diagnostics: gate.diagnostics });
+            }
+            const merged = configProviders.deepMergePreservingUnknown(
+                configProviders.getOmoConfigBlock(pathDecision.path),
+                parsed.config
+            );
+            configProviders.writeOmoBlock(pathDecision.path, merged, '[opencode]');
+        } else {
+            configProviders.writeConfigTextAtomicSync(pathDecision.path, writePayload.raw, 'utf8');
+        }
         res.json({
             success: true,
             imported: true,
@@ -2804,7 +3030,10 @@ app.post('/api/ohmyopencode', (req, res) => {
             const choices = agentPrefs.choices || [];
             const available = choices.find(c => c.available);
             if (available) {
-                if (!currentConfig.agents) currentConfig.agents = {};
+                if (!configProviders.isPlainObject(currentConfig.agents)) currentConfig.agents = {};
+                const existingAgent = configProviders.isPlainObject(currentConfig.agents[agentName])
+                    ? currentConfig.agents[agentName]
+                    : {};
                 const agentConfig = { model: available.model };
                 
                 if (available.thinking && available.thinking.type === 'enabled') {
@@ -2815,7 +3044,9 @@ app.post('/api/ohmyopencode', (req, res) => {
                     agentConfig.reasoning = { effort: available.reasoning.effort };
                 }
                 
-                currentConfig.agents[agentName] = agentConfig;
+                // E6: field-level merge — enabled and other unknown keys survive;
+                // never a whole-agent replace.
+                currentConfig.agents[agentName] = configProviders.deepMergePreservingUnknown(existingAgent, agentConfig);
             } else if (choices.length > 0) {
                 warnings.push(`No available model for agent "${agentName}"`);
             }
@@ -2829,7 +3060,14 @@ app.post('/api/ohmyopencode', (req, res) => {
         if (!pathDecision.ok) {
             return res.status(400).json({ success: false, diagnostics: pathDecision.diagnostics });
         }
-        configProviders.writeConfigTextAtomicSync(pathDecision.path, JSON.stringify(currentConfig, null, 2), 'utf8');
+        // MINOR-3: write point pinned to writeOmoBlock for omo files — the old
+        // whole-file writeConfigTextAtomicSync(JSON.stringify) would clobber
+        // omo.jsonc (C2). Legacy (non-omo) paths keep their whole-file JSON write.
+        if (isOmoConfigPath(pathDecision.path)) {
+            configProviders.writeOmoBlock(pathDecision.path, currentConfig, '[opencode]');
+        } else {
+            configProviders.writeConfigTextAtomicSync(pathDecision.path, JSON.stringify(currentConfig, null, 2), 'utf8');
+        }
         
         const ohMyPath = pathDecision.path;
         triggerGitHubAutoSync();
@@ -3167,6 +3405,31 @@ const getActiveSkillDir = () => {
     return cp ? path.join(path.dirname(cp), 'skills') : null;
 };
 
+// Returns the package entry (skillsDir/<name>) when the skill resolves to a
+// symlinked package — checked on the package entry, NOT dirInfo.path: for
+// nested packages dirInfo.path goes THROUGH the symlink (its final component
+// lives inside the target dir), so lstatSync on dirInfo.path would miss it,
+// while rmSync(recursive)/writeFile would resolve the intermediate symlink
+// and hit legacy dirs.
+const findSymlinkSkillEntry = (name) => {
+    for (const dirInfo of getSkillDirs()) {
+        const matchesName = dirInfo.isFlat
+            ? (dirInfo.package === name || path.basename(dirInfo.path) === name)
+            : fs.existsSync(path.join(dirInfo.path, name, 'SKILL.md'));
+        if (!matchesName) continue;
+
+        const pkgEntry = path.join(dirInfo.root, 'skills', dirInfo.package);
+        let st = null;
+        try {
+            st = fs.lstatSync(pkgEntry);
+        } catch (e) {
+            // entry vanished mid-flight — treat as not a symlink
+        }
+        if (st?.isSymbolicLink()) return pkgEntry;
+    }
+    return null;
+};
+
 app.get('/api/skills', (req, res) => {
     const studio = loadStudioConfig();
     const disabledSkills = studio.disabledSkills || [];
@@ -3237,6 +3500,16 @@ app.post('/api/skills/:name', (req, res) => {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
     }
 
+    // Symlink skills are read-only: reject before the edit loop AND before
+    // the create-new fallback (flat symlink skills would otherwise get a
+    // duplicate copy created in the active dir). Check the package entry
+    // (skillsDir/<name>), not dirInfo.path — for nested packages dirInfo.path
+    // goes through the symlink and lstat would miss it, while rmSync/writeFile
+    // would resolve the intermediate symlink into legacy dirs.
+    if (findSymlinkSkillEntry(name)) {
+        return res.status(403).json({ error: 'symlink skill is read-only' });
+    }
+
     let targetDir = null;
 
     // Check if editing existing
@@ -3275,6 +3548,12 @@ app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
     if (!isSafeSkillName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_SKILL_NAME, code: 'INVALID_SKILL_NAME' });
+    }
+
+    // Symlink skills are read-only: never rmSync through a symlink into
+    // legacy dirs.
+    if (findSymlinkSkillEntry(name)) {
+        return res.status(403).json({ error: 'symlink skill is read-only' });
     }
 
     let deleted = false;
@@ -3357,6 +3636,11 @@ const aggregatePlugins = () => {
     return Array.from(pluginMap.values());
 };
 
+const isDisplayOnlyNpmPlugin = (name) => {
+    const plugin = aggregatePlugins().find(p => p.name === name);
+    return !!plugin && plugin.source === 'json-config' && !plugin.path;
+};
+
 app.get('/api/plugins', (req, res) => {
     try {
         const plugins = aggregatePlugins();
@@ -3405,6 +3689,9 @@ app.post('/api/plugins/:name', (req, res) => {
     if (!isSafePluginName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
     }
+    if (isDisplayOnlyNpmPlugin(name)) {
+        return res.status(400).json({ error: 'npm plugin is display-only' });
+    }
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
@@ -3443,6 +3730,9 @@ app.delete('/api/plugins/:name', (req, res) => {
     const { name } = req.params;
     if (!isSafePluginName(name)) {
         return res.status(400).json({ error: ERROR_CODES.INVALID_PLUGIN_NAME, code: 'INVALID_PLUGIN_NAME' });
+    }
+    if (isDisplayOnlyNpmPlugin(name)) {
+        return res.status(400).json({ error: 'npm plugin is display-only' });
     }
 
     let deleted = false;
@@ -4820,7 +5110,14 @@ app.post('/api/auth/pool/quota/limit', (req, res) => {
 });
 
 app.get('/api/profiles', (req, res) => {
-    res.json(profileManager.listProfiles());
+    const result = profileManager.listProfiles();
+    const marker = readStudioMarker();
+    const legacy = marker ? result.legacy.filter((name) => name !== marker) : result.legacy;
+    res.json({
+        ...result,
+        legacy,
+        active: result.active || marker
+    });
 });
 
 app.post('/api/profiles', (req, res) => {
@@ -4841,7 +5138,21 @@ app.delete('/api/profiles/:name', (req, res) => {
 
 app.post('/api/profiles/:name/activate', (req, res) => {
     try {
-        res.json(profileManager.activateProfile(req.params.name));
+        const result = profileManager.activateProfile(req.params.name);
+        try {
+            writeStudioMarker(req.params.name);
+        } catch (markerErr) {
+            return res.status(500).json({ error: `Failed to persist active profile marker: ${markerErr.message}` });
+        }
+        res.json(result);
+    } catch (e) {
+        res.status(400).json({ error: e.message, ...(e.code && { code: e.code }) });
+    }
+});
+
+app.post('/api/profiles/:name/import-legacy', (req, res) => {
+    try {
+        res.json(profileManager.importLegacyProfile(req.params.name));
     } catch (e) {
         res.status(400).json({ error: e.message, ...(e.code && { code: e.code }) });
     }
@@ -5613,8 +5924,8 @@ async function startServer() {
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
     const port = await findAvailablePort(DEFAULT_PORT);
-    app.listen(port, '127.0.0.1', () => {
-        console.log(`Server running at http://127.0.0.1:${port}`);
+    app.listen(port, HOST, () => {
+        console.log(`Server running at http://${HOST}:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
             const studio = loadStudioConfig();
@@ -5638,7 +5949,14 @@ module.exports = {
     savePoolMetadata,
     loadStudioConfig,
     saveStudioConfig,
-    buildAccountPool
+    buildAccountPool,
+    getPaths,
+    getSearchRoots,
+    getSkillDirs,
+    loadAggregatedConfig,
+    aggregatePlugins,
+    detectConfigProviders,
+    getOhMyOpenCodeConfigPath
 };
 app.get('/api/prompts/global', (req, res) => {
     const cp = getConfigPath();

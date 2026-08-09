@@ -481,7 +481,9 @@
     "noMatch": "No skills match \"{search}\"",
     "unknownError": "Unknown error",
     "delete": "Delete",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "deleted": "Skill {name} deleted",
+    "deleteFailed": "Failed to delete skill: {error}"
   },
   "plugins": {
     "incompatibleWarning": "Incompatible with Antigravity. Use openskills instead.",
@@ -498,7 +500,9 @@
     "noMatch": "No plugins match \"{search}\"",
     "unknownError": "Unknown error",
     "delete": "Delete",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "deleted": "Plugin {name} deleted",
+    "deleteFailed": "Failed to delete plugin: {error}"
   },
   "commands": {
     "loadFailed": "Failed to load commands",
@@ -612,6 +616,9 @@
     "active": "Active",
     "current": "Current",
     "switch": "Switch",
+    "legacyEnv": "Legacy environment",
+    "importAndActivate": "Import & activate",
+    "activeConsumed": "Already active",
     "deleteTitle": "Delete Profile?",
     "deleteDescription": "This will permanently delete the profile \"{name}\" and all its configuration and history.",
     "cancelBtn": "Cancel",
@@ -698,7 +705,14 @@
     "modelInterface": "Model Interface",
     "input": "Input",
     "output": "Output",
-    "cost": "Cost"
+    "cost": "Cost",
+    "range24h": "Last 24 hours",
+    "range7d": "Last 7 days",
+    "range30d": "Last 30 days",
+    "range3m": "Last 3 months",
+    "range6m": "Last 6 months",
+    "range1y": "Last year",
+    "rangeCustom": "Custom range"
   },
   "config": {
     "invalidJson": "Invalid JSON: {error}",

@@ -337,3 +337,236 @@ describe('provider write/import helper semantics', () => {
         expect(withAllowedPath).toEqual({ ok: true, path: candidatePath });
     });
 });
+
+describe('omo config detection and [opencode] block reading', () => {
+    it('selects omo.jsonc from an omo root over a legacy openagent config', () => {
+        const tempDir = makeTempDir();
+        const omoRoot = path.join(tempDir, '.omo');
+        fs.mkdirSync(omoRoot, { recursive: true });
+        const omoPath = path.join(omoRoot, 'omo.jsonc');
+        const legacyPath = path.join(tempDir, 'oh-my-openagent.json');
+        fs.writeFileSync(omoPath, '{ "[opencode]": { "theme": "dark" } }');
+        fs.writeFileSync(legacyPath, '{"a":1}');
+
+        const detect = () => providers.detectProviders({ roots: [tempDir] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        const withOmo = detect();
+        expect(withOmo.activePath).toBe(omoPath);
+        expect(withOmo.diagnostics.some((d) => d.code === 'OPENAGENT_LEGACY_CONFIG')).toBe(false);
+
+        fs.unlinkSync(omoPath);
+        const legacyOnly = detect();
+        expect(legacyOnly.activePath).toBe(legacyPath);
+        const legacyDiagnostic = legacyOnly.diagnostics.find((d) => d.code === 'OPENAGENT_LEGACY_CONFIG');
+        expect(legacyDiagnostic).toBeTruthy();
+        expect(legacyDiagnostic.severity).toBe('warning');
+        expect(legacyDiagnostic.details.path).toBe(legacyPath);
+    });
+
+    it('prefers the ~/.omo user root over another omo root when both hold omo.jsonc', () => {
+        const homeDir = makeTempDir();
+        const otherRoot = makeTempDir();
+        const userOmoDir = path.join(homeDir, '.omo');
+        const otherOmoDir = path.join(otherRoot, '.omo');
+        fs.mkdirSync(userOmoDir, { recursive: true });
+        fs.mkdirSync(otherOmoDir, { recursive: true });
+        const userOmoPath = path.join(userOmoDir, 'omo.jsonc');
+        const otherOmoPath = path.join(otherOmoDir, 'omo.jsonc');
+        fs.writeFileSync(userOmoPath, '{ "[opencode]": { "theme": "user" } }');
+        fs.writeFileSync(otherOmoPath, '{ "[opencode]": { "theme": "other" } }');
+
+        const openAgent = providers.detectProviders({ roots: [userOmoDir, otherOmoDir] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        expect(openAgent.activePath).toBe(userOmoPath);
+        expect(providers.getOmoConfigBlock(openAgent.activePath)).toEqual({ theme: 'user' });
+    });
+
+    it('extracts only the [opencode] block from an omo config file', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, [
+            '{',
+            '  // omo config carries plugin metadata plus the [opencode] block',
+            '  "plugin": { "version": "1.0.0" },',
+            '  "[opencode]": {',
+            '    "theme": "dark",',
+            '    "model": "fast",',
+            '  },',
+            '}'
+        ].join('\n'));
+
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({ theme: 'dark', model: 'fast' });
+    });
+
+    it('returns {} without throwing for omo.jsonc missing the [opencode] block', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, '{ "plugin": { "version": "1.0.0" } }');
+
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({});
+    });
+
+    it('warns and never selects omo.jsonc found outside omo search roots', () => {
+        const homeDir = makeTempDir();
+        const outsideRoot = path.join(homeDir, '.config', 'opencode');
+        fs.mkdirSync(outsideRoot, { recursive: true });
+        const omoPath = path.join(outsideRoot, 'omo.jsonc');
+        fs.writeFileSync(omoPath, '{ "[opencode]": { "theme": "dark" } }');
+
+        const openAgent = providers.detectProviders({ roots: [outsideRoot] })
+            .find((provider) => provider.id === providers.PROVIDER_IDS.OH_MY_OPENAGENT);
+
+        expect(openAgent.activePath).toBeNull();
+        expect(openAgent.exists).toBe(false);
+        const outsideDiagnostic = openAgent.diagnostics.find((d) => d.code === 'OPENAGENT_OMO_OUTSIDE_ROOT');
+        expect(outsideDiagnostic).toBeTruthy();
+        expect(outsideDiagnostic.severity).toBe('warning');
+        expect(outsideDiagnostic.details.paths).toEqual([omoPath]);
+    });
+});
+
+describe('omo profiles jsonc-fidelity writes and CRUD', () => {
+    it('preserves comment header, $schema, _migrations and existing profiles through setOmoProfile', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, [
+            '// OMO configuration',
+            '{',
+            '  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",',
+            '  "[opencode]": { "theme": "dark" },',
+            '  "_migrations": [',
+            '    "2026-07-opencode-config-unification",',
+            '    "2026-08-reasoning-unification"',
+            '  ],',
+            '  "profiles": {',
+            '    "existing": {',
+            '      "[opencode]": { "model": "fast" }',
+            '    }',
+            '  }',
+            '}',
+        ].join('\n'));
+
+        const result = providers.setOmoProfile(omoPath, 'work', { theme: 'light' });
+
+        const raw = fs.readFileSync(omoPath, 'utf8');
+        expect(raw).toContain('// OMO configuration');
+        expect(raw).toContain('"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json"');
+        expect(raw).toContain('2026-07-opencode-config-unification');
+        expect(raw).toContain('2026-08-reasoning-unification');
+
+        const parsed = providers.parseJsonText(raw);
+        expect(parsed['[opencode]']).toEqual({ theme: 'dark' });
+        expect(parsed._migrations).toEqual([
+            '2026-07-opencode-config-unification',
+            '2026-08-reasoning-unification'
+        ]);
+        expect(parsed.profiles.existing).toEqual({ '[opencode]': { model: 'fast' } });
+        expect(parsed.profiles.work).toEqual({ '[opencode]': { theme: 'light' } });
+        expect(result).toEqual({ path: omoPath, created: false });
+    });
+
+    it('creates a skeleton omo.jsonc with schema header when the file is missing', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+
+        const result = providers.setOmoProfile(omoPath, 'work', { theme: 'light' });
+        expect(result).toEqual({ path: omoPath, created: true });
+
+        const raw = fs.readFileSync(omoPath, 'utf8');
+        expect(raw).toContain('// OMO configuration');
+        expect(raw).toContain('"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json"');
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({});
+        expect(providers.getOmoProfile(omoPath, 'work')).toEqual({ '[opencode]': { theme: 'light' } });
+    });
+
+    it('creates, lists, reads, rewrites and deletes omo profiles', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+
+        providers.setOmoProfile(omoPath, 'work', { theme: 'light' });
+        expect(providers.listOmoProfiles(omoPath)).toEqual(['work']);
+        expect(providers.getOmoProfile(omoPath, 'work')).toEqual({ '[opencode]': { theme: 'light' } });
+
+        providers.setOmoProfile(omoPath, 'home', { model: 'fast' });
+        expect([...providers.listOmoProfiles(omoPath)].sort()).toEqual(['home', 'work']);
+        expect(providers.getOmoProfile(omoPath, 'home')).toEqual({ '[opencode]': { model: 'fast' } });
+
+        providers.setOmoProfile(omoPath, 'work', { theme: 'dark', model: 'fast' });
+        expect(providers.getOmoProfile(omoPath, 'work')).toEqual({ '[opencode]': { theme: 'dark', model: 'fast' } });
+
+        const deleted = providers.deleteOmoProfile(omoPath, 'work');
+        expect(deleted).toEqual({ path: omoPath, removed: true });
+        expect(providers.listOmoProfiles(omoPath)).toEqual(['home']);
+        expect(providers.getOmoProfile(omoPath, 'work')).toBeNull();
+
+        const deletedAgain = providers.deleteOmoProfile(omoPath, 'work');
+        expect(deletedAgain).toEqual({ path: omoPath, removed: false });
+        expect(providers.listOmoProfiles(omoPath)).toEqual(['home']);
+    });
+
+    it('removes only the targeted profile, leaving header, $schema, _migrations and sibling profiles intact', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, [
+            '// OMO configuration',
+            '{',
+            '  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",',
+            '  "[opencode]": { "theme": "dark" },',
+            '  "_migrations": ["2026-08-reasoning-unification"],',
+            '  "profiles": {',
+            '    "work": { "[opencode]": { "theme": "light" } },',
+            '    "keep": { "[opencode]": { "model": "fast" } }',
+            '  }',
+            '}',
+        ].join('\n'));
+
+        const deleted = providers.deleteOmoProfile(omoPath, 'work');
+        expect(deleted).toEqual({ path: omoPath, removed: true });
+
+        const raw = fs.readFileSync(omoPath, 'utf8');
+        expect(raw).toContain('// OMO configuration');
+        expect(raw).toContain('"$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json"');
+        expect(raw).toContain('2026-08-reasoning-unification');
+        expect(raw).toContain('"keep"');
+        expect(raw).not.toContain('"work"');
+
+        const parsed = providers.parseJsonText(raw);
+        expect(parsed['[opencode]']).toEqual({ theme: 'dark' });
+        expect(parsed._migrations).toEqual(['2026-08-reasoning-unification']);
+        expect(parsed.profiles.keep).toEqual({ '[opencode]': { model: 'fast' } });
+        expect(providers.getOmoProfile(omoPath, 'work')).toBeNull();
+    });
+
+    it('returns {} when an omo config file has no [opencode] block', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, [
+            '// OMO configuration',
+            '{',
+            '  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",',
+            '  "_migrations": ["2026-08-reasoning-unification"],',
+            '  "profiles": { "work": { "[opencode]": { "theme": "dark" } } }',
+            '}',
+        ].join('\n'));
+
+        expect(providers.getOmoConfigBlock(omoPath)).toEqual({});
+    });
+
+    it('throws on invalid profile names for write entry points', () => {
+        const tempDir = makeTempDir();
+        const omoPath = path.join(tempDir, 'omo.jsonc');
+        fs.writeFileSync(omoPath, '{ "[opencode]": {} }');
+
+        for (const badName of ['', '   ', '!!!', '#$%', '.json', undefined, null]) {
+            expect(() => providers.setOmoProfile(omoPath, badName, {})).toThrow(/Invalid omo profile name/);
+            expect(() => providers.deleteOmoProfile(omoPath, badName)).toThrow(/Invalid omo profile name/);
+        }
+        expect(() => providers.writeOmoBlock(omoPath, {}, 'profiles..[opencode]')).toThrow(/Invalid omo block key/);
+
+        // read-side entry points never throw on invalid names
+        expect(providers.getOmoProfile(omoPath, '!!!')).toBeNull();
+        expect(providers.listOmoProfiles(omoPath)).toEqual([]);
+    });
+});

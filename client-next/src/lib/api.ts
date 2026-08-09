@@ -844,6 +844,8 @@ export async function applyPreset(id: string, mode: 'exclusive' | 'additive'): P
 
 export interface ProfileList {
   profiles: string[];
+  /** Names of legacy profile dirs not yet imported as omo blocks (importable) */
+  legacy: string[];
   active: string | null;
 }
 
@@ -864,6 +866,12 @@ export async function deleteProfile(name: string): Promise<{ success: boolean }>
 
 export async function activateProfile(name: string): Promise<{ success: boolean }> {
   const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/activate`);
+  return data;
+}
+
+/** Imports a legacy profile dir's omo config as an omo profile (no bake). */
+export async function importLegacyProfile(name: string): Promise<{ success: boolean; imported: boolean; name: string }> {
+  const { data } = await api.post(`/profiles/${encodeURIComponent(name)}/import-legacy`);
   return data;
 }
 
