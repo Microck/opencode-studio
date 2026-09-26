@@ -23,6 +23,7 @@ interface ModelDraft {
   cacheReadCost: string;
   cacheWriteCost: string;
   attachment: boolean;
+  imageInput: boolean;
   reasoning: boolean;
   temperature: boolean;
   toolCall: boolean;
@@ -65,6 +66,7 @@ function emptyModel(key = "model-id"): ModelDraft {
     cacheReadCost: "",
     cacheWriteCost: "",
     attachment: false,
+    imageInput: false,
     reasoning: false,
     temperature: false,
     toolCall: true,
@@ -112,7 +114,8 @@ function modelDraftsFromProvider(provider: ProviderConfig): ModelDraft[] {
     outputCost: toNumberText(model.cost?.output),
     cacheReadCost: toNumberText(model.cost?.cache_read),
     cacheWriteCost: toNumberText(model.cost?.cache_write),
-    attachment: model.attachment === true,
+    attachment: model.attachment === true || model.modalities?.input?.includes("image") === true,
+    imageInput: model.modalities?.input?.includes("image") === true,
     reasoning: model.reasoning === true,
     temperature: model.temperature === true,
     toolCall: model.tool_call !== false,
@@ -203,8 +206,25 @@ function buildModelConfig(model: ModelDraft) {
     delete next.cost;
   }
 
-  if (model.attachment) next.attachment = true;
+  if (model.attachment || model.imageInput) next.attachment = true;
   else delete next.attachment;
+
+  if (model.source?.modalities || model.imageInput) {
+    const inputModalities = new Set(model.source?.modalities?.input || []);
+    const outputModalities = new Set(model.source?.modalities?.output || []);
+    if (model.imageInput) {
+      inputModalities.add("text");
+      inputModalities.add("image");
+    } else {
+      inputModalities.delete("image");
+    }
+    next.modalities = {
+      input: Array.from(inputModalities),
+      output: model.imageInput ? ["text"] : Array.from(outputModalities),
+    };
+  } else {
+    delete next.modalities;
+  }
   if (model.reasoning) next.reasoning = true;
   else delete next.reasoning;
   if (model.temperature) next.temperature = true;
@@ -717,9 +737,26 @@ export function CustomProviderModelEditor({ config, onSave }: CustomProviderMode
                         <label className="flex items-center gap-2 text-sm">
                           <Switch
                             checked={model.attachment}
-                            onCheckedChange={(checked) => updateModel(providerIndex, modelIndex, { attachment: checked })}
+                            onCheckedChange={(checked) =>
+                              updateModel(providerIndex, modelIndex, {
+                                attachment: checked,
+                                imageInput: checked ? model.imageInput : false,
+                              })
+                            }
                           />
                           {t("attachment")}
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <Switch
+                            checked={model.imageInput}
+                            onCheckedChange={(checked) =>
+                              updateModel(providerIndex, modelIndex, {
+                                imageInput: checked,
+                                attachment: checked ? true : model.attachment,
+                              })
+                            }
+                          />
+                          {t("imageInput")}
                         </label>
                         <label className="flex items-center gap-2 text-sm">
                           <Switch

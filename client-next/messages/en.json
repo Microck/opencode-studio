@@ -271,6 +271,7 @@
       "cacheReadCost": "Cache Read Cost",
       "cacheWriteCost": "Cache Write Cost",
       "attachment": "Attachments",
+      "imageInput": "Vision (image input)",
       "reasoning": "Reasoning",
       "temperature": "Temperature",
       "toolCall": "Tool Calls",

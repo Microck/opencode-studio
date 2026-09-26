@@ -271,6 +271,7 @@
       "cacheReadCost": "캐시 읽기 비용",
       "cacheWriteCost": "캐시 쓰기 비용",
       "attachment": "첨부 파일",
+      "imageInput": "비전(이미지 입력)",
       "reasoning": "추론",
       "temperature": "온도(Temperature)",
       "toolCall": "도구 호출",

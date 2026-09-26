@@ -271,6 +271,7 @@
       "cacheReadCost": "\u7f13\u5b58\u8bfb\u53d6\u6210\u672c",
       "cacheWriteCost": "\u7f13\u5b58\u5199\u5165\u6210\u672c",
       "attachment": "\u9644\u4ef6",
+      "imageInput": "\u89c6\u89c9\uff08\u56fe\u50cf\u8f93\u5165\uff09",
       "reasoning": "\u63a8\u7406",
       "temperature": "\u6e29\u5ea6",
       "toolCall": "\u5de5\u5177\u8c03\u7528",
