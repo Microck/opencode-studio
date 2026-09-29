@@ -20,7 +20,7 @@ const PROVIDER_ICONS: Record<ConfigProviderId, typeof File> = {
 
 const PROVIDER_DESCRIPTIONS: Record<ConfigProviderId, string> = {
   opencode: "Standard OpenCode configuration file",
-  "oh-my-openagent": "OpenAgent plugin config. Legacy oh-my-opencode names are preserved and not auto-migrated.",
+  "oh-my-openagent": "OMO 配置块（profiles.<name>），切换会把选中 profile 合并进当前配置并移除该 profile 块",
   "oh-my-opencode-slim": "Slim configuration. Validates tui.json as a companion file.",
 };
 

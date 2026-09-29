@@ -33,5 +33,11 @@ Thumbs.db
 # Sisyphus working files
 .sisyphus/
 
+# OMO workspace / planning artifacts (dev docs — never committed)
+.omo/
+PROGRESS.md
+.playwright-mcp/
+f3-*.png
+
 # Changeset (version management - optional)
 .changeset/
