@@ -241,6 +241,12 @@ config locations:
 
 ---
 
+### sponsorship
+
+sponsorships are welcome. contact [contact@micr.dev](mailto:contact@micr.dev) to discuss supporting the project.
+
+---
+
 ### license
 
 mit
