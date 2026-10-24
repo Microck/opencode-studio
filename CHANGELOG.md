@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.1] - 2026-10-24
+
+### Fixed
+- Open credential and usage databases with node:sqlite’s supported `readOnly` option; the lowercase spelling was ignored.
+- Add a real SQLite regression proving writes and missing-database creation are rejected.
+
 ## [2.5.0] - 2026-10-24
 
 ### Fixed

@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { openReadOnlyDatabase } = require('./read-only-database');
 
 // Metadata only. Never select credential.value or rewrite OpenCode's database.
 function readNativeCredentialMetadata(dataDirectories, DatabaseSync) {
@@ -9,7 +10,7 @@ function readNativeCredentialMetadata(dataDirectories, DatabaseSync) {
         if (!fs.existsSync(file)) continue;
         let db;
         try {
-            db = new DatabaseSync(file, { readonly: true });
+            db = openReadOnlyDatabase(DatabaseSync, file);
             if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='credential'").get()) continue;
             const credentials = db.prepare('SELECT id, integration_id, label, active FROM credential ORDER BY label, id').all()
                 .map(row => ({ id: row.id, integrationID: row.integration_id, label: row.label, active: !!row.active }));
