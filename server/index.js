@@ -10,6 +10,7 @@ try { ({ DatabaseSync } = require('node:sqlite')); } catch {}
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
 const configProviders = require('./lib/config-providers');
+const { openReadOnlyDatabase } = require('./lib/read-only-database');
 const { readCliConfig, writeCliConfig } = require('./lib/cli-config');
 const { readNativeCredentialMetadata } = require('./lib/native-credentials');
 const { pluginName, isNativeAgent, hasNativeMcp, readConfigMaps, agentView, mergeNativeAgentUpdate } = require('./lib/opencode-compat');
@@ -5052,7 +5053,7 @@ function tryReadUsageFromSqlite(opts) {
     const { dbPath, projectIdFilter, min, max, granularity } = opts;
     let db;
     try {
-        db = new DatabaseSync(dbPath, { readonly: true });
+        db = openReadOnlyDatabase(DatabaseSync, dbPath);
 
         const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => row.name));
         const native = tables.has('session_message') && tables.has('session_v2');
