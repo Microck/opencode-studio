@@ -10,7 +10,10 @@ try { ({ DatabaseSync } = require('node:sqlite')); } catch {}
 const { spawn, exec, execSync } = require('child_process');
 const yaml = require('js-yaml');
 const configProviders = require('./lib/config-providers');
-const { corsOptions, setLocalNetworkAccessHeaders } = require('./lib/cors-policy');
+const { readCliConfig, writeCliConfig } = require('./lib/cli-config');
+const { readNativeCredentialMetadata } = require('./lib/native-credentials');
+const { pluginName, isNativeAgent, hasNativeMcp, readConfigMaps, agentView, mergeNativeAgentUpdate } = require('./lib/opencode-compat');
+const { corsOptions, setLocalNetworkAccessHeaders, rejectUntrustedOrigin } = require('./lib/cors-policy');
 const {
     assertSafeBackupResourceNames,
     isSafeAgentName,
@@ -21,6 +24,7 @@ const {
 
 const pkg = require('./package.json');
 const profileManager = require('./profile-manager');
+const { listenOnAvailablePort } = require('./lib/listen');
 const SERVER_VERSION = pkg.version;
 const MIN_CLIENT_VERSION = '1.16.0';
 
@@ -120,19 +124,6 @@ const app = express();
 const DEFAULT_PORT = 1920;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
-function findAvailablePort(startPort) {
-    const net = require('net');
-    return new Promise((resolve) => {
-        const server = net.createServer();
-        server.listen(startPort, () => {
-            server.once('close', () => resolve(startPort));
-            server.close();
-        });
-        server.on('error', () => {
-            findAvailablePort(startPort + 1).then(resolve);
-        });
-    });
-}
 
 let idleTimer = null;
 
@@ -151,6 +142,7 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use(rejectUntrustedOrigin);
 app.use(setLocalNetworkAccessHeaders);
 app.use(cors(corsOptions));
 
@@ -1041,6 +1033,23 @@ const buildAgentMarkdown = (frontmatter, body) => {
     return `---\n${yamlText}---\n\n${content}`;
 };
 
+const findNativeMarkdownAgent = (name) => {
+    for (const directory of getAgentDirs()) {
+        const file = path.join(directory, `${name}.md`);
+        if (!fs.existsSync(file)) continue;
+        const parsed = parseAgentMarkdown(fs.readFileSync(file, 'utf8'));
+        if (isNativeAgent(parsed.data)) return { file, ...parsed };
+        return null;
+    }
+    return null;
+};
+
+const saveNativeMarkdownAgent = (existing, update) => {
+    const merged = mergeNativeAgentUpdate({ ...existing.data, system: existing.body }, update);
+    const { system, ...frontmatter } = merged;
+    atomicWriteFileSync(existing.file, buildAgentMarkdown(frontmatter, system));
+};
+
 const validatePermissionValue = (value) => {
     const allowed = ['ask', 'allow', 'deny'];
     if (value === undefined || value === null) return true;
@@ -1116,6 +1125,12 @@ const saveConfig = (config) => {
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
 };
 
+const configFileInRoot = (root) => {
+    const active = getConfigPath();
+    if (active && path.resolve(path.dirname(active)) === path.resolve(root) && fs.existsSync(active)) return active;
+    return ['opencode.json', 'opencode.jsonc'].map(name => path.join(root, name)).find(file => fs.existsSync(file));
+};
+
 const aggregateModels = () => {
     const roots = getSearchRoots();
     const activeConfigPath = getConfigPath();
@@ -1124,21 +1139,15 @@ const aggregateModels = () => {
     const providerMap = new Map();
     
     for (const root of roots) {
-        const configPath = path.join(root, 'opencode.json');
+        const configPath = configFileInRoot(root);
         
-        if (!fs.existsSync(configPath)) continue;
+        if (!configPath || !fs.existsSync(configPath)) continue;
         
         try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const config = configProviders.loadConfigFileSync(configPath);
             
-            let providers = null;
-            
-            if (config.model && config.model.providers) {
-                providers = config.model.providers;
-            } else if (config.providers) {
-                providers = config.providers;
-            }
-            
+            const providers = readConfigMaps(config).providers;
+
             if (providers && typeof providers === 'object') {
                 for (const [providerName, providerConfig] of Object.entries(providers)) {
                     if (!providerMap.has(providerName)) {
@@ -1173,10 +1182,10 @@ const loadAggregatedConfig = () => {
 
     const configs = [];
     for (const root of roots) {
-        const configPath = path.join(root, 'opencode.json');
-        if (fs.existsSync(configPath)) {
+        const configPath = configFileInRoot(root);
+        if (configPath && fs.existsSync(configPath)) {
             try {
-                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                const content = configProviders.loadConfigFileSync(configPath);
                 configs.push({
                     root,
                     isHighestPriority: activeDir ? path.resolve(root) === path.resolve(activeDir) : false,
@@ -1196,35 +1205,43 @@ const loadAggregatedConfig = () => {
 
     [...configs].reverse().forEach(({ config }) => {
         if (config.mcp && typeof config.mcp === 'object') {
-            for (const [key, value] of Object.entries(config.mcp)) {
+            for (const [key, value] of Object.entries(readConfigMaps(config).mcp)) {
                 aggregated.mcp[key] = value;
             }
         }
 
-        if (config.command && typeof config.command === 'object') {
-            Object.assign(aggregated.command, config.command);
-        }
+        Object.assign(aggregated.command, readConfigMaps(config).commands);
 
         if (config.env && typeof config.env === 'object') {
             Object.assign(aggregated.env, config.env);
         }
 
-        if (config.plugins && Array.isArray(config.plugins)) {
-            for (const plugin of config.plugins) {
-                const name = typeof plugin === 'string' ? plugin : plugin.name || plugin.npm;
-                if (name && !aggregated.plugins.find((p) => p.name === name)) {
-                    aggregated.plugins.push({
-                        name,
-                        source: 'json-config',
-                        type: typeof plugin === 'object' && plugin.npm ? 'npm' : 'file'
-                    });
-                }
+        for (const [key, native] of [['plugin', false], ['plugins', true]]) {
+            if (!Array.isArray(config[key])) continue;
+            for (const plugin of config[key]) {
+                const name = pluginName(plugin);
+                if (!name || name === '*' || name.startsWith('-')) continue;
+                if (!aggregated.plugins.find(p => p.name === name)) aggregated.plugins.push({
+                    name, source: 'json-config', type: 'npm',
+                    configurationFormat: native ? 'v2' : 'v1',
+                });
             }
         }
+
     });
 
     return aggregated;
 };
+
+const cliConfigPath = () => path.join(process.env.XDG_CONFIG_HOME || path.join(HOME_DIR, '.config'), 'opencode', 'cli.json');
+app.get('/api/cli-config', (req, res) => {
+    try { res.json(readCliConfig(cliConfigPath())); }
+    catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/cli-config', (req, res) => {
+    try { res.json(writeCliConfig(cliConfigPath(), req.body, atomicWriteFileSync)); }
+    catch (error) { res.status(error.statusCode || 500).json({ error: error.message }); }
+});
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: SERVER_VERSION }));
 
@@ -1308,6 +1325,9 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/config', (req, res) => {
     try {
+        if (!configProviders.isPlainObject(req.body)) {
+            return res.status(400).json({ error: 'Configuration must be an object', code: 'INVALID_CONFIG' });
+        }
         if (!validatePermissionValue(req.body?.permission)) {
             return res.status(400).json({ error: ERROR_CODES.INVALID_PERMISSION, code: 'INVALID_PERMISSION' });
         }
@@ -1405,20 +1425,22 @@ const aggregateAgents = () => {
     
     for (const root of roots) {
         // Read from opencode.json (agent field - singular)
-        const configPath = path.join(root, 'opencode.json');
-        if (fs.existsSync(configPath)) {
+        const configPath = configFileInRoot(root);
+        if (configPath && fs.existsSync(configPath)) {
             try {
-                const content = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                const configAgents = content.agent || {};
+                const content = configProviders.loadConfigFileSync(configPath);
+                const configAgents = readConfigMaps(content).agents;
                 for (const [name, agentConfig] of Object.entries(configAgents)) {
                     if (!agentMap.has(name)) {
                         agentMap.set(name, {
                             name,
                             source: 'json-config',
                             configPath: root,
-                            ...agentConfig,
-                            permission: agentConfig.permission || agentConfig.permissions,
-                            permissions: agentConfig.permission || agentConfig.permissions
+                            ...agentView(agentConfig, Object.hasOwn(content.agents || {}, name)),
+                            ...(Object.hasOwn(content.agents || {}, name) ? {} : {
+                                permission: agentConfig.permission || agentConfig.permissions,
+                                permissions: agentConfig.permission || agentConfig.permissions,
+                            })
                         });
                     }
                 }
@@ -1466,17 +1488,7 @@ const aggregateAgents = () => {
                     source: 'markdown',
                     path: fp,
                     disabled: false,
-                    description: data.description,
-                    mode: data.mode,
-                    model: data.model,
-                    temperature: data.temperature,
-                    tools: data.tools,
-                    permission: data.permission,
-                    permissions: data.permission,
-                    maxSteps: data.maxSteps,
-                    disable: data.disable,
-                    hidden: data.hidden,
-                    prompt: body
+                    ...agentView(isNativeAgent(data) ? { ...data, system: body } : { ...data, prompt: body }, isNativeAgent(data))
                 });
             }
         });
@@ -1500,7 +1512,7 @@ app.get('/api/agents', (req, res) => {
         
         const agentsWithStatus = agents.map(agent => ({
             ...agent,
-            disabled: disabledAgents.includes(agent.name)
+            disabled: agent.configurationFormat === 'v2' ? !!agent.disable : disabledAgents.includes(agent.name) || !!agent.disable
         }));
         
         res.json({ agents: agentsWithStatus });
@@ -1516,6 +1528,18 @@ app.post('/api/agents', (req, res) => {
         if (!isSafeAgentName(name)) return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
 
         const config = loadConfig() || {};
+        if (config.agents && Object.hasOwn(config.agents, name)) {
+            config.agents[name] = mergeNativeAgentUpdate(config.agents[name], agentConfig || {});
+            saveConfig(config);
+            triggerGitHubAutoSync();
+            return res.json({ success: true });
+        }
+        const nativeMarkdown = findNativeMarkdownAgent(name);
+        if (nativeMarkdown) {
+            saveNativeMarkdownAgent(nativeMarkdown, agentConfig || {});
+            triggerGitHubAutoSync();
+            return res.json({ success: true });
+        }
         if (!config.agent) config.agent = {};
 
         const normalizedConfig = { ...(agentConfig || {}) };
@@ -1524,7 +1548,7 @@ app.post('/api/agents', (req, res) => {
             delete normalizedConfig.permissions;
         }
 
-        const shouldWriteMarkdown = source === 'markdown' || !!normalizedConfig?.mode;
+        const shouldWriteMarkdown = source === 'markdown' || (source === undefined && !!normalizedConfig?.mode);
         if (shouldWriteMarkdown) {
             const configPath = getConfigPath();
             const baseDir = configPath ? path.dirname(configPath) : HOME_DIR;
@@ -1560,7 +1584,7 @@ app.post('/api/agents', (req, res) => {
         triggerGitHubAutoSync();
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.statusCode || 500).json({ error: err.message });
     }
 });
 
@@ -1579,6 +1603,18 @@ app.put('/api/agents/:name', (req, res) => {
         }
 
         const config = loadConfig() || {};
+        if (config.agents && Object.hasOwn(config.agents, name)) {
+            config.agents[name] = mergeNativeAgentUpdate(config.agents[name], agentConfig || {});
+            saveConfig(config);
+            triggerGitHubAutoSync();
+            return res.json({ success: true });
+        }
+        const nativeMarkdown = findNativeMarkdownAgent(name);
+        if (nativeMarkdown) {
+            saveNativeMarkdownAgent(nativeMarkdown, agentConfig || {});
+            triggerGitHubAutoSync();
+            return res.json({ success: true });
+        }
         if (!config.agent) config.agent = {};
 
         const markdownDirs = getAgentDirs().filter((d) => fs.existsSync(d));
@@ -1608,7 +1644,7 @@ app.put('/api/agents/:name', (req, res) => {
         triggerGitHubAutoSync();
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.statusCode || 500).json({ error: err.message });
     }
 });
 
@@ -1621,6 +1657,10 @@ app.delete('/api/agents/:name', (req, res) => {
 
         const config = loadConfig() || {};
 
+        if (config.agents && Object.hasOwn(config.agents, name)) {
+            delete config.agents[name];
+            saveConfig(config);
+        }
         if (config.agent && config.agent[name]) {
             delete config.agent[name];
             saveConfig(config);
@@ -1643,6 +1683,23 @@ app.post('/api/agents/:name/toggle', (req, res) => {
         const { name } = req.params;
         if (!isSafeAgentName(name)) {
             return res.status(400).json({ error: ERROR_CODES.INVALID_AGENT_NAME, code: 'INVALID_AGENT_NAME' });
+        }
+
+        const config = loadConfig() || {};
+        if (config.agents && Object.hasOwn(config.agents, name)) {
+            const disabled = !config.agents[name].disabled;
+            config.agents[name] = { ...config.agents[name], disabled };
+            saveConfig(config);
+            triggerGitHubAutoSync();
+            return res.json({ success: true, disabled });
+        }
+
+        const nativeMarkdown = findNativeMarkdownAgent(name);
+        if (nativeMarkdown) {
+            const disabled = !nativeMarkdown.data.disabled;
+            saveNativeMarkdownAgent(nativeMarkdown, { disable: disabled });
+            triggerGitHubAutoSync();
+            return res.json({ success: true, disabled });
         }
 
         const studio = loadStudioConfig();
@@ -1764,7 +1821,7 @@ app.get('/api/backup', (req, res) => {
             fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
                 const fp = path.join(pd, e.name);
                 if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
-                    plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(fp, 'utf8') });
+                    plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), extension: path.extname(e.name), content: fs.readFileSync(fp, 'utf8') });
                 }
             });
         }
@@ -1784,8 +1841,8 @@ app.get('/api/backup', (req, res) => {
 
 app.post('/api/restore', (req, res) => {
     try {
+        assertSafeBackupResourceNames(req.body);
         const { studioConfig, opencodeConfig, skills, plugins } = req.body;
-        assertSafeBackupResourceNames(req.body || {});
         
         if (studioConfig) saveStudioConfig(studioConfig);
         if (opencodeConfig) saveConfig(opencodeConfig);
@@ -1804,7 +1861,7 @@ app.post('/api/restore', (req, res) => {
         if (pd && plugins && Array.isArray(plugins)) {
             if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
             plugins.forEach(p => {
-                atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+                atomicWriteFileSync(path.join(pd, `${p.name}${p.extension || '.js'}`), p.content);
             });
         }
         
@@ -1865,7 +1922,7 @@ function buildBackupData() {
     if (pd && fs.existsSync(pd)) {
         fs.readdirSync(pd, { withFileTypes: true }).forEach(e => {
             if (e.isFile() && /\.(js|ts)$/.test(e.name)) {
-                plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), content: fs.readFileSync(path.join(pd, e.name), 'utf8') });
+                plugins.push({ name: e.name.replace(/\.(js|ts)$/, ''), extension: path.extname(e.name), content: fs.readFileSync(path.join(pd, e.name), 'utf8') });
             }
         });
     }
@@ -1911,7 +1968,7 @@ function restoreFromBackup(backup, studio) {
     if (pd && backup.plugins && Array.isArray(backup.plugins)) {
         if (!fs.existsSync(pd)) fs.mkdirSync(pd, { recursive: true });
         backup.plugins.forEach(p => {
-            atomicWriteFileSync(path.join(pd, `${p.name}.js`), p.content);
+            atomicWriteFileSync(path.join(pd, `${p.name}${p.extension || '.js'}`), p.content);
         });
     }
 }
@@ -3383,6 +3440,7 @@ app.get('/api/plugins/:name', (req, res) => {
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
+            ...(/\.(js|ts)$/.test(name) ? [path.join(dirInfo.path, name)] : []),
             path.join(dirInfo.path, name + '.js'),
             path.join(dirInfo.path, name + '.ts'),
             path.join(dirInfo.path, name, 'index.js'),
@@ -3408,6 +3466,7 @@ app.post('/api/plugins/:name', (req, res) => {
 
     for (const dirInfo of getPluginDirs()) {
         const possiblePaths = [
+            ...(/\.(js|ts)$/.test(name) ? [path.join(dirInfo.path, name)] : []),
             path.join(dirInfo.path, name + '.js'),
             path.join(dirInfo.path, name + '.ts'),
             path.join(dirInfo.path, name, 'index.js'),
@@ -3475,6 +3534,11 @@ app.delete('/api/plugins/:name', (req, res) => {
 
 app.post('/api/plugins/:name/toggle', (req, res) => {
     const { name } = req.params;
+    const config = loadConfig() || {};
+    if (Array.isArray(config.plugins)) return res.status(409).json({
+        code: 'NATIVE_PLUGIN_CONTROL_REQUIRES_ID',
+        error: 'V2 plugin runtime controls use plugin IDs, not package names. Edit the plugins control list in Raw Config; Studio will not guess an ID.',
+    });
     const studio = loadStudioConfig();
     studio.disabledPlugins = studio.disabledPlugins || [];
     
@@ -3502,6 +3566,16 @@ app.get('/api/models', (req, res) => {
                         provider: provider.name,
                         providerConfig: provider.config,
                         ...((typeof model === 'object' ? model : {}))
+                    });
+                }
+            } else if (provider.config.models && typeof provider.config.models === 'object') {
+                for (const [modelId, model] of Object.entries(provider.config.models)) {
+                    if (!model || typeof model !== 'object' || model.disabled) continue;
+                    allModels.push({
+                        ...model,
+                        id: `${provider.name}/${modelId}`,
+                        provider: provider.name,
+                        providerConfig: provider.config
                     });
                 }
             } else {
@@ -3616,6 +3690,28 @@ function rejectInvalidAuthProfileName(res, name) {
     return true;
 }
 
+// V2 credentials are not legacy auth.json pools. Do not claim a legacy write
+// changes V2 credentials, or import legacy secrets as a side effect of viewing.
+app.use('/api/auth', (req, res, next) => {
+    try {
+        const config = loadConfig() || {};
+        const nativeConfig = ['agents', 'commands', 'providers', 'permissions', 'plugins'].some(key => Object.hasOwn(config, key)) || hasNativeMcp(config);
+        const cp = getConfigPath() || path.join(HOME_DIR, '.config', 'opencode', 'opencode.json');
+        const metadata = readNativeCredentialMetadata(getUsageDataCandidates(cp), DatabaseSync);
+        if (!nativeConfig && !metadata) return next();
+        const message = 'OpenCode v2 credentials use a separate store. This view is read-only; manage login and account selection with opencode auth. Legacy Studio auth pools are not applied to v2.';
+        if (req.method === 'GET' && (req.path === '/' || req.path === '')) return res.json({
+            credentials: [], nativeCredentials: metadata?.credentials || [], readOnly: true,
+            authFile: null, installedGooglePlugins: [], activeGooglePlugin: null, message,
+        });
+        if (req.method === 'GET' && req.path === '/profiles') return res.json({});
+        if (req.method === 'GET' && req.path === '/providers') return res.json([]);
+        return res.status(409).json({ code: 'OPENCODE_V2_AUTH_READ_ONLY', error: message });
+    } catch (error) {
+        return res.status(503).json({ code: 'AUTH_METADATA_UNAVAILABLE', error: 'Credential metadata could not be read. No credentials were changed.' });
+    }
+});
+
 app.get('/api/auth/providers', (req, res) => {
     const providers = [
         { id: 'google', name: 'Google', type: 'oauth', description: 'Google Gemini API' },
@@ -3696,7 +3792,6 @@ app.get('/api/auth', (req, res) => {
         credentials.push({ ...p, active: ac[p.id] || (curr ? 'current' : null), profiles: saved, hasCurrentAuth: curr });
     });
     res.json({ 
-        ...authCfg, 
         credentials, 
         installedGooglePlugins: studio.availableGooglePlugins || [], 
         activeGooglePlugin: activePlugin 
@@ -4859,6 +4954,7 @@ function getUsageDataCandidates(cp) {
     const home = os.homedir();
     return [
         path.dirname(cp),
+        process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, 'opencode') : null,
         path.join(home, '.local', 'share', 'opencode'),
         path.join(home, '.opencode'),
         process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode') : null,
@@ -4898,11 +4994,11 @@ function createStatsAccumulator() {
 }
 
 function appendUsage(stats, projectInfo, msg, granularity) {
-    if (msg.role !== 'assistant' || !msg.tokens) return;
+    if (!['assistant', 'compaction'].includes(msg.role) || !msg.tokens) return;
     const c = msg.cost || 0;
     const it = msg.tokens.input || 0;
     const ot = msg.tokens.output || 0;
-    const t = it + ot;
+    const t = it + ot + (msg.tokens.reasoning || 0) + (msg.tokens.cache?.read || 0) + (msg.tokens.cache?.write || 0);
     const createdAt = msg.time?.created;
     if (!createdAt) return;
 
@@ -4952,11 +5048,24 @@ function finalizeUsageStats(stats) {
 }
 
 function tryReadUsageFromSqlite(opts) {
-    if (!DatabaseSync) return null;
+    if (!DatabaseSync) throw new Error('SQLite usage requires a Node runtime with node:sqlite');
     const { dbPath, projectIdFilter, min, max, granularity } = opts;
     let db;
     try {
         db = new DatabaseSync(dbPath, { readonly: true });
+
+        const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => row.name));
+        const native = tables.has('session_message') && tables.has('session_v2');
+        const legacy = tables.has('message') && tables.has('session');
+        if (!native && !legacy) throw new Error('Unsupported OpenCode usage database schema');
+        const messageColumns = 'id, session_id, time_created, data';
+        const sessionColumns = 'id, project_id';
+        const messageSource = native
+            ? `SELECT ${messageColumns} FROM session_message${legacy ? ` UNION ALL SELECT ${messageColumns} FROM message WHERE id NOT IN (SELECT id FROM session_message)` : ''}`
+            : `SELECT ${messageColumns} FROM message`;
+        const sessionSource = native
+            ? `SELECT ${sessionColumns} FROM session_v2${legacy ? ` UNION ALL SELECT ${sessionColumns} FROM session WHERE id NOT IN (SELECT id FROM session_v2)` : ''}`
+            : `SELECT ${sessionColumns} FROM session`;
 
         // Extract only the usage fields in SQL instead of loading full message
         // payloads into the V8 heap. opencode DBs can hold hundreds of
@@ -4980,21 +5089,25 @@ function tryReadUsageFromSqlite(opts) {
         params.push('');
 
         const stmt = db.prepare(`
+            WITH usage_messages AS (${messageSource}), usage_sessions AS (${sessionSource})
             SELECT m.id AS message_id,
                    m.time_created AS message_time_created,
-                   json_extract(m.data, '$.role') AS msg_role,
+                   COALESCE(json_extract(m.data, '$.role'), json_extract(m.data, '$.type')) AS msg_role,
                    json_extract(m.data, '$.cost') AS msg_cost,
                    json_type(m.data, '$.tokens') AS msg_tokens_type,
                    json_extract(m.data, '$.tokens.input') AS msg_tokens_input,
                    json_extract(m.data, '$.tokens.output') AS msg_tokens_output,
+                   json_extract(m.data, '$.tokens.reasoning') AS msg_tokens_reasoning,
+                   json_extract(m.data, '$.tokens.cache.read') AS msg_tokens_cache_read,
+                   json_extract(m.data, '$.tokens.cache.write') AS msg_tokens_cache_write,
                    json_extract(m.data, '$.time.created') AS msg_time_created,
                    json_extract(m.data, '$.modelID') AS msg_model_id,
                    json_extract(m.data, '$.model.modelID') AS msg_model_model_id,
                    json_extract(m.data, '$.model.id') AS msg_model_nested_id,
                    s.project_id AS session_project_id,
                    p.id AS project_id, p.name AS project_name, p.worktree AS project_worktree
-            FROM message m
-            LEFT JOIN session s ON s.id = m.session_id
+            FROM usage_messages m
+            LEFT JOIN usage_sessions s ON s.id = m.session_id
             LEFT JOIN project p ON p.id = s.project_id
             WHERE ${conditions.join(' AND ')}
             ORDER BY m.id
@@ -5013,7 +5126,7 @@ function tryReadUsageFromSqlite(opts) {
                 const msg = {
                     role: row.msg_role,
                     cost: row.msg_cost,
-                    tokens: (row.msg_tokens_type === 'object' || row.msg_tokens_type === 'array') ? { input: row.msg_tokens_input, output: row.msg_tokens_output } : null,
+                    tokens: (row.msg_tokens_type === 'object' || row.msg_tokens_type === 'array') ? { input: row.msg_tokens_input, output: row.msg_tokens_output, reasoning: row.msg_tokens_reasoning, cache: { read: row.msg_tokens_cache_read, write: row.msg_tokens_cache_write } } : null,
                     time: { created: row.msg_time_created },
                     modelID: row.msg_model_id,
                     model: (row.msg_model_model_id !== null || row.msg_model_nested_id !== null)
@@ -5136,8 +5249,8 @@ app.get('/api/usage', async (req, res) => {
             try {
                 return res.json(tryReadUsageFromSqlite({ dbPath, projectIdFilter, min, max, granularity }));
             } catch (error) {
-                console.warn('[Usage] Failed reading SQLite usage DB, falling back to legacy JSON:', error?.message || error);
-                break;
+                console.warn('[Usage] Failed reading SQLite usage DB:', error?.message || error);
+                throw error;
             }
         }
 
@@ -5464,19 +5577,22 @@ app.delete('/api/pending-action', (req, res) => {
 });
 
 app.post('/api/plugins/config/add', (req, res) => {
-    const { plugins } = req.body;
+    const { plugins } = req.body || {};
+    if (!Array.isArray(plugins) || plugins.some(p => typeof p !== 'string' || !p.trim())) return res.status(400).json({ error: 'Expected an array of plugin package names' });
     const opencode = loadConfig();
     if (!opencode) return res.status(404).json({ error: ERROR_CODES.CONFIG_NOT_FOUND, code: 'CONFIG_NOT_FOUND' });
     
-    if (!opencode.plugin) opencode.plugin = [];
+    const key = Array.isArray(opencode.plugins) ? 'plugins' : 'plugin';
+    if (!opencode[key]) opencode[key] = [];
     const added = [];
     const skipped = [];
     
     plugins.forEach(p => {
-        if (!opencode.plugin.includes(p)) {
-            opencode.plugin.push(p);
+        if (!opencode[key].some(entry => pluginName(entry) === p)) {
+            opencode[key].push(p);
             added.push(p);
             
+            if (key === 'plugins') return;
             const studio = loadStudioConfig();
             if (p.includes('gemini-auth') && !studio.availableGooglePlugins.includes('gemini')) {
                 studio.availableGooglePlugins.push('gemini');
@@ -5493,6 +5609,23 @@ app.post('/api/plugins/config/add', (req, res) => {
     
     saveConfig(opencode);
     res.json({ added, skipped });
+});
+
+app.delete('/api/plugins/config/:name', (req, res) => {
+    const config = loadConfig();
+    if (!config) return res.status(404).json({ error: ERROR_CODES.CONFIG_NOT_FOUND });
+    const name = req.params.name;
+    let removed = false;
+    for (const key of ['plugin', 'plugins']) {
+        if (!Array.isArray(config[key])) continue;
+        const remaining = config[key].filter(entry => pluginName(entry) !== name);
+        removed ||= remaining.length !== config[key].length;
+        config[key] = remaining;
+    }
+    if (!removed) return res.status(404).json({ error: ERROR_CODES.PLUGIN_NOT_FOUND });
+    saveConfig(config);
+    triggerGitHubAutoSync();
+    res.json({ success: true });
 });
 
 // Presets
@@ -5588,13 +5721,12 @@ app.post('/api/presets/:id/apply', (req, res) => {
     // MCPs
     if (preset.config.mcps !== undefined && preset.config.mcps !== null) {
         const targetMcps = new Set(preset.config.mcps);
-        if (config.mcp) {
-            for (const key in config.mcp) {
-                if (mode === 'exclusive') {
-                    config.mcp[key].enabled = targetMcps.has(key);
-                } else { // additive
-                    if (targetMcps.has(key)) config.mcp[key].enabled = true;
-                }
+        const nativeMcp = hasNativeMcp(config);
+        const servers = nativeMcp ? config.mcp.servers || {} : config.mcp || {};
+        for (const [key, server] of Object.entries(servers)) {
+            if (mode === 'exclusive' || targetMcps.has(key)) {
+                if (nativeMcp) server.disabled = !targetMcps.has(key);
+                else server.enabled = targetMcps.has(key);
             }
         }
     }
@@ -5612,8 +5744,9 @@ async function startServer() {
 
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
-    const port = await findAvailablePort(DEFAULT_PORT);
-    app.listen(port, '127.0.0.1', () => {
+    const server = await listenOnAvailablePort(app, DEFAULT_PORT, 10);
+    const port = server.address().port;
+    {
         console.log(`Server running at http://127.0.0.1:${port}`);
         // Initial sync on startup if enabled
         setTimeout(() => {
@@ -5623,7 +5756,8 @@ async function startServer() {
                 triggerGitHubAutoSync();
             }
         }, 5000);
-    });
+    }
+    return server;
 }
 
 if (require.main === module) {

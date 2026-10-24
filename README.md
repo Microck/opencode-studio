@@ -21,6 +21,30 @@
 
 ---
 
+### opencode v2 configuration support
+
+The compatibility work targets OpenCode 2.1.4 while retaining supported v1 config
+editing. Studio preserves the source format instead of migrating your setup:
+
+- Native `agents` and `commands`, including ordered permission rules and agent
+  Markdown files; MCP's `servers`, `disabled`, and global timeout settings.
+- Native provider model maps and plugin package entries/options.
+- Both v1 and v2 usage database layouts, with errors instead of false zero totals
+  when a database cannot be read.
+- A separate **Raw Config → v2 CLI** editor for global `cli.json`. It does not
+  overwrite `tui.json` or silently prevent first-launch migration.
+
+Important limits: v2 authentication is metadata-only in Studio. Use `opencode auth`
+for credential changes and account selection; legacy Studio auth pools are not
+applied to v2. V1 plugins need an actual API port, not a renamed config key. Native
+plugin runtime controls use plugin IDs, so edit those controls in Raw Config rather
+than relying on package-name toggles. Existing plugin code is never auto-converted.
+
+See the [compatibility verification notes](docs/OPENCODE-V2-COMPATIBILITY.md) and
+[upstream migration guide](https://opencode.ai/v2/docs/migrate-v1/). End-to-end
+native CLI agent discovery remains unverified; this is not a blanket compatibility
+claim. Keep a backup, and do not point v1 at native-v2-only configuration.
+
 ### quickstart
 
 #### option 1: public site + local backend (recommended)

@@ -485,6 +485,7 @@
     "cancel": "Cancel"
   },
   "plugins": {
+    "nativeV2Warning": "OpenCode v2 uses a new plugin API. Existing plugins are not automatically ported. Runtime enable/disable controls require plugin IDs; manage those controls in Raw Config. Package entries and options are preserved.",
     "incompatibleWarning": "Incompatible with Antigravity. Use openskills instead.",
     "toggleEnabled": "{name} enabled",
     "toggleDisabled": "{name} disabled",
@@ -534,6 +535,9 @@
     "delete": "Delete"
   },
   "agents": {
+    "nativePermissionsLabel": "Ordered OpenCode v2 permissions (JSON)",
+    "nativePermissionsHint": "Rules stay in their original order. Use action, resource and effect (ask, allow or deny). Legacy tool switches and temperature do not apply to native v2 agents.",
+    "invalidNativePermissions": "Enter a valid JSON array of v2 permission rules.",
     "sourceJson": "JSON",
     "sourceMarkdown": "Markdown",
     "sourceBuiltin": "Built-in",

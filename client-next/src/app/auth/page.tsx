@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,28 +35,18 @@ export default function AuthPage() {
   const [deleteProfileTarget, setDeleteProfileTarget] = useState<{ provider: string; name: string } | null>(null);
   const t = useTranslations('auth');
 
-  const loadAuthData = async () => {
-    try {
-      const [providersData, authData, profilesData] = await Promise.all([
-        getAuthProviders(),
-        getAuthInfo(),
-        getAuthProfiles()
-      ]);
+  const loadAuthData = useCallback(() => Promise.all([
+    getAuthProviders(), getAuthInfo(), getAuthProfiles(),
+  ]).then(([providersData, authData, profilesData]) => {
+    setProviders(providersData);
+    setAuthInfo(authData);
+    setProfiles(profilesData);
+  }).catch(error => {
+    console.error("Failed to load auth data", error);
+    toast.error(t('failedToLoad'));
+  }).finally(() => setLoading(false)), [t]);
 
-      setProviders(providersData);
-      setAuthInfo(authData);
-      setProfiles(profilesData);
-    } catch (e) {
-      console.error("Failed to load auth data", e);
-      toast.error(t('failedToLoad'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAuthData();
-  }, []);
+  useEffect(() => { void loadAuthData(); }, [loadAuthData]);
 
   const handleLogin = async (provider: string) => {
     setLoginLoading(prev => ({ ...prev, [provider]: true }));
@@ -142,6 +132,20 @@ export default function AuthPage() {
       </div>
     );
   }
+
+  if (authInfo?.readOnly) return (
+    <div className="max-w-4xl mx-auto space-y-4 p-6">
+      <h1 className="text-2xl font-semibold">{t('pageTitle')}</h1>
+      <p role="status">{authInfo.message}</p>
+      <ul className="space-y-2">
+        {authInfo.nativeCredentials?.map(credential => <li key={credential.id} className="rounded border p-3">
+          {credential.label} · {credential.integrationID || 'Unassigned'}{credential.active ? ' · Active' : ''}
+        </li>)}
+      </ul>
+      <Button variant="outline" onClick={loadAuthData}>{t('refresh')}</Button>
+      <a className="block underline" href="https://opencode.ai/v2/docs/providers/" target="_blank" rel="noopener noreferrer">OpenCode v2 authentication documentation</a>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-6">

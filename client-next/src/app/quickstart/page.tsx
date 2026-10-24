@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { 
   Card, 
@@ -100,9 +100,13 @@ function ExternalLinkButton({ href, children }: { href: string; children: React.
 
 // --- Main Page Component ---
 
-export default function QuickstartPage() {
-  const [mounted, setMounted] = useState(false);
-  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+function QuickstartContent() {
+  const [completedSteps, setCompletedSteps] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("opencode-quickstart-progress") || "[]");
+      return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === 'string') : [];
+    } catch { return []; }
+  });
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     ohmyopencode: true,
     superpowers: false,
@@ -157,25 +161,10 @@ export default function QuickstartPage() {
     providerChoices.gemini === "google" ||
     providerChoices.grok === "opencode";
 
-  // Load from localStorage on mount
   useEffect(() => {
-    setMounted(true);
-    const saved = localStorage.getItem("opencode-quickstart-progress");
-    if (saved) {
-      try {
-        setCompletedSteps(JSON.parse(saved));
-      } catch {
-        // ignore
-      }
-    }
-  }, []);
-
-  // Save to localStorage
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("opencode-quickstart-progress", JSON.stringify(completedSteps));
-    }
-  }, [completedSteps, mounted]);
+    try { localStorage.setItem("opencode-quickstart-progress", JSON.stringify(completedSteps)); }
+    catch { /* Progress remains usable when storage is blocked. */ }
+  }, [completedSteps]);
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -389,10 +378,6 @@ export default function QuickstartPage() {
 
   const progressPercentage = Math.round((completedSteps.length / steps.length) * 100);
 
-  if (!mounted) {
-    return <div className="p-8 text-center text-muted-foreground">{t('loading')}</div>;
-  }
-
   return (
     <div className="space-y-4 mx-auto" style={{ maxWidth: "727px" }}>
       {/* Hero */}
@@ -556,4 +541,11 @@ export default function QuickstartPage() {
       </Card>
     </div>
   );
+}
+
+const subscribeHydration = () => () => {};
+export default function QuickstartPage() {
+  const mounted = useSyncExternalStore(subscribeHydration, () => true, () => false);
+  const t = useTranslations('quickstart');
+  return mounted ? <QuickstartContent /> : <div className="p-8 text-center text-muted-foreground">{t('loading')}</div>;
 }

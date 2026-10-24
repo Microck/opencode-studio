@@ -71,7 +71,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
     });
   }, [search, onlyEnabled, value]);
 
-  const updateTool = (tool: keyof PermissionConfig, next: any) => {
+  const updateTool = (tool: keyof PermissionConfig, next: PermissionConfig[keyof PermissionConfig] | Record<string, PermissionValue>) => {
     onChange({
       ...value,
       [tool]: next,
@@ -120,7 +120,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                     value={mode}
                     onValueChange={(next) => {
                       if (next === "simple") updateTool(tool as keyof PermissionConfig, "ask");
-                      if (next === "map") updateTool(tool as keyof PermissionConfig, { "*": "ask" } as PermissionConfig);
+                      if (next === "map") updateTool(tool as keyof PermissionConfig, { "*": "ask" });
                       if (next === "list")
                         updateTool(
                           tool as keyof PermissionConfig,
@@ -168,7 +168,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                         <Select
                           value={rule as string}
                           onValueChange={(next) => {
-                            updateTool(tool as keyof PermissionConfig, { ...current, [pattern]: next });
+                            updateTool(tool as keyof PermissionConfig, { ...current, [pattern]: next as PermissionValue });
                           }}
                         >
                           <SelectTrigger className="w-[100px] h-8 text-xs">
@@ -185,7 +185,7 @@ export function PermissionEditor({ value, onChange, className }: PermissionEdito
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => {
-                            const { [pattern]: _removed, ...rest } = current as any;
+                            const { [pattern]: _removed, ...rest } = current as Record<string, PermissionValue>;
                             updateTool(tool as keyof PermissionConfig, Object.keys(rest).length ? rest : "ask");
                           }}
                         >

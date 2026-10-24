@@ -1,5 +1,7 @@
 "use client";
 
+import axios from "axios";
+import { changeMcp, mcpServers, mcpEnabled, nativeMcp } from "@/lib/mcp-config";
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { getConfig, saveConfig as apiSaveConfig, getSkills, getPlugins, toggleSkill as apiToggleSkill, togglePlugin as apiTogglePlugin, checkHealth, checkVersion, getPendingAction, clearPendingAction, syncAuto, syncPush, getSyncStatus, type PendingAction, type VersionCheck } from '@/lib/api';
 import type { OpencodeConfig, MCPConfig, SkillInfo, PluginInfo } from '@/types';
@@ -57,43 +59,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionCheck | null>(null);
-  const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
-  const loadingRef = useRef(false);
+  const connectedRef = useRef(false);
+  const updateConnection = useCallback((value: boolean) => {
+    connectedRef.current = value;
+    setConnected(value);
+  }, []);
+  const refreshGenerationRef = useRef(0);
   const checkedPendingRef = useRef(false);
   const versionCheckedRef = useRef(false);
   const autoSyncCheckedRef = useRef(false);
 
-  const refreshData = useCallback(async () => {
-    // Prevent multiple simultaneous refreshes
-    if (loadingRef.current) return;
-    
-    try {
-      loadingRef.current = true;
-      setLoading(true);
-      setError(null);
-      const [configData, skillsData, pluginsData] = await Promise.all([
+  const fetchData = useCallback(() => {
+    // Newer refreshes (especially profile switches) own the resulting state.
+    const generation = ++refreshGenerationRef.current;
+    return Promise.all([
         getConfig(),
         getSkills(),
         getPlugins(),
-      ]);
+      ]).then(([configData, skillsData, pluginsData]) => {
+      if (generation !== refreshGenerationRef.current) return;
+      setError(null);
       setConfig(configData);
       setSkills(skillsData);
       setPlugins(pluginsData);
       // We are connected because the requests succeeded
-      setConnected(true);
-    } catch (err: any) {
+      updateConnection(true);
+    }).catch((err: unknown) => {
+      if (generation !== refreshGenerationRef.current) return;
       let errorMessage = 'Failed to load data from backend';
       
-      if (err.code === 'ERR_NETWORK') {
+      const httpError = axios.isAxiosError<{ error?: string; message?: string }>(err) ? err : null;
+      if (httpError?.code === 'ERR_NETWORK') {
         errorMessage = 'Backend server is unreachable. Ensure "npm start" is running.';
-      } else if (err.response) {
-        const status = err.response.status;
-        const data = err.response.data;
+      } else if (httpError?.response) {
+        const status = httpError.response.status;
+        const data = httpError.response.data;
         
         if (status === 404) {
           errorMessage = 'OpenCode configuration not found. Please run "opencode --version" in your terminal to initialize it.';
           setConfig(null);
-          setConnected(true);
+          setSkills([]);
+          setPlugins([]);
+          updateConnection(true);
         } else if (status === 500) {
           errorMessage = `Server Error (500): ${data?.error || data?.message || 'Check backend logs'}`;
         } else if (status === 403) {
@@ -101,18 +108,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           errorMessage = `HTTP Error ${status}: ${data?.error || data?.message || 'Unknown server error'}`;
         }
-      } else if (err.message) {
+      } else if (err instanceof Error) {
         errorMessage = `Error: ${err.message}`;
       }
 
       setError(errorMessage);
-      setConnected(err.response ? true : false);
+      updateConnection(Boolean(httpError?.response));
       console.error(err);
-    } finally {
-      setLoading(false);
-      loadingRef.current = false;
-    }
-  }, []);
+    }).finally(() => {
+      if (generation === refreshGenerationRef.current) setLoading(false);
+    });
+  }, [updateConnection]);
+
+  const refreshData = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    return fetchData();
+  }, [fetchData]);
 
   const checkForPendingAction = useCallback(async () => {
     if (checkedPendingRef.current) return;
@@ -154,23 +166,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const isHealthy = await checkHealth();
         if (isHealthy) {
-          if (!connected) {
-            setConnected(true);
+          if (!connectedRef.current) {
+            updateConnection(true);
             checkServerVersion();
             checkAutoSync();
             refreshData();
             checkForPendingAction();
           }
         } else {
-          if (connected) {
-            setConnected(false);
+          if (connectedRef.current) {
+            updateConnection(false);
             setError('Backend disconnected. Attempting to reconnect...');
             checkedPendingRef.current = false;
           }
         }
       } catch {
-        if (connected) {
-          setConnected(false);
+        if (connectedRef.current) {
+          updateConnection(false);
           setError('Backend connection lost. Check if the server is still running.');
         }
       }
@@ -178,11 +190,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     checkServerVersion();
     checkAutoSync();
-    refreshData();
+    void fetchData();
 
     const interval = setInterval(pollHealth, 3000);
     return () => clearInterval(interval);
-  }, [refreshData, connected, checkForPendingAction]);
+  }, [fetchData, refreshData, updateConnection, checkForPendingAction]);
 
   const dismissPendingAction = useCallback(async () => {
     await clearPendingAction();
@@ -205,53 +217,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [triggerAutoSync]);
 
   const toggleMCP = useCallback(async (key: string) => {
-    if (!config?.mcp?.[key]) return;
-    const newConfig = {
-      ...config,
-      mcp: {
-        ...config.mcp,
-        [key]: {
-          ...config.mcp[key],
-          enabled: !config.mcp[key].enabled,
-        },
-      },
-    };
-    await saveConfigHandler(newConfig);
-  }, [config, saveConfigHandler]);
+    const latest = await getConfig();
+    const server = mcpServers(latest)[key];
+    if (!server) return;
+    const updated = nativeMcp(latest)
+      ? { ...server, disabled: mcpEnabled(server) }
+      : { ...server, enabled: !mcpEnabled(server) };
+    await saveConfigHandler(changeMcp(latest, key, updated));
+  }, [saveConfigHandler]);
 
   const deleteMCP = useCallback(async (key: string) => {
-    if (!config) return;
-    const rest = { ...config.mcp };
-    delete rest[key];
-    const newConfig = { ...config, mcp: rest };
-    await saveConfigHandler(newConfig);
-  }, [config, saveConfigHandler]);
+    const latest = await getConfig();
+    await saveConfigHandler(changeMcp(latest, key, null));
+  }, [saveConfigHandler]);
 
   const addMCP = useCallback(async (key: string, mcpConfig: MCPConfig) => {
-    if (!config) return;
-    const sanitizedConfig = sanitizeMCPConfig(mcpConfig);
-    const newConfig = {
-      ...config,
-      mcp: {
-        ...config.mcp,
-        [key]: sanitizedConfig,
-      },
-    };
-    await saveConfigHandler(newConfig);
-  }, [config, saveConfigHandler]);
+    const latest = await getConfig();
+    await saveConfigHandler(changeMcp(latest, key, sanitizeMCPConfig(mcpConfig)));
+  }, [saveConfigHandler]);
 
-  const updateMCP = useCallback(async (key: string, mcpConfig: MCPConfig) => {
-    if (!config) return;
-    const sanitizedConfig = sanitizeMCPConfig(mcpConfig);
-    const newConfig = {
-      ...config,
-      mcp: {
-        ...config.mcp,
-        [key]: sanitizedConfig,
-      },
-    };
-    await saveConfigHandler(newConfig);
-  }, [config, saveConfigHandler]);
+  const updateMCP = addMCP;
 
   const toggleSkill = useCallback(async (name: string) => {
     const result = await apiToggleSkill(name);

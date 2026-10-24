@@ -22,10 +22,12 @@ function EditorContent() {
   const name = searchParams.get("name");
   const isNew = searchParams.get("new") === "true";
 
-  const [content, setContent] = useState("");
+  const defaultContent = type === "skills" ? "## When to Use\n\n## Instructions\n\n" :
+    type === "commands" ? "Instructions:\n" : "// New Plugin\n\n";
+  const [content, setContent] = useState(isNew ? defaultContent : "");
   const [description, setDescription] = useState("");
-  const [currentName, setCurrentName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [currentName, setCurrentName] = useState(isNew ? name || "" : "");
+  const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -34,44 +36,41 @@ function EditorContent() {
       return;
     }
 
-    if (isNew) {
-      const defaultContent = type === "skills" ? "## When to Use\n\n## Instructions\n\n" : 
-                             type === "commands" ? "Instructions:\n" : 
-                             "// New Plugin\n\n";
-      setContent(defaultContent);
-      setCurrentName(name);
-      setLoading(false);
-      return;
-    }
+    if (isNew) return;
 
+    let cancelled = false;
     const loadFile = async () => {
       try {
-        setLoading(true);
         if (type === "skills") {
           const data = await getSkill(name);
+          if (cancelled) return;
           setContent(data.content);
           const match = data.content.match(/<description>([\s\S]*?)<\/description>/);
           setDescription(data.description || (match ? match[1].trim() : ""));
           setCurrentName(name);
         } else if (type === "commands") {
           const data = await getCommand(name);
+          if (cancelled) return;
           setContent(data.template);
           setCurrentName(name);
         } else {
           const data = await getPlugin(name);
+          if (cancelled) return;
           setContent(data.content);
           setCurrentName(name);
         }
       } catch {
+        if (cancelled) return;
         toast.error(t('loadFailed'));
         router.back();
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadFile();
-  }, [type, name, isNew, router]);
+    return () => { cancelled = true; };
+  }, [type, name, isNew, router, t]);
 
   const handleSave = async () => {
     if (!type || !name) return;
@@ -195,5 +194,7 @@ function EditorContent() {
 }
 
 export default function EditorPage() {
-  return <EditorContent />;
+  const params = useSearchParams();
+  const key = JSON.stringify([params.get("type"), params.get("name"), params.get("new")]);
+  return <EditorContent key={key} />;
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import { mcpEnabled } from "@/lib/mcp-config";
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useState, useMemo, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
@@ -41,7 +44,7 @@ export default function MCPPage() {
       setLoading(true);
       const data = await getMcpServers();
       setMcpData(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(t('loadFailed'));
       console.error(err);
     } finally {
@@ -50,8 +53,12 @@ export default function MCPPage() {
   };
 
   useEffect(() => {
-    fetchMcpServers();
-  }, []);
+    let cancelled = false;
+    getMcpServers().then(data => { if (!cancelled) setMcpData(data); })
+      .catch(error => { if (!cancelled) { toast.error(t('loadFailed')); console.error(error); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t]);
   
   const filteredMCPs = useMemo(() => {
     if (!search.trim()) return mcpEntries;
@@ -66,10 +73,10 @@ export default function MCPPage() {
   const handleToggle = async (key: string) => {
     try {
       await toggleMCP(key);
-      toast.success(mcpData[key]?.enabled ? t('toggleDisabled', { name: key }) : t('toggleEnabled', { name: key }));
+      toast.success(mcpData[key] && mcpEnabled(mcpData[key]) ? t('toggleDisabled', { name: key }) : t('toggleEnabled', { name: key }));
       await fetchMcpServers();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toggleFailed', { error: msg }));
     }
   };
@@ -80,8 +87,8 @@ export default function MCPPage() {
       await deleteMCP(deleteTarget);
       toast.success(t('deleted', { name: deleteTarget }));
       await fetchMcpServers();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('deleteFailed', { error: msg }));
     } finally {
       setDeleteTarget(null);
@@ -93,8 +100,8 @@ export default function MCPPage() {
       await addMCP(name, mcpConfig);
       toast.success(t('added', { name }));
       await fetchMcpServers();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('addFailed', { error: msg }));
     }
   };
@@ -106,8 +113,8 @@ export default function MCPPage() {
       await updateMCP(key, mcpConfig);
       toast.success(t('updated', { name: key }));
       await fetchMcpServers();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('updateFailed', { error: msg }));
     }
   };

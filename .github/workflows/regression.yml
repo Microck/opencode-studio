@@ -1,0 +1,82 @@
+name: Regression checks
+on:
+  pull_request:
+  push:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      # Do not register host protocol handlers during dependency installation.
+      - run: npm ci --ignore-scripts
+        working-directory: server
+      - run: npm test
+        working-directory: server
+      - run: npm ci --ignore-scripts
+        working-directory: client-next
+      - run: npm test
+        working-directory: client-next
+      - run: npm run lint
+        working-directory: client-next
+      - run: npx tsc --noEmit
+        working-directory: client-next
+      - run: npm run build
+        working-directory: client-next
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: regression
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - run: npm ci --ignore-scripts
+        working-directory: server
+      - name: Package and publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./server/package.json').version")
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; no changes made."
+            exit 0
+          fi
+          mkdir -p release-artifacts
+          npm pack ./server --ignore-scripts --pack-destination release-artifacts
+          sha256sum release-artifacts/*.tgz > release-artifacts/SHA256SUMS
+          printf '%s\n' 'See CHANGELOG.md and docs/OPENCODE-V2-COMPATIBILITY.md for changes and limitations.' 'The attached archive is the tested server package. npm publication is a separate step; verify the registry before claiming it is published.' > release-artifacts/notes.md
+          gh release create "$TAG" release-artifacts/*.tgz release-artifacts/SHA256SUMS --target "$GITHUB_SHA" --title "$TAG" --notes-file release-artifacts/notes.md
+      - name: Publish npm when an existing token is configured
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: server
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo 'npm publication skipped: no existing NPM_TOKEN is configured.'
+            exit 0
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "npm $NAME@$VERSION already exists; no changes made."
+            exit 0
+          fi
+          npm publish --ignore-scripts --access public

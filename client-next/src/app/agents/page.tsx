@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { Editor } from "@monaco-editor/react";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/error-message.mjs";
 import type { AgentConfig, AgentInfo, PermissionConfig } from "@/types";
 import { getAgents, saveAgent, deleteAgent, toggleAgent } from "@/lib/api";
 import { useErrorTranslation } from "@/lib/error-translate";
@@ -91,8 +92,10 @@ export default function AgentsPage() {
   const [open, setOpen] = useState(false);
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [form, setForm] = useState<AgentFormState>(emptyForm());
+  const [nativeRules, setNativeRules] = useState("[]");
   const [helpOpen, setHelpOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgentInfo | null>(null);
 
   const filteredAgents = useMemo(() => agents, [agents]);
@@ -102,7 +105,7 @@ export default function AgentsPage() {
       setLoading(true);
       const data = await getAgents();
       setAgents(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(translateError(err, t('loadFailed')));
     } finally {
       setLoading(false);
@@ -110,8 +113,12 @@ export default function AgentsPage() {
   };
 
   useEffect(() => {
-    loadAgents();
-  }, []);
+    let cancelled = false;
+    getAgents().then(data => { if (!cancelled) setAgents(data); })
+      .catch(() => { if (!cancelled) toast.error(t('loadFailed')); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t]);
 
   const openEditor = (agent?: AgentInfo) => {
     if (!agent) {
@@ -122,10 +129,11 @@ export default function AgentsPage() {
     }
 
     setEditing(agent);
+    setNativeRules(JSON.stringify(agent.nativePermissions || [], null, 2));
     setForm({
       name: agent.name,
       description: agent.description || "",
-      mode: agent.mode || "subagent",
+      mode: agent.mode || (agent.configurationFormat === "v2" ? "primary" : "subagent"),
       model: agent.model || "",
       temperature: agent.temperature ?? 0.3,
       prompt: agent.prompt || "",
@@ -134,7 +142,7 @@ export default function AgentsPage() {
       maxSteps: agent.maxSteps,
       disable: agent.disable,
       hidden: agent.hidden,
-      source: agent.source === "json" ? "json" : "markdown",
+      source: ["json", "json-config"].includes(agent.source) ? "json" : "markdown",
       scope: "global",
     });
     setOpen(true);
@@ -159,13 +167,24 @@ export default function AgentsPage() {
       hidden: form.hidden,
     };
 
+    if (editing?.configurationFormat === 'v2') {
+      try {
+        const rules: unknown = JSON.parse(nativeRules);
+        if (!Array.isArray(rules)) throw new Error('Expected an array');
+        payload.nativePermissions = rules;
+      } catch {
+        toast.error(t('invalidNativePermissions'));
+        return;
+      }
+    }
+
     try {
       await saveAgent(editing?.name || form.name.trim(), payload, form.source, form.scope);
       toast.success(editing ? t('updated') : t('created'));
       setOpen(false);
       setEditing(null);
       loadAgents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(translateError(err, t('saveFailed')));
     }
   };
@@ -176,23 +195,27 @@ export default function AgentsPage() {
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     try {
       await deleteAgent(deleteTarget.name);
       toast.success(t('deleted'));
-      loadAgents();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || t('deleteFailed');
+      await loadAgents();
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('deleteFailed'));
       toast.error(msg);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+      setDeleteDialogOpen(false);
     }
-    setDeleteDialogOpen(false);
   };
 
   const handleToggle = async (agent: AgentInfo) => {
     try {
       await toggleAgent(agent.name);
       loadAgents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(translateError(err, t('toggleFailed')));
     }
   };
@@ -243,6 +266,7 @@ export default function AgentsPage() {
                 <div className="space-y-2">
                   <Label>{t('nameLabel')}</Label>
                   <Input
+                    aria-label={t('nameLabel')}
                     value={form.name}
                     onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder={t('namePlaceholder')}
@@ -252,6 +276,7 @@ export default function AgentsPage() {
                 <div className="space-y-2">
                   <Label>{t('descriptionLabel')}</Label>
                   <Textarea
+                    aria-label={t('descriptionLabel')}
                     value={form.description}
                     onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                     placeholder={t('descriptionPlaceholder')}
@@ -276,6 +301,7 @@ export default function AgentsPage() {
                 <div className="space-y-2">
                   <Label>{t('modelLabel')}</Label>
                   <Input
+                    aria-label={t('modelLabel')}
                     value={form.model}
                     onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))}
                     placeholder="anthropic/claude-sonnet-4-20250514"
@@ -288,6 +314,8 @@ export default function AgentsPage() {
                     step="0.1"
                     min="0"
                     max="1"
+                    aria-label={t('temperatureLabel')}
+                    disabled={editing?.configurationFormat === 'v2'}
                     value={form.temperature}
                     onChange={(e) => setForm((prev) => ({ ...prev, temperature: Number(e.target.value) }))}
                   />
@@ -296,6 +324,7 @@ export default function AgentsPage() {
                   <Label>{t('maxStepsLabel')}</Label>
                   <Input
                     type="number"
+                    aria-label={t('maxStepsLabel')}
                     value={form.maxSteps ?? ""}
                     onChange={(e) => setForm((prev) => ({ ...prev, maxSteps: e.target.value ? Number(e.target.value) : undefined }))}
                   />
@@ -330,6 +359,7 @@ export default function AgentsPage() {
                 )}
               </div>
 
+              {editing?.configurationFormat !== "v2" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>{t('toolsLabel')}</Label>
@@ -372,6 +402,7 @@ export default function AgentsPage() {
                   ))}
                 </div>
               </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-4">
                 <label className="flex items-center gap-2 text-sm">
@@ -441,10 +472,14 @@ export default function AgentsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 p-6 flex flex-col">
-            <PermissionEditor
+            {editing?.configurationFormat === 'v2' ? <div className="space-y-3">
+              <p>{t('nativePermissionsHint')}</p>
+              <Textarea aria-label={t('nativePermissionsLabel')} value={nativeRules}
+                onChange={event => setNativeRules(event.target.value)} className="font-mono min-h-80" />
+            </div> : <PermissionEditor
               value={form.permission}
               onChange={(next) => setForm((prev) => ({ ...prev, permission: next }))}
-            />
+            />}
           </div>
           <DialogFooter className="p-4 border-t bg-muted/20 shrink-0">
             <Button onClick={() => setPermissionsModalOpen(false)}>{t('done')}</Button>
@@ -452,6 +487,18 @@ export default function AgentsPage() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('deleteConfirm', { name: deleteTarget?.name || '' })}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting}>{t('delete')}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <PageHelpDialog open={helpOpen} onOpenChange={setHelpOpen} page="agents" />
     </div>
   );

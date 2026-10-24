@@ -68,3 +68,32 @@ describe('cors policy', () => {
         assert.deepEqual(appliedHeaders, {});
     });
 });
+
+describe('request origin enforcement', () => {
+    const { rejectUntrustedOrigin, isAllowedHost } = require('./cors-policy');
+    function request(headers) {
+        let code=200, proceeded=false;
+        rejectUntrustedOrigin({headers:{host:'127.0.0.1:1920',...headers}}, {
+            status(value){code=value;return this;},json(){return this;},
+        },()=>{proceeded=true;});
+        return {code,proceeded};
+    }
+    it('rejects simple cross-origin writes before any route runs', () => {
+        for(const origin of ['https://untrusted.example','https://unrelated.vercel.app','http://192.168.attacker.example:1080','null','', 'https://opencode.micr.dev/']) {
+            assert.deepEqual(request({origin}),{code:403,proceeded:false});
+        }
+    });
+    it('allows exact trusted origins and originless native requests', () => {
+        for(const headers of [{},{origin:'https://opencode.micr.dev'},{origin:'http://localhost:1080'},{origin:'http://192.168.1.2:1089'}]) {
+            assert.deepEqual(request(headers),{code:200,proceeded:true});
+        }
+    });
+    it('rejects originless cross-site requests and DNS-rebinding hosts', () => {
+        assert.deepEqual(request({'sec-fetch-site':'cross-site'}),{code:403,proceeded:false});
+        assert.deepEqual(request({host:'untrusted.example:1920'}),{code:403,proceeded:false});
+        assert.equal(isAllowedHost('127.0.0.1:1920'),true);
+        assert.equal(isAllowedHost('[::1]:1920'),true);
+        assert.equal(isAllowedHost('evil@127.0.0.1:1920'),false);
+        assert.equal(isAllowedHost('127.0.0.1:1920/path'),false);
+    });
+});

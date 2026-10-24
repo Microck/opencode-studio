@@ -1,11 +1,13 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useApp } from "@/lib/context";
 import { getApiBaseUrl, getPaths, getProjectRules, getSystemTools } from "@/lib/api";
-import type { PathsInfo, RulesResponse, SystemToolInfo } from "@/types";
+import type { PathsInfo, RulesResponse, SystemToolInfo, LSPConfig, FormatterConfig } from "@/types";
 import { PageHelp } from "@/components/page-help";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -63,8 +65,8 @@ export default function CodeSettingsPage() {
         setPaths(pathsData);
         setRules(rulesData);
         setTools(toolsData);
-      } catch (err: any) {
-        toast.error(err?.message || t('code.toast.failedToLoadMetadata'));
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, t('code.toast.failedToLoadMetadata')));
       } finally {
         setLoading(false);
       }
@@ -78,7 +80,7 @@ export default function CodeSettingsPage() {
     return map;
   }, [tools]);
 
-  const updateLsp = (id: string, next: any) => {
+  const updateLsp = (id: string, next: LSPConfig[string]) => {
     if (!config) return;
     saveConfig({
       ...config,
@@ -89,7 +91,7 @@ export default function CodeSettingsPage() {
     });
   };
 
-  const updateFormatter = (id: string, next: any) => {
+  const updateFormatter = (id: string, next: FormatterConfig[string]) => {
     if (!config) return;
     saveConfig({
       ...config,
@@ -148,7 +150,7 @@ export default function CodeSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {LSP_LIST.map((item) => {
-            const cfg = config?.lsp?.[item.id] as any;
+            const cfg = config?.lsp?.[item.id];
             const tool = toolMap.get(item.tool);
             return (
               <div key={item.id} className="grid gap-3 md:grid-cols-[1.4fr_0.6fr_0.4fr_1.6fr] md:items-center">
@@ -193,7 +195,7 @@ export default function CodeSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {FORMATTER_LIST.map((item) => {
-            const cfg = config?.formatter?.[item.id] as any;
+            const cfg = config?.formatter?.[item.id];
             const tool = toolMap.get(item.tool);
             return (
               <div key={item.id} className="grid gap-3 md:grid-cols-[1.4fr_0.6fr_0.4fr_1.6fr] md:items-center">

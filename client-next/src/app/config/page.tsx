@@ -1,5 +1,7 @@
 "use client";
 
+import { CliConfigEditor } from "@/components/cli-config-editor";
+
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
@@ -23,29 +25,21 @@ function ProvidersTab() {
   const [error, setError] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<ConfigProviderId | null>(null);
 
-  const loadProviders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await getConfigProviders();
-      setProviders(result);
-      setError("");
-    } catch {
-      setError("Failed to load providers");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadProviders = useCallback(() => getConfigProviders().then(result => {
+    setProviders(result);
+    setError("");
+  }).catch(() => setError("Failed to load providers"))
+    .finally(() => setLoading(false)), []);
 
-  useEffect(() => {
-    loadProviders();
-  }, [loadProviders]);
+  useEffect(() => { void loadProviders(); }, [loadProviders]);
 
   const handleBack = () => {
     setSelectedProvider(null);
   };
 
   const handleRefresh = () => {
-    loadProviders();
+    setLoading(true);
+    void loadProviders();
   };
 
   if (selectedProvider) {
@@ -123,22 +117,13 @@ function ProvidersTab() {
 export default function ConfigPage() {
   const t = useTranslations('config');
   const { config, loading, saveConfig } = useApp();
-  const [content, setContent] = useState("");
+  const [draft, setDraft] = useState<string | null>(null);
+  const content = draft ?? (config ? JSON.stringify(config, null, 2) : "");
+  const hasChanges = draft !== null;
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  useEffect(() => {
-    if (config) {
-      const formatted = JSON.stringify(config, null, 2);
-      setContent(formatted);
-      setHasChanges(false);
-    }
-  }, [config]);
-
   const handleChange = (value: string) => {
-    setContent(value);
-    setHasChanges(true);
+    setDraft(value);
     setError("");
   };
 
@@ -160,7 +145,7 @@ export default function ConfigPage() {
       const parsed = JSON.parse(content);
       await saveConfig(parsed);
       toast.success(t('saved'));
-      setHasChanges(false);
+      setDraft(current => current === content ? null : current);
     } catch {
       toast.error(t('saveFailed'));
     } finally {
@@ -170,8 +155,7 @@ export default function ConfigPage() {
 
   const handleReset = () => {
     if (config) {
-      setContent(JSON.stringify(config, null, 2));
-      setHasChanges(false);
+      setDraft(null);
       setError("");
     }
   };
@@ -179,7 +163,7 @@ export default function ConfigPage() {
   const handleFormat = () => {
     try {
       const parsed = JSON.parse(content);
-      setContent(JSON.stringify(parsed, null, 2));
+      setDraft(JSON.stringify(parsed, null, 2));
       setError("");
     } catch (e) {
       setError(t('cannotFormat', { error: (e as Error).message }));
@@ -203,14 +187,17 @@ export default function ConfigPage() {
         <TabsList className="w-fit">
           <TabsTrigger value="providers">Providers</TabsTrigger>
           <TabsTrigger value="raw">Raw Config</TabsTrigger>
+          <TabsTrigger value="cli">v2 CLI</TabsTrigger>
         </TabsList>
 
         <TabsContent value="providers" className="mt-4">
           <ProvidersTab />
         </TabsContent>
 
+        <TabsContent value="cli" className="mt-4"><CliConfigEditor /></TabsContent>
+
         <TabsContent value="raw" className="mt-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap gap-3 justify-between items-center">
             <CardTitle className="flex items-center gap-2 text-base">
               {t('fileName')}
               {hasChanges && <span className="text-xs text-orange-500">{t('unsavedChanges')}</span>}
@@ -252,6 +239,7 @@ export default function ConfigPage() {
               )}
 
               <Textarea
+                aria-label={t('fileName')}
                 value={content}
                 onChange={(e) => handleChange(e.target.value)}
                 className="font-mono text-sm min-h-[500px] resize-y"

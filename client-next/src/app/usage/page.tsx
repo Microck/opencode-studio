@@ -1,5 +1,7 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +75,7 @@ export default function UsagePage() {
   const [pieConfig, setPieConfig] = useState({ cx: "45%", cy: "45%", legendRight: 35 });
   const [timeRange, setTimeRange] = useState("30d");
   const [customRange, setCustomRange] = useState({ start: "", end: "" });
+  const [appliedCustomRange, setAppliedCustomRange] = useState({ start: "", end: "" });
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const hoveredModelRef = useRef<string | null>(null);
@@ -104,38 +107,37 @@ export default function UsagePage() {
       return;
     }
     setCustomError(null);
+    setAppliedCustomRange({ ...customRange });
     setCustomDialogOpen(false);
     setTimeRange("custom");
   };
 
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
+  useEffect(() => {
+    let cancelled = false;
       const selectedRange = TIME_RANGES.find(r => r.value === timeRange) || TIME_RANGES[2];
       const isCustom = timeRange === "custom";
       let from: number | undefined;
       let to: number | undefined;
       
       if (isCustom) {
-        if (!customRange.start || !customRange.end) {
-          setLoading(false);
+        if (!appliedCustomRange.start || !appliedCustomRange.end) {
           return;
         }
-        from = Date.parse(`${customRange.start}T00:00:00.000Z`);
-        to = Date.parse(`${customRange.end}T23:59:59.999Z`);
+        from = Date.parse(`${appliedCustomRange.start}T00:00:00.000Z`);
+        to = Date.parse(`${appliedCustomRange.end}T23:59:59.999Z`);
         if (Number.isNaN(from) || Number.isNaN(to)) {
-          setLoading(false);
           return;
         }
       }
 
-      const data = await getUsageStats(
+      void getUsageStats(
         projectId,
         selectedRange.granularity,
         isCustom ? "custom" : selectedRange.value,
         from,
         to
-      );
+      ).then(data => {
+      if (cancelled) return;
       
       const enrichedStats: UsageStats = {
         totalCost: 0,
@@ -154,12 +156,12 @@ export default function UsagePage() {
       enrichedStats.totalCost = enrichedStats.byModel.reduce((acc, m) => acc + m.cost, 0);
       
       const modelNames = enrichedStats.byModel.map(m => m.name);
-      const processedByDay = (data.byDay || []).map((d: any) => {
+      const processedByDay = (data.byDay || []).map((d) => {
         const modelCosts: Record<string, number> = {};
         modelNames.forEach(mid => {
           modelCosts[mid] = 0;
-          const it = d[`${mid}_input`] || 0;
-          const ot = d[`${mid}_output`] || 0;
+          const it = Number(d[`${mid}_input`]) || 0;
+          const ot = Number(d[`${mid}_output`]) || 0;
           if (it > 0 || ot > 0) {
             modelCosts[mid] = calculateCost(mid, it, ot);
           }
@@ -173,18 +175,14 @@ export default function UsagePage() {
       
       enrichedStats.byDay = processedByDay;
       setStats(enrichedStats);
-    } catch (e: any) {
-      const msg = e.response?.data?.error || e.message || "Unknown error";
+    }).catch((e: unknown) => {
+      if (cancelled) return;
+      const msg = errorMessage(e, "Unknown error");
       toast.error(t('fetchFailed', { error: msg }));
       console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, [projectId, timeRange, customRange.start, customRange.end]);
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [projectId, timeRange, appliedCustomRange.start, appliedCustomRange.end, t]);
 
   const pieData = useMemo(() => {
     if (!stats) return [];
@@ -526,7 +524,7 @@ export default function UsagePage() {
                     content={({ active, payload, label }) => {
                       const hovered = hoveredModelRef.current;
                       if (barTooltipRef.current && active && payload && payload.length && hovered) {
-                        const entry = payload.find((p: any) => p.name === hovered);
+                        const entry = payload.find((p) => p.name === hovered);
                         if (entry) {
                           const inputTokens = entry.payload[`${hovered}_input`] || 0;
                           const outputTokens = entry.payload[`${hovered}_output`] || 0;
@@ -647,7 +645,7 @@ export default function UsagePage() {
                     align="right"
                     wrapperStyle={{ fontSize: "11px", right: pieConfig.legendRight }}
                     content={({ payload }) => {
-                      const sortedPayload = [...(payload || [])].sort((a: any, b: any) => {
+                      const sortedPayload = [...(payload || [])].sort((a, b) => {
                         if (a.value === "Others") return 1;
                         if (b.value === "Others") return -1;
                         const aCost = pieData.find(p => p.name === a.value)?.cost || 0;
@@ -656,7 +654,7 @@ export default function UsagePage() {
                       });
                       return (
                         <ul className="space-y-2">
-                          {sortedPayload.map((entry: any, index: number) => (
+                          {sortedPayload.map((entry, index: number) => (
                             <li key={`item-${index}`} className="flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
                               <span className="truncate text-[10px] font-medium opacity-80" title={entry.value}>{entry.value}</span>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { errorMessage } from "@/lib/error-message.mjs";
+
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -141,15 +143,15 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
     setError("");
   };
 
-  useEffect(() => {
-    if (!pasteInput.trim()) return;
-    
-    const parsed = parseInput(pasteInput);
+  const handlePasteInput = (value: string) => {
+    setPasteInput(value);
+    if (!value.trim()) return;
+    const parsed = parseInput(value);
     if (parsed) {
       setName(parsed.name);
       setConfigJson(JSON.stringify(parsed.config, null, 2));
     }
-  }, [pasteInput]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,8 +184,8 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
       await onAdd(name, config);
       resetForm();
       setOpen(false);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('addMcp.errors.failedToAdd');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('addMcp.errors.failedToAdd'));
       setError(msg);
     } finally {
       setLoading(false);
@@ -218,7 +220,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
             </Label>
             <Textarea
               value={pasteInput}
-              onChange={(e) => setPasteInput(e.target.value)}
+              onChange={(e) => handlePasteInput(e.target.value)}
               placeholder={t('addMcp.quickAddPlaceholder')}
               className="font-mono text-sm min-h-[60px]"
             />
@@ -251,7 +253,7 @@ export function AddMCPDialog({ onAdd }: AddMCPDialogProps) {
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button type="button" variant="ghost" onClick={() => { setOpen(false); resetForm(); }}>
               {t('cancel')}
             </Button>
             <Button type="submit" disabled={loading}>

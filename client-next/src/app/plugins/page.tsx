@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { deletePlugin, deletePluginFromConfig, getActiveGooglePlugin } from "@/lib/api";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/error-message.mjs";
 import { Search } from "@nsmr/pixelart-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +30,7 @@ import { PresetsManager } from "@/components/presets-manager";
 
 export default function PluginsPage() {
   const t = useTranslations('plugins');
-  const { plugins, loading, refreshData, togglePlugin } = useApp();
+  const { config, plugins, loading, refreshData, togglePlugin } = useApp();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [activeGPlugin, setActiveGPlugin] = useState<string | null>(null);
@@ -56,8 +57,8 @@ export default function PluginsPage() {
       await togglePlugin(name);
       const plugin = plugins.find(p => p.name === name);
       toast.success(plugin?.enabled ? t('toggleDisabled', { name }) : t('toggleEnabled', { name }));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toggleFailed', { error: msg }));
     }
   };
@@ -78,8 +79,8 @@ export default function PluginsPage() {
       toast.success(t('deleted', { name: deleteTarget.name }));
       setDeleteDialogOpen(false);
       refreshData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('deleteFailed', { error: msg }));
     }
   };
@@ -113,6 +114,10 @@ if (loading) {
           <AddPluginDialog onSuccess={refreshData} />
         </div>
       </div>
+
+      {config && 'plugins' in config && <p className="rounded border p-3 text-sm text-muted-foreground">
+        {t('nativeV2Warning')}
+      </p>}
 
       {plugins.length > 0 && (
         <div className="relative max-w-sm">

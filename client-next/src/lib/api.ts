@@ -434,18 +434,21 @@ export async function getModels(): Promise<{ providers: unknown[]; models: unkno
 
 export async function getCommand(name: string): Promise<{ template: string }> {
   const config = await getConfig();
-  const cmd = config.command?.[name];
+  const cmd = config.commands?.[name] ?? config.command?.[name];
   if (!cmd) throw new Error('Command not found');
   return cmd;
 }
 
 export async function saveCommand(name: string, template: string): Promise<void> {
   const config = await getConfig();
+  const key = config.commands !== undefined || (config.command === undefined && (config.agents || config.providers || config.permissions))
+    ? 'commands' : 'command';
+  const commands = config[key];
   const updated = {
     ...config,
-    command: {
-        ...config.command,
-        [name]: { template }
+    [key]: {
+        ...commands,
+        [name]: { ...(config.commands?.[name] ?? config.command?.[name]), template }
     }
   };
   await saveConfig(updated);
@@ -453,11 +456,16 @@ export async function saveCommand(name: string, template: string): Promise<void>
 
 export async function deleteCommand(name: string): Promise<void> {
   const config = await getConfig();
-  if (config.command) {
-      const rest = { ...config.command };
-      delete rest[name];
-      await saveConfig({ ...config, command: rest });
+  const updated = { ...config };
+  let changed = false;
+  for (const key of ['command', 'commands'] as const) {
+    if (config[key] && Object.hasOwn(config[key], name)) {
+      updated[key] = { ...config[key] };
+      delete updated[key]![name];
+      changed = true;
+    }
   }
+  if (changed) await saveConfig(updated);
 }
 
 export interface BackupData {
@@ -466,7 +474,7 @@ export interface BackupData {
   studioConfig: Record<string, unknown>;
   opencodeConfig: OpencodeConfig | null;
   skills: { name: string; content: string }[];
-  plugins: { name: string; content: string }[];
+  plugins: { name: string; content: string; extension?: ".js" | ".ts" }[];
 }
 
 export async function getBackup(): Promise<BackupData> {
@@ -656,7 +664,7 @@ export interface UsageStats {
   totalCost: number;
   totalTokens: number;
   byModel: { name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
-  byDay: { date: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
+  byDay: { date: string; cost: number; tokens: number; inputTokens: number; outputTokens: number; [key: string]: string | number }[];
   byProject: { id: string; name: string; cost: number; tokens: number; inputTokens: number; outputTokens: number }[];
 }
 
@@ -672,14 +680,14 @@ export const getUsageStats = async (
     if (projectId) params.set('projectId', projectId);
     if (granularity) params.set('granularity', granularity);
     if (range) params.set('range', range);
-    if (from) params.set('from', String(from));
-    if (to) params.set('to', String(to));
+    if (from !== undefined) params.set('from', String(from));
+    if (to !== undefined) params.set('to', String(to));
     
     const res = await api.get(`/usage?${params.toString()}`);
     return res.data;
   } catch (error) {
     console.error("Failed to fetch usage stats:", error);
-    return { totalCost: 0, totalTokens: 0, byModel: [], byDay: [], byProject: [] };
+    throw error;
   }
 };
 
@@ -898,3 +906,12 @@ export async function setGitHubAutoSync(enabled: boolean): Promise<{ success: bo
 }
 
 export default api;
+
+
+export interface CliConfigDocument { content: string; exists: boolean; revision: string | null }
+export async function getCliConfig(): Promise<CliConfigDocument> {
+  return (await api.get<CliConfigDocument>('/cli-config')).data;
+}
+export async function saveCliConfig(document: Pick<CliConfigDocument, 'content' | 'revision'>): Promise<CliConfigDocument> {
+  return (await api.post<CliConfigDocument>('/cli-config', document)).data;
+}

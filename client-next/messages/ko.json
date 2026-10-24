@@ -485,6 +485,7 @@
     "cancel": "취소"
   },
   "plugins": {
+    "nativeV2Warning": "OpenCode v2는 새 플러그인 API를 사용합니다. 기존 플러그인은 자동 변환되지 않습니다. 런타임 활성화/비활성화에는 플러그인 ID가 필요하므로 Raw Config에서 관리하세요. 패키지 항목과 옵션은 보존됩니다.",
     "incompatibleWarning": "Antigravity와 호환되지 않습니다. 대신 openskills를 사용하세요.",
     "toggleEnabled": "{name}이(가) 활성화되었습니다",
     "toggleDisabled": "{name}이(가) 비활성화되었습니다",
@@ -534,6 +535,9 @@
     "delete": "삭제"
   },
   "agents": {
+    "nativePermissionsLabel": "OpenCode v2 권한 규칙 (JSON)",
+    "nativePermissionsHint": "규칙의 순서가 유지됩니다. action, resource, effect(ask, allow, deny)를 사용하세요. 기존 도구 스위치와 temperature는 v2 에이전트에 적용되지 않습니다.",
+    "invalidNativePermissions": "올바른 v2 권한 규칙 JSON 배열을 입력하세요.",
     "sourceJson": "JSON",
     "sourceMarkdown": "Markdown",
     "sourceBuiltin": "내장",

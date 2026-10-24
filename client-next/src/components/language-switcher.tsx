@@ -12,16 +12,20 @@ import {
 
 const locales = [
   { code: "en", label: "English", triggerLabel: "EN" },
-  { code: "zh-CN", label: "중文", triggerLabel: "中" },
+  { code: "zh-CN", label: "中文", triggerLabel: "中" },
   { code: "ko", label: "한국어", triggerLabel: "한" },
 ] as const;
+
+function persistLocale(locale: string) {
+  document.cookie = `locale=${encodeURIComponent(locale)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+}
 
 export function LanguageSwitcher() {
   const currentLocale = useLocale();
   const router = useRouter();
 
-  const handleChange = async (locale: string) => {
-    document.cookie = `locale=${locale};path=/;max-age=${60 * 60 * 24 * 365}`;
+  const handleChange = (locale: string) => {
+    persistLocale(locale);
     router.refresh();
   };
 
