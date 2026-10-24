@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useApp } from "@/lib/context";
 import { useTranslations } from "next-intl";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,8 +32,15 @@ import { Plus, Trash, Check, User, CardStack, Play } from "@nsmr/pixelart-react"
 import { getProfiles, createProfile, deleteProfile, activateProfile, type ProfileList } from "@/lib/api";
 import { PageHelp } from "@/components/page-help";
 
+const getErrorMessage = (err: unknown) => {
+    if (axios.isAxiosError(err)) return err.response?.data?.error || err.message;
+    if (err instanceof Error) return err.message;
+    return null;
+  };
+
 export default function ProfilesPage() {
   const t = useTranslations('profiles');
+  const { refreshData } = useApp();
   const [data, setData] = useState<ProfileList | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -40,70 +48,73 @@ export default function ProfilesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const mutationInFlight = useRef(false);
+  const busy = creating || deleting || activating !== null;
 
-  const getErrorMessage = (err: unknown) => {
-    if (axios.isAxiosError(err)) return err.response?.data?.error || err.message;
-    if (err instanceof Error) return err.message;
-    return null;
-  };
-
-  const loadProfiles = async () => {
-    try {
-      const res = await getProfiles();
-      setData(res);
-    } catch (e) {
-      const msg = getErrorMessage(e);
+  const loadProfiles = useCallback(() => getProfiles()
+    .then(setData)
+    .catch((error: unknown) => {
+      const msg = getErrorMessage(error);
       toast.error(msg ? t('loadFailedWithError', { error: msg }) : t('loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
+    })
+    .finally(() => setLoading(false)), [t]);
 
   useEffect(() => {
-    loadProfiles();
-  }, []);
+    void loadProfiles();
+  }, [loadProfiles]);
 
   const handleCreate = async () => {
-    if (!newProfileName.trim()) return;
+    if (!newProfileName.trim() || mutationInFlight.current) return;
+    mutationInFlight.current = true;
     try {
       setCreating(true);
       await createProfile(newProfileName);
       toast.success(t('createSuccess', { name: newProfileName }));
       setCreateOpen(false);
       setNewProfileName("");
-      loadProfiles();
+      await loadProfiles();
     } catch (e) {
       const msg = getErrorMessage(e);
       toast.error(msg ? t('createFailedWithError', { error: msg }) : t('createFailed'));
     } finally {
+      mutationInFlight.current = false;
       setCreating(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || mutationInFlight.current) return;
+    mutationInFlight.current = true;
+    setDeleting(true);
     try {
       await deleteProfile(deleteTarget);
       toast.success(t('deleted'));
-      loadProfiles();
+      await loadProfiles();
     } catch (e) {
       const msg = getErrorMessage(e);
       toast.error(msg ? t('deleteFailedWithError', { error: msg }) : t('deleteFailed'));
     } finally {
+      mutationInFlight.current = false;
+      setDeleting(false);
       setDeleteTarget(null);
     }
   };
 
   const handleActivate = async (name: string) => {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     try {
       setActivating(name);
       await activateProfile(name);
+      await refreshData();
       toast.success(t('switchSuccess', { name }));
-      loadProfiles();
+      await loadProfiles();
     } catch (e) {
       const msg = getErrorMessage(e);
       toast.error(msg ? t('switchFailedWithError', { error: msg }) : t('switchFailed'));
     } finally {
+      mutationInFlight.current = false;
       setActivating(null);
     }
   };
@@ -114,7 +125,7 @@ export default function ProfilesPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12 p-8">
-      <header className="flex justify-between items-end border-b pb-4">
+      <header className="flex flex-col sm:flex-row gap-4 justify-between sm:items-end border-b pb-4">
         <div>
           <div className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <PageHelp
@@ -132,7 +143,7 @@ export default function ProfilesPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={busy}>
                <Plus className="h-4 w-4 mr-2" />
               {t('newProfile')}
             </Button>
@@ -147,14 +158,16 @@ export default function ProfilesPage() {
             <div className="py-4">
               <Input
                 placeholder={t('namePlaceholder')}
+                aria-label={t('namePlaceholder')}
                 value={newProfileName}
+                disabled={busy}
                 onChange={(e) => setNewProfileName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
-              <Button onClick={handleCreate} disabled={!newProfileName.trim() || creating}>{t('create')}</Button>
+              <Button onClick={handleCreate} disabled={!newProfileName.trim() || busy}>{t('create')}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -190,7 +203,7 @@ export default function ProfilesPage() {
                       className="w-full" 
                       variant="outline" 
                       onClick={() => handleActivate(profile)}
-                      disabled={activating === profile}
+                      disabled={busy}
                     >
                        <Play className="h-4 w-4 mr-2" />
                       {t('switch')}
@@ -203,6 +216,8 @@ export default function ProfilesPage() {
                       size="icon" 
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleteTarget(profile)}
+                      aria-label={`${t('deleteTitle')}: ${profile}`}
+                      disabled={busy}
                     >
                       <Trash className="h-4 w-4" />
                     </Button>

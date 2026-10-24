@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { errorMessage } from "@/lib/error-message.mjs";
+
+import { useEffect, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { Editor } from "@monaco-editor/react";
@@ -37,20 +39,13 @@ export default function RulesPage() {
   const [path, setPath] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const loadRules = async () => {
-    try {
-      const data = await getProjectRules();
-      setContent(data.content || "");
-      setSource(data.source || "none");
-      setPath(data.path || null);
-    } catch (err: any) {
-      toast.error(err?.message || t('loadFailed'));
-    }
-  };
+  const loadRules = useCallback(() => getProjectRules().then(data => {
+    setContent(data.content || "");
+    setSource(data.source || "none");
+    setPath(data.path || null);
+  }).catch((error: unknown) => { toast.error(errorMessage(error, t('loadFailed'))); }), [t]);
 
-  useEffect(() => {
-    loadRules();
-  }, []);
+  useEffect(() => { void loadRules(); }, [loadRules]);
 
   const handleSave = async () => {
     const target = source === "none" ? "AGENTS.md" : source;
@@ -60,8 +55,8 @@ export default function RulesPage() {
       toast.success(t('saved'));
       setSource(target);
       loadRules();
-    } catch (err: any) {
-      toast.error(err?.message || t('saveFailed'));
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t('saveFailed')));
     } finally {
       setSaving(false);
     }

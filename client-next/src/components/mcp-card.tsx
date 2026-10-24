@@ -1,5 +1,6 @@
 "use client";
 
+import { mcpEnabled } from "@/lib/mcp-config";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,7 +51,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
     let newConfig: MCPConfig;
     try {
       newConfig = JSON.parse(configJson);
-      if (typeof newConfig !== "object" || Array.isArray(newConfig)) {
+      if (!newConfig || typeof newConfig !== "object" || Array.isArray(newConfig)) {
         setError(t("configMustBeObject"));
         return;
       }
@@ -72,7 +73,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
 
   return (
     <>
-      <Card className={config.enabled ? "border-primary/50" : "opacity-60"}>
+      <Card className={mcpEnabled(config) ? "border-primary/50" : "opacity-60"}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -95,7 +96,7 @@ export function MCPCard({ name, config, onToggle, onDelete, onEdit }: MCPCardPro
                 <Edit className="h-4 w-4" />
               </Button>
               <Switch
-                checked={config.enabled}
+                checked={mcpEnabled(config)}
                 onCheckedChange={onToggle}
                 onClick={(e) => e.stopPropagation()}
                 aria-label={`Toggle ${name}`}

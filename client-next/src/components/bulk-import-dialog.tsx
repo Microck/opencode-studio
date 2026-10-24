@@ -1,5 +1,7 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useState, useCallback } from "react";
 import {
   Dialog,
@@ -188,8 +190,8 @@ export function BulkImportDialog({ type, existingNames, onSuccess }: BulkImportD
           await savePlugin(pluginName, item.result!.content || "");
         }
         successCount++;
-      } catch (err: any) {
-        const msg = err.response?.data?.error || err.message || "Unknown error";
+      } catch (err: unknown) {
+        const msg = errorMessage(err, "Unknown error");
         console.error(`Failed to import ${item.result?.name}:`, msg);
         failCount++;
       }

@@ -1,5 +1,7 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -48,8 +50,8 @@ export default function LogsPage() {
         source.onerror = () => {
           toast.error(t('disconnected'));
         };
-      } catch (err: any) {
-        toast.error(err?.message || t('connectFailed'));
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, t('connectFailed')));
       }
     };
 

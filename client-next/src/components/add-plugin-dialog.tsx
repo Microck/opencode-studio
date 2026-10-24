@@ -1,5 +1,7 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useState } from "react";
 import {
   Dialog,
@@ -482,8 +484,8 @@ export function AddPluginDialog({ onSuccess }: AddPluginDialogProps) {
       resetForm();
       setOpen(false);
       onSuccess();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('addPlugin.errors.createFailed');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('addPlugin.errors.createFailed'));
       setError(msg);
     } finally {
       setLoading(false);

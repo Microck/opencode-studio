@@ -76,6 +76,16 @@ function getNamedEntries(entries, type) {
 }
 
 function assertSafeBackupResourceNames(backup = {}) {
+    const invalid = (message) => Object.assign(new Error(message), { statusCode: 400 });
+    if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
+        throw invalid('Invalid backup object');
+    }
+    for (const field of ['studioConfig', 'opencodeConfig']) {
+        const value = backup[field];
+        if (value !== undefined && value !== null && (typeof value !== 'object' || Array.isArray(value))) {
+            throw invalid(`Invalid ${field} object`);
+        }
+    }
     const skills = getNamedEntries(backup.skills, 'skills');
     const invalidSkill = findInvalidNamedEntry(skills, isSafeSkillName);
     if (invalidSkill) {
@@ -87,6 +97,22 @@ function assertSafeBackupResourceNames(backup = {}) {
     if (invalidPlugin) {
         throw createInvalidResourceNameError('plugin', invalidPlugin.name);
     }
+    for (const [type, entries] of [['skill', skills], ['plugin', plugins]]) {
+        for (const entry of entries) {
+            if (!entry || typeof entry !== 'object') throw invalid(`Invalid ${type} entry`);
+            if (typeof entry.content !== 'string') {
+                const error = new Error(`Invalid ${type} content`);
+                error.statusCode = 400;
+                throw error;
+            }
+            if (type === 'plugin' && entry.extension !== undefined && !['.js', '.ts'].includes(entry.extension)) {
+                const error = new Error('Invalid plugin extension');
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+    }
+
 }
 
 module.exports = {

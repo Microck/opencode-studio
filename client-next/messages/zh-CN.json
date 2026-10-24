@@ -487,6 +487,7 @@
     "cancel": "\u53d6\u6d88"
   },
   "plugins": {
+    "nativeV2Warning": "OpenCode v2 使用新的插件 API，不会自动迁移现有插件。运行时启用或禁用需要插件 ID，请在原始配置中管理。软件包条目和选项会保留。",
     "incompatibleWarning": "\u4e0e Antigravity \u4e0d\u517c\u5bb9\uff0c\u8bf7\u6539\u7528 openskills\u3002",
     "toggleEnabled": "{name} \u5df2\u542f\u7528",
     "toggleDisabled": "{name} \u5df2\u7981\u7528",
@@ -538,6 +539,9 @@
     "delete": "\u5220\u9664"
   },
   "agents": {
+    "nativePermissionsLabel": "OpenCode v2 有序权限规则（JSON）",
+    "nativePermissionsHint": "保留规则顺序。使用 action、resource 和 effect（ask、allow 或 deny）。旧版工具开关和 temperature 不适用于原生 v2 代理。",
+    "invalidNativePermissions": "请输入有效的 v2 权限规则 JSON 数组。",
     "sourceJson": "JSON",
     "sourceMarkdown": "Markdown",
     "sourceBuiltin": "\u5185\u7f6e",

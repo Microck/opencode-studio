@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { getCommands, saveCommand, deleteCommand } from "@/lib/api";
+import { saveRenamedResource } from "@/lib/save-renamed-resource.mjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +57,7 @@ export default function CommandsPage() {
         template: value.template,
       }));
       setCommands(entries);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(t('loadFailed'));
       console.error(err);
     } finally {
@@ -65,8 +66,14 @@ export default function CommandsPage() {
   };
 
   useEffect(() => {
-    fetchCommands();
-  }, []);
+    let cancelled = false;
+    getCommands().then(data => {
+      if (!cancelled) setCommands(Object.entries(data).map(([name, value]) => ({ name, template: value.template })));
+    }).catch(error => {
+      if (!cancelled) { toast.error(t('loadFailed')); console.error(error); }
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t]);
 
   const handleAdd = async () => {
     if (!newName.trim()) {
@@ -108,16 +115,18 @@ export default function CommandsPage() {
     }
     
     // Check for duplicate name only if name changed
-    if (editingCmd.name !== editingCmd.originalName && commands.some(c => c.name === editingCmd.name.trim())) {
+    if (editingCmd.name.trim() !== editingCmd.originalName && commands.some(c => c.name === editingCmd.name.trim())) {
       toast.error(t('alreadyExists'));
       return;
     }
 
     try {
-      if (editingCmd.name !== editingCmd.originalName) {
-        await deleteCommand(editingCmd.originalName);
-      }
-      await saveCommand(editingCmd.name.trim(), editingCmd.template);
+      await saveRenamedResource(
+        editingCmd.originalName,
+        editingCmd.name,
+        (name) => saveCommand(name, editingCmd.template),
+        deleteCommand,
+      );
       toast.success(t('updateSuccess', { name: editingCmd.name }));
       setEditOpen(false);
       setEditingCmd(null);
@@ -277,6 +286,7 @@ export default function CommandsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openEdit(cmd)}
+                      aria-label={`${t('editTitle')}: ${cmd.name}`}
                       className="h-8 w-8"
                     >
                       <Edit className="h-4 w-4" />
@@ -285,6 +295,7 @@ export default function CommandsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDelete(cmd.name)}
+                      aria-label={`${t('delete')}: ${cmd.name}`}
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     >
                       <Trash className="h-4 w-4" />
@@ -293,7 +304,7 @@ export default function CommandsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-background p-3 rounded-md max-h-32 overflow-auto">
+                <pre className="text-sm text-foreground whitespace-pre-wrap font-mono bg-background p-3 rounded-md max-h-32 overflow-auto">
                   {cmd.template}
                 </pre>
               </CardContent>

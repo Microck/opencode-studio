@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2026-10-24
+
+### Fixed
+- Preserve unmanaged configurations and roll back failed profile activation.
+- Reject untrusted-origin requests and invalid configuration/backup shapes before writes.
+- Preserve TypeScript plugin extensions through read and backup/restore flows.
+- Keep backend and frontend startup within their supported port ranges.
+- Preserve commands when rename writes fail and retain unsaved editor changes.
+- Ignore stale file/profile responses and serialize profile mutations.
+- Restore the missing agent-deletion confirmation dialog.
+- Update vulnerable dependency overrides and add reproducible dependency locks.
+
+### Added
+- Source-preserving OpenCode v2 agents, commands, MCP and provider/plugin configuration support.
+- Separate global v2 CLI settings with stale-write protection.
+- Read-only v2 credential metadata and explicit native-plugin runtime-control limits.
+- V1/V2 usage database support without silently hiding database errors.
+- Native v2 permission editing, responsive navigation and cross-page stale-write protection.
+
+### Security
+- Never return stored legacy auth secrets from the status endpoint.
+- Native credential metadata queries never select secret values.
+
+### Tests
+- Add synthetic HTTP, profile rollback, frontend interaction and failure-path regressions.
+- Add a dependency-isolated regression workflow without protocol-handler registration.
+
 ## [2.4.5] - 2026-08-08
 
 ### Fixed

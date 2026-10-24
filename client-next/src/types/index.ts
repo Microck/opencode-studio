@@ -3,7 +3,8 @@ export interface MCPConfig {
   args?: string[];
   url?: string;
   env?: Record<string, string>;
-  enabled: boolean;
+  enabled?: boolean;
+  disabled?: boolean;
   type: 'local' | 'sse' | 'remote';
   timeout?: number;
   environment?: Record<string, string>;
@@ -44,6 +45,7 @@ export interface PermissionConfig {
 export type PermissionToolKey = keyof PermissionConfig;
 
 export interface AgentConfig {
+  nativePermissions?: Array<{ action: string; resource: string; effect: PermissionValue; [key: string]: unknown }>;
   model?: string;
   temperature?: number;
   top_p?: number;
@@ -62,6 +64,7 @@ export interface AgentConfig {
 export type AgentSource = 'json' | 'markdown' | 'builtin';
 
 export interface AgentInfo extends AgentConfig {
+  configurationFormat?: 'v1' | 'v2';
   name: string;
   source: AgentSource;
   disabled?: boolean;
@@ -252,7 +255,7 @@ export interface ConfigProviderContentPayload {
   path?: string | null;
 }
 
-export interface ConfigProviderValidationPayload extends ConfigProviderContentPayload {}
+export type ConfigProviderValidationPayload = ConfigProviderContentPayload;
 
 export interface ConfigProviderValidationResult {
   valid: boolean;
@@ -367,7 +370,7 @@ export interface LSPConfig {
     args?: string[];
     extensions?: string[];
     env?: Record<string, string>;
-    initialization?: Record<string, any>;
+    initialization?: Record<string, unknown>;
   };
 }
 
@@ -413,7 +416,7 @@ export interface OpencodeConfig {
   share?: 'manual' | 'auto' | 'disabled';
   default_agent?: string;
   snapshot?: boolean;
-  mcp?: Record<string, MCPConfig>;
+  mcp?: Record<string, MCPConfig | Record<string, MCPConfig> | Record<string, number>>;
   permission?: PermissionConfig;
   agent?: AgentsConfig;
   tools?: Record<string, boolean>;
@@ -424,6 +427,10 @@ export interface OpencodeConfig {
   lsp?: LSPConfig;
   formatter?: FormatterConfig;
   command?: Record<string, { template: string }>;
+  commands?: Record<string, { template: string; [key: string]: unknown }>;
+  agents?: Record<string, unknown>;
+  providers?: Record<string, unknown>;
+  permissions?: Array<{ action: string; resource: string; effect: PermissionValue; [key: string]: unknown }>;
   plugin?: string[];
   experimental?: ExperimentalConfig;
   provider?: Record<string, ProviderConfig>;
@@ -448,6 +455,7 @@ export interface PluginFile {
 }
 
 export interface PluginInfo {
+  configurationFormat?: 'v1' | 'v2';
   name: string;
   type: 'file' | 'npm';
   enabled: boolean;
@@ -472,6 +480,8 @@ export interface AuthCredential {
 }
 
 export interface AuthInfo {
+  readOnly?: boolean;
+  nativeCredentials?: Array<{ id: string; integrationID: string | null; label: string; active: boolean }>;
   credentials: AuthCredential[];
   authFile: string | null;
   message?: string;

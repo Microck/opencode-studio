@@ -39,6 +39,7 @@ export function PluginCard({ plugin, onToggle, onDelete, onClick, locked }: Plug
                 <Lock className="h-4 w-4 text-muted-foreground" />
             ) : (
                 <Switch
+                  disabled={plugin.configurationFormat === "v2"}
                   checked={plugin.enabled}
                   onCheckedChange={() => onToggle()}
                   onClick={(e) => e.stopPropagation()}

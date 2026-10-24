@@ -17,8 +17,8 @@ interface AgentCardProps {
 
 export function AgentCard({ agent, onEdit, onDelete, onToggle }: AgentCardProps) {
   const t = useTranslations("agents");
-  const sourceLabelKey = agent.source === "json" ? "sourceJson" : agent.source === "markdown" ? "sourceMarkdown" : "sourceBuiltin";
-  const modeLabel = agent.mode || t("defaultMode");
+  const sourceLabelKey = ["json", "json-config"].includes(agent.source) ? "sourceJson" : agent.source === "markdown" ? "sourceMarkdown" : "sourceBuiltin";
+  const modeLabel = agent.mode || (agent.configurationFormat === "v2" ? "primary" : t("defaultMode"));
 
   return (
     <Card className={cn("border-border/70", agent.disabled && "opacity-60")}> 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +11,20 @@ import { cn } from "@/lib/utils";
 export function DebugMenu() {
   const t = useTranslations("common");
   const [isOpen, setIsOpen] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDebugInfo = useCallback(() => getDebugInfo().then(info => {
+    setDebugInfo({ ...info, userAgent: navigator.userAgent, timestamp: new Date().toISOString(), windowSize: `${window.innerWidth}x${window.innerHeight}` });
+  }).catch(error => {
+    console.error("Failed to fetch debug info", error);
+    setDebugInfo({ error: t("debug.failedToFetch") });
+  }).finally(() => setLoading(false)), [t]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F2") {
+        setLoading(true);
         setIsOpen((prev) => !prev);
       }
     };
@@ -29,25 +37,7 @@ export function DebugMenu() {
     if (isOpen) {
       fetchDebugInfo();
     }
-  }, [isOpen]);
-
-  const fetchDebugInfo = async () => {
-    setLoading(true);
-    try {
-      const info = await getDebugInfo();
-      setDebugInfo({
-        ...info,
-        userAgent: navigator.userAgent,
-        timestamp: new Date().toISOString(),
-        windowSize: `${window.innerWidth}x${window.innerHeight}`,
-      });
-    } catch (err) {
-      console.error("Failed to fetch debug info", err);
-      setDebugInfo({ error: t("debug.failedToFetch") });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen, fetchDebugInfo]);
 
   const copyToClipboard = () => {
     if (debugInfo) {
@@ -75,18 +65,18 @@ export function DebugMenu() {
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t("debug.systemInformation")}</h3>
               <div className="text-[10px] font-mono opacity-50">{new Date().toLocaleTimeString()}</div>
             </div>
-            
+
             <div className="bg-black/90 p-4 rounded-lg border border-border/50 shadow-inner">
               <pre className="text-green-400 text-xs font-mono overflow-auto leading-relaxed">
                 {loading ? t("debug.fetchingData") : JSON.stringify(debugInfo, null, 2)}
               </pre>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3">
-              <Button 
-                onClick={fetchDebugInfo} 
-                variant="outline" 
-                size="sm" 
+              <Button
+                onClick={() => { setLoading(true); void fetchDebugInfo(); }}
+                variant="outline"
+                size="sm"
                 className="gap-2"
                 disabled={loading}
               >

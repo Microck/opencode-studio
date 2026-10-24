@@ -66,13 +66,13 @@ export function Sidebar() {
 
   return (
     <TooltipProvider>
-      <div className="w-64 bg-background flex flex-col h-screen" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
-        <div className="p-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
+      <div className="w-14 md:w-64 shrink-0 bg-background flex flex-col h-dvh" style={{ borderRight: '1px solid var(--oc-border-weak)' }}>
+        <div className="p-3 md:p-6 flex items-center justify-center md:justify-start gap-3" style={{ borderBottom: '1px solid var(--oc-border-weak)' }}>
           <Logo className="w-6 h-6" />
-          <img src="/OpencodeStudioText.png" alt="OpenCode Studio" className="h-6 w-auto" />
+          <img src="/OpencodeStudioText.png" alt="OpenCode Studio" className="hidden md:block h-6 w-auto" />
         </div>
 
-        <nav className="flex-1 py-4 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto py-4 space-y-0.5">
           {navItems.map((item) => {
             const isActive = (() => {
               if (pathname === item.href) return true;
@@ -89,7 +89,7 @@ export function Sidebar() {
                   <Button
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-3 rounded-none px-6 h-9",
+                      "w-full justify-center md:justify-start gap-3 rounded-none px-2 md:px-6 h-9",
                       isActive 
                         ? "font-medium" 
                         : "font-normal"
@@ -106,7 +106,7 @@ export function Sidebar() {
                   >
                     <Link href={item.href}>
                       <item.icon className="h-4 w-4" style={{ color: isActive ? 'var(--oc-text-strong)' : 'var(--oc-icon)' }} />
-                      <span className="text-sm">{t(item.label)}</span>
+                      <span className="sr-only md:not-sr-only md:text-sm">{t(item.label)}</span>
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -127,7 +127,7 @@ export function Sidebar() {
                   <Button
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-3 rounded-none px-6 h-9",
+                      "w-full justify-center md:justify-start gap-3 rounded-none px-2 md:px-6 h-9",
                       isActive 
                         ? "font-medium" 
                         : "font-normal"
@@ -144,7 +144,7 @@ export function Sidebar() {
                   >
                     <Link href={item.href}>
                       <item.icon className="h-4 w-4" style={{ color: isActive ? 'var(--oc-text-strong)' : 'var(--oc-icon)' }} />
-                      <span className="text-sm">{t(item.label)}</span>
+                      <span className="sr-only md:not-sr-only md:text-sm">{t(item.label)}</span>
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -156,18 +156,18 @@ export function Sidebar() {
           })}
         </div>
 
-        <div className="p-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--oc-border-weak)' }}>
+        <div className="p-2 md:p-4 flex flex-col md:flex-row items-center gap-2 justify-between" style={{ borderTop: '1px solid var(--oc-border-weak)' }}>
           <div className="flex items-center gap-2">
             <Circle className={cn("h-2 w-2 fill-current", connected ? "text-green-500" : "text-red-500")} />
-            <span className="text-xs text-muted-foreground">
+            <span className="sr-only md:not-sr-only md:text-xs md:text-muted-foreground">
               {connected ? t('status.connected') : t('status.disconnected')}
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-col md:flex-row items-center gap-1">
             {!connected && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleLaunchBackend}>
+                  <Button variant="ghost" size="icon" onClick={handleLaunchBackend} aria-label={t('tooltips.launchBackend')}>
                     <Play className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -179,7 +179,7 @@ export function Sidebar() {
             {connected && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={() => setShowDisconnectDialog(true)}>
+                  <Button variant="ghost" size="icon" onClick={() => setShowDisconnectDialog(true)} aria-label={t('tooltips.disconnectBackend')}>
                     <Power className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -191,7 +191,7 @@ export function Sidebar() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" asChild>
-                  <a href="https://github.com/Microck/opencode-studio" target="_blank" rel="noopener noreferrer">
+                  <a aria-label={t('tooltips.github')} href="https://github.com/Microck/opencode-studio" target="_blank" rel="noopener noreferrer">
                     <Github className="h-4 w-4" />
                   </a>
                 </Button>

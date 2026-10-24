@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { mcpServers, mcpEnabled } from "@/lib/mcp-config";
+
+import { errorMessage } from "@/lib/error-message.mjs";
+
+import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useApp } from "@/lib/context";
 import { Button } from "@/components/ui/button";
@@ -57,31 +61,22 @@ export function PresetsManager() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string } | null>(null);
 
-  useEffect(() => {
-    if (createOpen) {
-      // Initialize with currently enabled items
-      setSelectedSkills(skills.filter(s => s.enabled).map(s => s.name));
-      setSelectedPlugins(plugins.filter(p => p.enabled).map(p => p.name));
-      setSelectedMcps(config?.mcp ? Object.entries(config.mcp).filter(([_, c]) => c.enabled).map(([k]) => k) : []);
-      
-      setIncludeSkills(true);
-      setIncludePlugins(true);
-      setIncludeMcps(true);
-    }
-  }, [createOpen, skills, plugins, config]);
-
-  const loadPresets = async () => {
-    try {
-      const data = await getPresets();
-      setPresets(data);
-    } catch {
-      toast.error(t("presets.failedToLoad"));
-    }
+  const openCreateDialog = () => {
+    setSelectedSkills(skills.filter(s => s.enabled).map(s => s.name));
+    setSelectedPlugins(plugins.filter(p => p.enabled).map(p => p.name));
+    setSelectedMcps(config?.mcp ? Object.entries(mcpServers(config)).filter(([, c]) => mcpEnabled(c)).map(([key]) => key) : []);
+    setIncludeSkills(true);
+    setIncludePlugins(true);
+    setIncludeMcps(true);
+    setCreateOpen(true);
   };
 
+  const loadPresets = useCallback(() => getPresets().then(setPresets)
+    .catch(() => { toast.error(t("presets.failedToLoad")); }), [t]);
+
   useEffect(() => {
-    if (open) loadPresets();
-  }, [open]);
+    if (open) void loadPresets();
+  }, [open, loadPresets]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return toast.error(t("presets.nameRequired"));
@@ -98,8 +93,8 @@ export function PresetsManager() {
       setNewName("");
       setNewDesc("");
       loadPresets();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || "Unknown error";
+    } catch (err: unknown) {
+      const msg = errorMessage(err, "Unknown error");
       toast.error(t("presets.failedToCreate", { msg }));
     }
   };
@@ -222,7 +217,7 @@ export function PresetsManager() {
           </div>
 
           <DialogFooter className="border-t pt-4">
-             <Button onClick={() => setCreateOpen(true)}>
+             <Button onClick={openCreateDialog}>
                <Plus className="h-4 w-4 mr-2" />
                {t("presets.newPreset")}
              </Button>
@@ -327,26 +322,26 @@ export function PresetsManager() {
                   <div className="flex items-center justify-between p-3 border-b bg-muted/30">
                     <Label htmlFor="include-mcps" className="cursor-pointer font-medium text-sm">{t("presets.mcps")}</Label>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{selectedMcps.length}/{config?.mcp ? Object.keys(config.mcp).length : 0}</span>
+                      <span className="text-xs text-muted-foreground">{selectedMcps.length}/{config?.mcp ? Object.keys(mcpServers(config)).length : 0}</span>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 text-xs px-2"
                         onClick={() => {
-                          const allLocks = config?.mcp ? Object.keys(config.mcp) : [];
+                          const allLocks = config?.mcp ? Object.keys(mcpServers(config)) : [];
                           if (selectedMcps.length === allLocks.length) setSelectedMcps([]);
                           else setSelectedMcps(allLocks);
                         }}
                       >
-                        {selectedMcps.length === (config?.mcp ? Object.keys(config.mcp).length : 0) ? t("presets.none") : t("presets.all")}
+                        {selectedMcps.length === (config?.mcp ? Object.keys(mcpServers(config)).length : 0) ? t("presets.none") : t("presets.all")}
                       </Button>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto max-h-[65vh] p-2 space-y-1">
-                    {!config?.mcp || Object.keys(config.mcp).length === 0 ? (
+                    {!config?.mcp || Object.keys(mcpServers(config)).length === 0 ? (
                       <p className="text-xs text-muted-foreground italic p-2">{t("presets.noMcpServersFound")}</p>
                     ) : (
-                      Object.keys(config.mcp).map(key => (
+                      Object.keys(mcpServers(config)).map(key => (
                         <div key={key} className="flex items-start justify-between gap-3 p-2 rounded hover:bg-muted/50 text-sm">
                           <label htmlFor={`mcp-${key}`} className="flex-1 min-w-0 cursor-pointer whitespace-normal break-words leading-tight" title={key}>{key}</label>
                           <Switch 

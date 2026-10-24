@@ -28,6 +28,7 @@ import { CustomProviderModelEditor } from "@/components/custom-provider-model-ed
 import { Sliders as Settings, Android, Download, Upload, Save, ChevronDown, Loader, Code, Github } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/error-message.mjs";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { SincronizadoCard } from "@/components/sincronizado-card";
@@ -67,7 +68,7 @@ export default function SettingsPage() {
   });
   
 const [systemPrompt, setSystemPrompt] = useState("");
-  const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [loadingPrompt, setLoadingPrompt] = useState(true);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const { theme } = useTheme();
 
@@ -85,7 +86,9 @@ const [systemPrompt, setSystemPrompt] = useState("");
 
   useEffect(() => {
     getPaths().then(setPathsInfo).catch(console.error);
-    loadSystemPrompt();
+    api.get('/prompts/global').then(res => setSystemPrompt(res.data.content))
+      .catch(error => console.error("Error loading prompt:", error))
+      .finally(() => setLoadingPrompt(false));
 
     getGitHubBackupStatus().then(status => {
       setGhBackupStatus(status);
@@ -97,18 +100,6 @@ const [systemPrompt, setSystemPrompt] = useState("");
       if (status.user && !status.config?.owner) setGhOwner(status.user);
     }).catch(console.error);
   }, []);
-
-  const loadSystemPrompt = async () => {
-    try {
-      setLoadingPrompt(true);
-      const res = await api.get('/prompts/global');
-      setSystemPrompt(res.data.content);
-    } catch (error) {
-      console.error("Error loading prompt:", error);
-    } finally {
-      setLoadingPrompt(false);
-    }
-  };
 
   const handleSaveSystemPrompt = async () => {
     try {
@@ -127,8 +118,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
     try {
       await saveConfig({ ...config, ...updates });
       toast.success(t('toast.settingsSaved'));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toast.failedToSaveSettings', { msg }));
     }
   };
@@ -141,8 +132,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       await refreshData();
       toast.success(manualPath ? t('toast.configPathUpdated') : t('toast.resetToAutoDetect'));
       setManualPath("");
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toast.failedToSetConfigPath', { msg }));
     }
   };
@@ -154,8 +145,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       setPathsInfo(newPaths);
       await refreshData();
       toast.success(t('toast.resetToAutoDetect'));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toast.failedToResetPath', { msg }));
     }
   };
@@ -173,8 +164,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success(t('toast.backupDownloaded'));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toast.failedToCreateBackup', { msg }));
     }
   };
@@ -195,8 +186,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       await restoreBackup(backup);
       await refreshData();
       toast.success(t('toast.backupRestored'));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toast.failedToRestoreBackup', { msg }));
     }
     
@@ -220,8 +211,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       } else {
         toast.error(result.error || t('toast.backupFailed'));
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t('unknownError')));
     } finally {
       setBackingUp(false);
     }
@@ -241,8 +232,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       } else {
         toast.error(t('toast.restoreFailed'));
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t('unknownError')));
     } finally {
       setRestoring(false);
     }
@@ -254,8 +245,8 @@ const [systemPrompt, setSystemPrompt] = useState("");
       const status = await getGitHubBackupStatus();
       setGhBackupStatus(status);
       toast.success(enabled ? t('toast.autoSyncEnabled') : t('toast.autoSyncDisabled'));
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, t('unknownError')));
     }
   };
 

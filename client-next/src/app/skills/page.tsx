@@ -21,6 +21,7 @@ import {
 import { useRouter } from "next/navigation";
 import { deleteSkill } from "@/lib/api";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/error-message.mjs";
 import { Search } from "@nsmr/pixelart-react";
 import { PageHelp } from "@/components/page-help";
 import { PresetsManager } from "@/components/presets-manager";
@@ -51,8 +52,8 @@ export default function SkillsPage() {
       await toggleSkill(name);
       const skill = skills.find(s => s.name === name);
       toast.success(skill?.enabled ? t('toggleDisabled', { name }) : t('toggleEnabled', { name }));
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('toggleFailed', { error: msg }));
     }
   };
@@ -69,8 +70,8 @@ export default function SkillsPage() {
       toast.success(t('deleted', { name: deleteTarget.name }));
       setDeleteDialogOpen(false);
       refreshData();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('unknownError');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('unknownError'));
       toast.error(t('deleteFailed', { error: msg }));
     }
   };

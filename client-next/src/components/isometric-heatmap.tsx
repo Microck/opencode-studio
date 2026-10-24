@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-// @ts-ignore - obelisk.js doesn't have types
 import obelisk from 'obelisk.js';
 
 interface IsometricHeatmapProps {

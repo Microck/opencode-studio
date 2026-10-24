@@ -10,6 +10,11 @@ const {
 } = require('./resource-names');
 
 describe('resource name policy', () => {
+    it('rejects malformed backup objects and null entries with client errors', () => {
+        for (const payload of [null, [], 'bad', { opencodeConfig: [] }, { studioConfig: 'bad' }, { skills: [null] }, { plugins: [null] }]) {
+            assert.throws(() => assertSafeBackupResourceNames(payload), { statusCode: 400 });
+        }
+    });
     it('accepts normal skill, plugin, and agent names', () => {
         assert.equal(isSafeSkillName('code-review'), true);
         assert.equal(isSafePluginName('watcher.plugin'), true);

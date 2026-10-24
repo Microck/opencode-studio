@@ -1,5 +1,7 @@
 "use client";
 
+import { errorMessage } from "@/lib/error-message.mjs";
+
 import { useState } from "react";
 import {
   Dialog,
@@ -216,8 +218,8 @@ export function AddSkillDialog({ onSuccess }: AddSkillDialogProps) {
       resetForm();
       setOpen(false);
       onSuccess();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || t('addSkill.errors.createFailed');
+    } catch (err: unknown) {
+      const msg = errorMessage(err, t('addSkill.errors.createFailed'));
       setError(msg);
     } finally {
       setLoading(false);

@@ -85,7 +85,7 @@ interface ProviderDetailPanelProps {
   onRefresh: () => void;
 }
 
-export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderDetailPanelProps) {
+function ProviderDetailContent({ providerId, onBack, onRefresh }: ProviderDetailPanelProps) {
   const [detail, setDetail] = useState<ProviderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -130,27 +130,18 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
     setSelectedProfilePath(activeProfile?.path ?? result.profiles?.[0]?.path ?? "");
   }, [isOpenAgent, providerId]);
 
-  const loadDetail = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setStaleWriteWarning(false);
-      const result = await getConfigProvider(providerId);
-      setDetail(result);
-      setRawText(result.raw ?? "");
-      setDiagnostics(result.diagnostics ?? []);
-      setHasChanges(false);
-      await loadProfiles();
-    } catch {
-      setError("Failed to load provider detail");
-    } finally {
-      setLoading(false);
-    }
-  }, [loadProfiles, providerId]);
+  const loadDetail = useCallback(() => getConfigProvider(providerId).then(async result => {
+    setError("");
+    setStaleWriteWarning(false);
+    setDetail(result);
+    setRawText(result.raw ?? "");
+    setDiagnostics(result.diagnostics ?? []);
+    setHasChanges(false);
+    await loadProfiles();
+  }).catch(() => setError("Failed to load provider detail"))
+    .finally(() => setLoading(false)), [loadProfiles, providerId]);
 
-  useEffect(() => {
-    loadDetail();
-  }, [loadDetail]);
+  useEffect(() => { void loadDetail(); }, [loadDetail]);
 
   const handleRawChange = (value: string) => {
     setRawText(value);
@@ -757,4 +748,8 @@ export function ProviderDetailPanel({ providerId, onBack, onRefresh }: ProviderD
       </Dialog>
     </>
   );
+}
+
+export function ProviderDetailPanel(props: ProviderDetailPanelProps) {
+  return <ProviderDetailContent key={props.providerId} {...props} />;
 }
