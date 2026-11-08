@@ -3220,6 +3220,47 @@ app.post('/api/github/autosync', async (req, res) => {
     res.json({ success: true, enabled });
 });
 
+app.post('/api/fetch-url', async (req, res) => {
+    const { url } = req.body || {};
+    if (!url) return res.status(400).json({ error: 'URL required' });
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+        const content = await response.text();
+        const filename = path.basename(new URL(url).pathname) || 'file.txt';
+        res.json({ content, filename, url });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/bulk-fetch', async (req, res) => {
+    const { urls } = req.body || {};
+    if (!Array.isArray(urls)) return res.status(400).json({ error: 'URLs array required' });
+
+    const results = [];
+    for (const url of urls) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            const content = await response.text();
+            const filename = path.basename(new URL(url).pathname) || 'file.txt';
+            results.push({
+                url,
+                success: true,
+                content,
+                filename,
+                name: filename.replace(/\.(md|js|ts)$/i, ''),
+            });
+        } catch (err) {
+            results.push({ url, success: false, error: err.message });
+        }
+    }
+
+    res.json({ results });
+});
+
 const getActiveSkillDir = () => {
     const cp = getConfigPath();
     return cp ? path.join(path.dirname(cp), 'skills') : null;
