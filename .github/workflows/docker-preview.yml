@@ -68,9 +68,14 @@ jobs:
         run: |
           set -eu
           docker build -f deploy/opencode-cli/Dockerfile -t studio-cli-test .
+          docker volume create studio-ci-home
+          docker run --rm -v studio-ci-home:/home/node --entrypoint sh studio-pr-test -c \
+            'mkdir -p /home/node/.config/opencode && printf "{\"username\":\"studio-ci-marker\"}" > /home/node/.config/opencode/opencode.json'
+          docker run -d --name studio-shared -p 127.0.0.1:3500:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3500 -v studio-ci-home:/home/node studio-pr-test
           docker run -d --name studio-cli -p 127.0.0.1:3400:4096 \
-            -e OPENCODE_PASSWORD=ci-only-password studio-cli-test
-          trap 'docker rm -f studio-cli' EXIT
+            -e OPENCODE_PASSWORD=ci-only-password -v studio-ci-home:/home/node studio-cli-test
+          trap 'docker rm -f studio-cli studio-shared; docker volume rm studio-ci-home' EXIT
           for n in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3400/api/info || true)
             [ "$code" = 401 ] && break
@@ -78,6 +83,9 @@ jobs:
           done
           test "$code" = 401
           curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/info >/dev/null
+          curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/config | grep -F 'studio-ci-marker'
+          curl -fsS http://127.0.0.1:3500/api/config | grep -F 'studio-ci-marker'
+          docker exec studio-cli /opt/opencode/node_modules/.bin/opencode api --server http://127.0.0.1:4096 GET /api/info >/dev/null
           if docker logs studio-cli 2>&1 | grep -F 'ci-only-password'; then
             echo 'OpenCode printed its configured password; do not use this deployment.' >&2
             exit 1
