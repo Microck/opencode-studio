@@ -31,6 +31,7 @@ jobs:
         working-directory: client-next
       - run: npm run build
         working-directory: client-next
+      - run: bash scripts/test-release-checksums.sh
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: regression
@@ -60,7 +61,7 @@ jobs:
           fi
           mkdir -p release-artifacts
           npm pack ./server --ignore-scripts --pack-destination release-artifacts
-          sha256sum release-artifacts/*.tgz > release-artifacts/SHA256SUMS
+          bash scripts/write-release-checksums.sh release-artifacts
           printf '%s\n' 'See CHANGELOG.md and docs/OPENCODE-V2-COMPATIBILITY.md for changes and limitations.' 'The attached archive is the tested server package. npm publication is a separate step; verify the registry before claiming it is published.' > release-artifacts/notes.md
           gh release create "$TAG" release-artifacts/*.tgz release-artifacts/SHA256SUMS --target "$GITHUB_SHA" --title "$TAG" --notes-file release-artifacts/notes.md
       - name: Publish npm when an existing token is configured
