@@ -6,8 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Draft production client build, loopback-bound Docker setup and deployment security guidance.
-- Optional authenticated HTTPS Caddy gateway example (pending hosted verification).
-- Optional separately authenticated OpenCode server and loopback/SSH connection example (pending hosted verification).
+- Optional authenticated HTTPS Caddy gateway and separate OpenCode server with loopback/SSH connection guidance.
 
 ### Changed
 - Separate `npm run dev` from the built production `npm start` workflow.

@@ -50,7 +50,9 @@ does not provide rate limiting or MFA. An existing authenticated HTTPS reverse
 proxy can be used instead, provided it protects every route including `/api/`,
 preserves the configured Host, and does not trust arbitrary forwarded headers.
 
-The proxy example is pending CI verification and independent security review.
+CI has exercised gateway authentication and untrusted-host rejection using a
+local test certificate. An independent security review is still required before
+using this draft remotely; public certificate issuance was not tested.
 
 ## Separate OpenCode execution server (draft)
 
@@ -72,5 +74,7 @@ then connect with `opencode --server http://127.0.0.1:4096`; provide the same
 password via `OPENCODE_PASSWORD` in the local CLI environment. See the
 [official OpenCode server documentation](https://opencode.ai/docs/cli/web).
 This draft does not expose the execution server through the Caddy gateway.
-The container build, authentication and shared configuration behavior are
-pending hosted verification; do not depend on this preview yet.
+CI has built the container, checked API authentication, connected the OpenCode
+CLI to the server, and observed a synthetic shared configuration from both
+services. It has not exercised an actual SSH tunnel, real credentials, model
+calls or a public deployment. Do not depend on this preview yet.
