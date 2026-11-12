@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 // The container is populated with a synthetic config by CI; no user data or
 // model calls are involved. Keep Chromium's sandbox enabled.
-const browser = await chromium.launch({ headless: true, chromiumSandbox: true });
+// Use the runner's installed Chrome, whose packaged sandbox is supported by
+// Ubuntu's AppArmor profile. Do not fall back to disabling the sandbox.
+const browser = await chromium.launch({ channel: 'chrome', headless: true, chromiumSandbox: true });
 try {
   const page = await browser.newPage();
   const errors = [];
