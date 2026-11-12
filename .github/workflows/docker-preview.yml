@@ -6,6 +6,8 @@ on:
       - '.dockerignore'
       - 'docker-compose.yml'
       - 'scripts/**'
+      - 'deploy/**'
+      - 'docker-compose.proxy.yml'
       - 'server/**'
       - 'client-next/**'
       - '.github/workflows/docker-preview.yml'
@@ -36,3 +38,25 @@ jobs:
           test "$code" = 403
           code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:3300/api/health)
           test "$code" = 403
+      - name: Test authenticated gateway
+        run: |
+          set -eu
+          docker network create studio-ci
+          docker run -d --name studio -p 127.0.0.1:3300:3000 --network studio-ci \
+            -e STUDIO_PUBLIC_ORIGIN=https://localhost studio-pr-test
+          HASH=$(docker run --rm caddy:2 caddy hash-password --plaintext ci-test-password)
+          docker run -d --name studio-proxy --network studio-ci -p 127.0.0.1:3301:443 \
+            -e STUDIO_SITE=localhost -e STUDIO_USER=ci -e STUDIO_PASSWORD_HASH="$HASH" \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2
+          trap 'docker logs studio-proxy; docker logs studio; docker rm -f studio-proxy studio; docker network rm studio-ci' EXIT
+          for n in $(seq 1 60); do
+            code=$(curl -ks -o /dev/null -w '%{http_code}' -H 'Host: localhost' https://localhost:3301/ || true)
+            [ "$code" = 401 ] && break
+            sleep 2
+          done
+          test "$code" = 401
+          code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:wrong -H 'Host: localhost' https://localhost:3301/api/health)
+          test "$code" = 401
+          curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null
+          code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:ci-test-password -H 'Host: other.example.test' https://localhost:3301/api/health)
+          test "$code" != 200

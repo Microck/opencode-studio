@@ -1,0 +1,22 @@
+# Optional public HTTPS gateway. Never start without reviewing docs/PRODUCTION-DOCKER.md.
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      STUDIO_SITE: ${STUDIO_SITE:?Set STUDIO_SITE to your public DNS hostname}
+      STUDIO_USER: ${STUDIO_USER:?Set STUDIO_USER}
+      STUDIO_PASSWORD_HASH: ${STUDIO_PASSWORD_HASH:?Set a Caddy password hash}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - studio
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

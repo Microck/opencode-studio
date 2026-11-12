@@ -1,0 +1,8 @@
+https://{$STUDIO_SITE} {
+    basic_auth {
+        {env.STUDIO_USER} {env.STUDIO_PASSWORD_HASH}
+    }
+    reverse_proxy studio:3000 {
+        header_up -Authorization
+    }
+}

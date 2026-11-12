@@ -21,17 +21,38 @@ retains the prior development behavior. `PORT` sets the client port.
 ## Reverse proxy security
 
 The backend manages sensitive local configuration and has **no built-in remote
-authentication**. Do not expose the container port or backend directly to the
-internet. To use a remote HTTPS hostname, keep the loopback binding, configure
-an independently authenticated reverse proxy on the host, and set
-`STUDIO_PUBLIC_ORIGIN` to its exact HTTPS origin (no trailing slash or path).
-TLS alone is not authentication. The origin check is not an authentication
-mechanism; the proxy must protect every route, including `/api/` and upgrade
-requests, before allowing external traffic. Do not trust forwarded headers
-from the internet without a correctly configured proxy boundary.
+authentication**. Do not expose the Studio container or backend directly to the
+internet. TLS alone and the Studio origin check are not authentication.
 
-This draft does not yet provide an authenticated proxy configuration, automated
-remote CLI connectivity, or a verified Docker build. Studio's backend manages
-configuration on its own filesystem; it is not demonstrated to be an OpenCode
-execution server to which a separate local CLI can connect. Do not rely on this
-draft for remote access until those pieces are designed and tested.
+An optional Caddy gateway example protects all routes with HTTP Basic auth and
+uses HTTPS. It opens ports 80 and 443, so use it only on a host you intend to
+expose, with DNS pointing to that host and a valid publicly trusted certificate.
+Choose a strong unique password and generate its bcrypt hash interactively using
+`docker run --rm -it caddy:2 caddy hash-password`. Do not put the plaintext
+password in shell history or the repository. Place values in an access-restricted
+`.env` file outside version control. Single-quote the hash in `.env` so Compose
+does not interpolate its `$` characters. Container administrators can read the
+hash from the environment. Example keys (replace placeholders, do not use the
+example values):
+
+```dotenv
+STUDIO_SITE=studio.example.com
+STUDIO_PUBLIC_ORIGIN=https://studio.example.com
+STUDIO_USER=replace-me
+STUDIO_PASSWORD_HASH='replace-with-bcrypt-hash'
+```
+
+Then start `docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build`.
+The hostname and exact HTTPS origin must match. The Studio port remains bound to
+host loopback. Protect the host itself, limit access at the network layer, and
+add monitoring/rate limiting appropriate to the deployment; Basic auth alone
+does not provide rate limiting or MFA. An existing authenticated HTTPS reverse
+proxy can be used instead, provided it protects every route including `/api/`,
+preserves the configured Host, and does not trust arbitrary forwarded headers.
+
+The proxy example is pending CI verification and independent security review.
+Studio's backend manages configuration on its own filesystem; it is not the
+OpenCode execution server. The [OpenCode CLI documentation](https://opencode.ai/docs/cli/web)
+describes a separate password-protected `opencode serve` and `opencode --server`
+connection. This draft does not install, start, connect, or test that separate
+service. Do not assume the CLI can connect to Studio's API or shares its data.
