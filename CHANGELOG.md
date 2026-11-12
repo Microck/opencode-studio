@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Exclude nested environment files from Docker contexts and guard shared container data with a crash-released lock.
+- Add a production browser smoke test against synthetic local configuration.
 
 ## [2.5.1] - 2026-10-24
 

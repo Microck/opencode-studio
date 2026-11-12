@@ -86,6 +86,25 @@ jobs:
           code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:ci-test-password -H 'Host: other.example.test' https://localhost:3301/api/health)
           echo "Untrusted-host response: $code"
           test "$code" != 200
+      - name: Test production browser navigation
+        run: |
+          set -eu
+          cd client-next
+          npm ci --ignore-scripts
+          npx --no-install playwright install chromium
+          cd ..
+          docker volume create studio-browser-home
+          docker run --rm -v studio-browser-home:/home/node --entrypoint sh studio-pr-test -c \
+            'mkdir -p /home/node/.config/opencode && printf "{\"username\":\"browser-fixture\"}" > /home/node/.config/opencode/opencode.json'
+          docker run -d --name studio-browser -p 127.0.0.1:3300:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 -v studio-browser-home:/home/node studio-pr-test
+          trap 'docker logs studio-browser; docker rm -f studio-browser; docker volume rm studio-browser-home' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          cd client-next
+          node scripts/production-browser-smoke.mjs
       - name: Test separate OpenCode server authentication
         run: |
           set -eu
