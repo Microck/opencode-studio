@@ -8,6 +8,7 @@ on:
       - 'scripts/**'
       - 'deploy/**'
       - 'docker-compose.proxy.yml'
+      - 'docker-compose.cli.yml'
       - 'server/**'
       - 'client-next/**'
       - '.github/workflows/docker-preview.yml'
@@ -54,9 +55,30 @@ jobs:
             [ "$code" = 401 ] && break
             sleep 2
           done
+          echo "Unauthenticated gateway response: $code"
           test "$code" = 401
           code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:wrong -H 'Host: localhost' https://localhost:3301/api/health)
+          echo "Wrong-password response: $code"
           test "$code" = 401
           curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null
           code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:ci-test-password -H 'Host: other.example.test' https://localhost:3301/api/health)
+          echo "Untrusted-host response: $code"
           test "$code" != 200
+      - name: Test separate OpenCode server authentication
+        run: |
+          set -eu
+          docker build -f deploy/opencode-cli/Dockerfile -t studio-cli-test .
+          docker run -d --name studio-cli -p 127.0.0.1:3400:4096 \
+            -e OPENCODE_PASSWORD=ci-only-password studio-cli-test
+          trap 'docker rm -f studio-cli' EXIT
+          for n in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3400/api/info || true)
+            [ "$code" = 401 ] && break
+            sleep 2
+          done
+          test "$code" = 401
+          curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/info >/dev/null
+          if docker logs studio-cli 2>&1 | grep -F 'ci-only-password'; then
+            echo 'OpenCode printed its configured password; do not use this deployment.' >&2
+            exit 1
+          fi

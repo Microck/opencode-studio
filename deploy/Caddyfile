@@ -6,3 +6,8 @@ https://{$STUDIO_SITE} {
         header_up -Authorization
     }
 }
+
+# Caddy otherwise answers an unmatched Host with an empty 200. Fail closed.
+:443 {
+    respond 421
+}

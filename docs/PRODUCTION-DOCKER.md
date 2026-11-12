@@ -51,8 +51,26 @@ proxy can be used instead, provided it protects every route including `/api/`,
 preserves the configured Host, and does not trust arbitrary forwarded headers.
 
 The proxy example is pending CI verification and independent security review.
-Studio's backend manages configuration on its own filesystem; it is not the
-OpenCode execution server. The [OpenCode CLI documentation](https://opencode.ai/docs/cli/web)
-describes a separate password-protected `opencode serve` and `opencode --server`
-connection. This draft does not install, start, connect, or test that separate
-service. Do not assume the CLI can connect to Studio's API or shares its data.
+
+## Separate OpenCode execution server (draft)
+
+Studio's API manages configuration; it is not the OpenCode execution server.
+The optional `docker-compose.cli.yml` starts a separate, pinned OpenCode v2
+server, sharing Studio's home volume and a separate workspace volume. It binds
+port 4096 to host loopback, not the public network. It requires a strong,
+unique `OPENCODE_PASSWORD`; supply it privately, not in commands, logs or
+version control. Environment variables can be inspected by container
+administrators. The connected user can execute commands and modify files in the
+server's workspace, so grant access only to trusted users and do not mount
+Docker sockets or sensitive host directories. Configure model access and costs
+separately; this setup does not run a model.
+
+After reviewing this draft and setting the password, start the optional service
+with `docker compose -f docker-compose.yml -f docker-compose.cli.yml up -d --build`.
+For remote access, use an authenticated SSH tunnel to the host's loopback port,
+then connect with `opencode --server http://127.0.0.1:4096`; provide the same
+password via `OPENCODE_PASSWORD` in the local CLI environment. See the
+[official OpenCode server documentation](https://opencode.ai/docs/cli/web).
+This draft does not expose the execution server through the Caddy gateway.
+The container build, authentication and shared configuration behavior are
+pending hosted verification; do not depend on this preview yet.
