@@ -3,12 +3,14 @@ WORKDIR /app
 COPY client-next/package*.json ./client-next/
 RUN cd client-next && npm ci --ignore-scripts
 COPY client-next/ ./client-next/
+RUN test ! -e client-next/.env && test ! -e client-next/.env.production
 ENV STUDIO_PROXY_API=1 NEXT_PUBLIC_STUDIO_PROXY=1 NEXT_TELEMETRY_DISABLED=1
 RUN cd client-next && npm run build
 
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOME=/home/node STUDIO_STANDALONE=1
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends util-linux && rm -rf /var/lib/apt/lists/*
 COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY server/ ./server/

@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Separate `npm run dev` from the built production `npm start` workflow.
 
+### Fixed
+- Exclude nested environment files from Docker contexts and guard shared container data with a crash-released lock.
+
 ## [2.5.1] - 2026-10-24
 
 ### Fixed

@@ -13,6 +13,10 @@ Open `http://127.0.0.1:3000`. Set `STUDIO_PORT` to change the host port; when
 doing so, also set `STUDIO_PUBLIC_ORIGIN` to the exact browser origin, such as
 `http://127.0.0.1:3001`. Data is stored in the `studio-home` volume. Back up
 that volume before replacing it; it can contain credentials and configurations.
+The container supervisor uses a kernel advisory lock in that volume to prevent
+two Studio containers from writing the same home concurrently, and releases it
+on a crash. Use a local Docker volume with working `flock` semantics; distributed
+or network-backed volume locking has not been verified.
 
 For a local production build without Docker, install dependencies as described
 in the main README, then use `npm run build` and `npm start`. `npm run dev`

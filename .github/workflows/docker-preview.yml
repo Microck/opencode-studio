@@ -25,10 +25,15 @@ jobs:
       - name: Build and smoke-test the image
         run: |
           set -eu
+          printf '%s\n' 'synthetic-only' > .env
+          printf '%s\n' 'synthetic-only' > client-next/.env
+          printf '%s\n' 'synthetic-only' > client-next/.env.production
           docker build -t studio-pr-test .
+          rm .env client-next/.env client-next/.env.production
+          docker volume create studio-restart-home
           docker run -d --name studio-pr-test -p 127.0.0.1:3300:3000 \
-            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 studio-pr-test
-          trap 'docker logs studio-pr-test; docker rm -f studio-pr-test' EXIT
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 -v studio-restart-home:/home/node studio-pr-test
+          trap 'docker logs studio-pr-test; docker rm -f studio-pr-test studio-conflict 2>/dev/null || true; docker volume rm studio-restart-home' EXIT
           for n in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
             sleep 2
@@ -39,6 +44,19 @@ jobs:
           test "$code" = 403
           code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:3300/api/health)
           test "$code" = 403
+          # A second container sharing the same data must not acquire the lock.
+          docker run -d --name studio-conflict -v studio-restart-home:/home/node studio-pr-test
+          test "$(docker wait studio-conflict)" != 0
+          docker rm studio-conflict
+          curl -fsS http://127.0.0.1:3300/api/health >/dev/null
+          # An unclean container stop must release the kernel lock and recover.
+          docker kill --signal KILL studio-pr-test
+          docker start studio-pr-test
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3300/api/health >/dev/null
       - name: Test authenticated gateway
         run: |
           set -eu
@@ -60,6 +78,10 @@ jobs:
           code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:wrong -H 'Host: localhost' https://localhost:3301/api/health)
           echo "Wrong-password response: $code"
           test "$code" = 401
+          for n in $(seq 1 60); do
+            if curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null; then break; fi
+            sleep 2
+          done
           curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null
           code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:ci-test-password -H 'Host: other.example.test' https://localhost:3301/api/health)
           echo "Untrusted-host response: $code"
@@ -84,6 +106,10 @@ jobs:
           test "$code" = 401
           curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/info >/dev/null
           curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/config | grep -F 'studio-ci-marker'
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3500/api/health >/dev/null; then break; fi
+            sleep 2
+          done
           curl -fsS http://127.0.0.1:3500/api/config | grep -F 'studio-ci-marker'
           docker exec studio-cli /opt/opencode/node_modules/.bin/opencode api --server http://127.0.0.1:4096 GET /api/info >/dev/null
           if docker logs studio-cli 2>&1 | grep -F 'ci-only-password'; then

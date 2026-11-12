@@ -169,7 +169,11 @@ const STUDIO_CONFIG_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'st
 const PENDING_ACTION_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'pending-action.json');
 const ANTIGRAVITY_ACCOUNTS_PATH = path.join(HOME_DIR, '.config', 'opencode', 'antigravity-accounts.json');
 const LOG_DIR = path.join(HOME_DIR, '.local', 'share', 'opencode', 'log');
-const SERVER_LOCK_PATH = path.join(HOME_DIR, '.config', 'opencode-studio', 'server.lock.json');
+// Container supervisor holds a kernel advisory lock on the shared volume. Its
+// PID file must be ephemeral because PID namespaces are reused on restart.
+const SERVER_LOCK_PATH = process.env.STUDIO_CONTAINER_LOCK === '1'
+    ? path.join(os.tmpdir(), 'opencode-studio-server.lock.json')
+    : path.join(HOME_DIR, '.config', 'opencode-studio', 'server.lock.json');
 
 let lockFileDescriptor = null;
 
