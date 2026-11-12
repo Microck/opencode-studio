@@ -1,6 +1,6 @@
 {
   "name": "opencode-studio-server",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "private": false,
   "scripts": {
     "start": "node scripts/start-production.cjs",

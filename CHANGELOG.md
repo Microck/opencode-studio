@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [2.6.0] - 2026-11-12
 
 ### Added
 - Draft production client build, loopback-bound Docker setup and deployment security guidance.
