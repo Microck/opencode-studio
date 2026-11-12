@@ -36,6 +36,24 @@ describe('cors policy', () => {
         assert.equal(isAllowedOrigin('https://example.com'), false);
     });
 
+    it('accepts only the exact configured secure origin or explicit loopback origin', () => {
+        const previous = process.env.STUDIO_PUBLIC_ORIGIN;
+        try {
+            process.env.STUDIO_PUBLIC_ORIGIN = 'https://studio.example.com';
+            assert.equal(isAllowedOrigin('https://studio.example.com'), true);
+            assert.equal(isAllowedOrigin('https://studio.example.com.evil.test'), false);
+            assert.equal(isAllowedOrigin('https://studio.example.com/path'), false);
+            process.env.STUDIO_PUBLIC_ORIGIN = 'http://studio.example.com';
+            assert.equal(isAllowedOrigin('http://studio.example.com'), false);
+            process.env.STUDIO_PUBLIC_ORIGIN = 'http://127.0.0.1:3000';
+            assert.equal(isAllowedOrigin('http://127.0.0.1:3000'), true);
+            assert.equal(isAllowedOrigin('http://127.0.0.1:3001'), false);
+        } finally {
+            if (previous === undefined) delete process.env.STUDIO_PUBLIC_ORIGIN;
+            else process.env.STUDIO_PUBLIC_ORIGIN = previous;
+        }
+    });
+
     it('keeps cors origin checks wired through the shared origin policy', () => {
         corsOptions.origin('https://opencode-studio.micr.dev', (error, allowed) => {
             assert.equal(error, null);

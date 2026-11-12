@@ -3,10 +3,11 @@
   "version": "2.5.1",
   "private": false,
   "scripts": {
-    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "start": "node scripts/start-production.cjs",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm start",
     "client": "cd client-next && npm run dev",
-    "build": "cd client-next && npm run build",
+    "build": "node scripts/build-production.cjs",
     "postinstall": "cd server && npm install && cd ../client-next && npm install",
     "release-server": "cd server && npm publish"
   },

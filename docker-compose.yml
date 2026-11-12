@@ -1,0 +1,13 @@
+services:
+  studio:
+    build: .
+    ports:
+      - "127.0.0.1:${STUDIO_PORT:-3000}:3000"
+    environment:
+      STUDIO_PUBLIC_ORIGIN: ${STUDIO_PUBLIC_ORIGIN:-}
+    volumes:
+      - studio-home:/home/node
+    restart: unless-stopped
+
+volumes:
+  studio-home:

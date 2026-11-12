@@ -26,6 +26,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async rewrites() {
+    return process.env.STUDIO_PROXY_API === "1"
+      ? [{ source: "/api/:path*", destination: "http://127.0.0.1:1920/api/:path*" }]
+      : [];
+  },
   async headers() {
     return [
       {

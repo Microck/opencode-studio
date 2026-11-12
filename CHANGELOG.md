@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+- Draft production client build, loopback-bound Docker setup and deployment security guidance.
+
+### Changed
+- Separate `npm run dev` from the built production `npm start` workflow.
+
 ## [2.5.1] - 2026-10-24
 
 ### Fixed

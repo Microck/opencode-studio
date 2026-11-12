@@ -1,0 +1,38 @@
+name: Docker production preview
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - 'server/**'
+      - 'client-next/**'
+      - '.github/workflows/docker-preview.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and smoke-test the image
+        run: |
+          set -eu
+          docker build -t studio-pr-test .
+          docker run -d --name studio-pr-test -p 127.0.0.1:3300:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 studio-pr-test
+          trap 'docker logs studio-pr-test; docker rm -f studio-pr-test' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3300/ >/dev/null
+          curl -fsS -H 'Origin: http://127.0.0.1:3300' http://127.0.0.1:3300/api/health >/dev/null
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://untrusted.example' http://127.0.0.1:3300/api/health)
+          test "$code" = 403
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:3300/api/health)
+          test "$code" = 403

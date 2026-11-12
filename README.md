@@ -21,6 +21,10 @@
 
 ---
 
+For the experimental production build and loopback-only Docker setup, see
+[production deployment](docs/PRODUCTION-DOCKER.md). Remote use requires an
+authenticated reverse proxy; the Studio backend has no remote authentication.
+
 ### opencode v2 configuration support
 
 The compatibility work targets OpenCode 2.1.4 while retaining supported v1 config

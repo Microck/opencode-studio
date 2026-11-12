@@ -129,6 +129,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 let idleTimer = null;
 
 function resetIdleTimer() {
+    if (process.env.STUDIO_SERVICE === '1') return;
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
         console.log('Server idle for 30 minutes, shutting down...');
@@ -5745,7 +5746,7 @@ async function startServer() {
 
     ['google', 'anthropic', 'openai', 'xai', 'openrouter', 'together', 'mistral', 'deepseek', 'amazon-bedrock', 'azure', 'github-copilot'].forEach(p => importCurrentAuthToPool(p));
 
-    const server = await listenOnAvailablePort(app, DEFAULT_PORT, 10);
+    const server = await listenOnAvailablePort(app, DEFAULT_PORT, process.env.STUDIO_SERVICE === '1' ? 1 : 10);
     const port = server.address().port;
     {
         console.log(`Server running at http://127.0.0.1:${port}`);
