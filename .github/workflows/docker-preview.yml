@@ -1,0 +1,137 @@
+name: Docker production preview
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - 'deploy/**'
+      - 'docker-compose.proxy.yml'
+      - 'docker-compose.cli.yml'
+      - 'server/**'
+      - 'client-next/**'
+      - '.github/workflows/docker-preview.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and smoke-test the image
+        run: |
+          set -eu
+          printf '%s\n' 'synthetic-only' > .env
+          printf '%s\n' 'synthetic-only' > client-next/.env
+          printf '%s\n' 'synthetic-only' > client-next/.env.production
+          docker build -t studio-pr-test .
+          rm .env client-next/.env client-next/.env.production
+          docker volume create studio-restart-home
+          docker run -d --name studio-pr-test -p 127.0.0.1:3300:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 -v studio-restart-home:/home/node studio-pr-test
+          trap 'docker logs studio-pr-test; docker rm -f studio-pr-test studio-conflict 2>/dev/null || true; docker volume rm studio-restart-home' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3300/ >/dev/null
+          curl -fsS -H 'Origin: http://127.0.0.1:3300' http://127.0.0.1:3300/api/health >/dev/null
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://untrusted.example' http://127.0.0.1:3300/api/health)
+          test "$code" = 403
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:3300/api/health)
+          test "$code" = 403
+          # A second container sharing the same data must not acquire the lock.
+          docker run -d --name studio-conflict -v studio-restart-home:/home/node studio-pr-test
+          test "$(docker wait studio-conflict)" != 0
+          docker rm studio-conflict
+          curl -fsS http://127.0.0.1:3300/api/health >/dev/null
+          # An unclean container stop must release the kernel lock and recover.
+          docker kill --signal KILL studio-pr-test
+          docker start studio-pr-test
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3300/api/health >/dev/null
+      - name: Test authenticated gateway
+        run: |
+          set -eu
+          docker network create studio-ci
+          docker run -d --name studio -p 127.0.0.1:3300:3000 --network studio-ci \
+            -e STUDIO_PUBLIC_ORIGIN=https://localhost studio-pr-test
+          HASH=$(docker run --rm caddy:2 caddy hash-password --plaintext ci-test-password)
+          docker run -d --name studio-proxy --network studio-ci -p 127.0.0.1:3301:443 \
+            -e STUDIO_SITE=localhost -e STUDIO_USER=ci -e STUDIO_PASSWORD_HASH="$HASH" \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2
+          trap 'docker logs studio-proxy; docker logs studio; docker rm -f studio-proxy studio; docker network rm studio-ci' EXIT
+          for n in $(seq 1 60); do
+            code=$(curl -ks -o /dev/null -w '%{http_code}' -H 'Host: localhost' https://localhost:3301/ || true)
+            [ "$code" = 401 ] && break
+            sleep 2
+          done
+          echo "Unauthenticated gateway response: $code"
+          test "$code" = 401
+          code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:wrong -H 'Host: localhost' https://localhost:3301/api/health)
+          echo "Wrong-password response: $code"
+          test "$code" = 401
+          for n in $(seq 1 60); do
+            if curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -kfsS -u ci:ci-test-password -H 'Host: localhost' -H 'Origin: https://localhost' https://localhost:3301/api/health >/dev/null
+          code=$(curl -ks -o /dev/null -w '%{http_code}' -u ci:ci-test-password -H 'Host: other.example.test' https://localhost:3301/api/health)
+          echo "Untrusted-host response: $code"
+          test "$code" != 200
+      - name: Test production browser navigation
+        run: |
+          set -eu
+          cd client-next
+          npm ci --ignore-scripts
+          google-chrome --version
+          cd ..
+          docker volume create studio-browser-home
+          docker run --rm -v studio-browser-home:/home/node --entrypoint sh studio-pr-test -c \
+            'mkdir -p /home/node/.config/opencode && printf "{\"username\":\"browser-fixture\"}" > /home/node/.config/opencode/opencode.json'
+          docker run -d --name studio-browser -p 127.0.0.1:3300:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3300 -v studio-browser-home:/home/node studio-pr-test
+          trap 'docker logs studio-browser; docker rm -f studio-browser; docker volume rm studio-browser-home' EXIT
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3300/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          cd client-next
+          node scripts/production-browser-smoke.mjs
+      - name: Test separate OpenCode server authentication
+        run: |
+          set -eu
+          docker build -f deploy/opencode-cli/Dockerfile -t studio-cli-test .
+          docker volume create studio-ci-home
+          docker run --rm -v studio-ci-home:/home/node --entrypoint sh studio-pr-test -c \
+            'mkdir -p /home/node/.config/opencode && printf "{\"username\":\"studio-ci-marker\"}" > /home/node/.config/opencode/opencode.json'
+          docker run -d --name studio-shared -p 127.0.0.1:3500:3000 \
+            -e STUDIO_PUBLIC_ORIGIN=http://127.0.0.1:3500 -v studio-ci-home:/home/node studio-pr-test
+          docker run -d --name studio-cli -p 127.0.0.1:3400:4096 \
+            -e OPENCODE_PASSWORD=ci-only-password -v studio-ci-home:/home/node studio-cli-test
+          trap 'docker rm -f studio-cli studio-shared; docker volume rm studio-ci-home' EXIT
+          for n in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3400/api/info || true)
+            [ "$code" = 401 ] && break
+            sleep 2
+          done
+          test "$code" = 401
+          curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/info >/dev/null
+          curl -fsS -u opencode:ci-only-password http://127.0.0.1:3400/api/config | grep -F 'studio-ci-marker'
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3500/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3500/api/config | grep -F 'studio-ci-marker'
+          docker exec studio-cli /opt/opencode/node_modules/.bin/opencode api --server http://127.0.0.1:4096 GET /api/info >/dev/null
+          if docker logs studio-cli 2>&1 | grep -F 'ci-only-password'; then
+            echo 'OpenCode printed its configured password; do not use this deployment.' >&2
+            exit 1
+          fi

@@ -1,0 +1,17 @@
+# Optional separate execution server. Exposes only host loopback; see the guide.
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: deploy/opencode-cli/Dockerfile
+    environment:
+      OPENCODE_PASSWORD: ${OPENCODE_PASSWORD:?Set a strong unique OpenCode server password}
+    ports:
+      - "127.0.0.1:${OPENCODE_PORT:-4096}:4096"
+    volumes:
+      - studio-home:/home/node
+      - opencode-workspace:/workspace
+    restart: unless-stopped
+
+volumes:
+  opencode-workspace:

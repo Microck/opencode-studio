@@ -12,6 +12,11 @@ function isAllowedOrigin(origin) {
     // An Origin is exactly a serialized origin, never credentials, paths or lists.
     if (url.origin !== origin || url.username || url.password) return false;
     if (ALLOWED_ORIGINS.includes(origin)) return true;
+    // An explicitly configured deployment origin is exact, not a wildcard.
+    // The deployment must still authenticate at the reverse proxy.
+    if (process.env.STUDIO_PUBLIC_ORIGIN && origin === process.env.STUDIO_PUBLIC_ORIGIN &&
+        (url.protocol === 'https:' || (url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) return true;
     if (url.protocol !== 'http:' || !/^108\d$/.test(url.port)) return false;
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]') return true;
     const octets = url.hostname.split('.');

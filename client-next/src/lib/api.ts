@@ -117,7 +117,9 @@ async function discoverBackendPort(): Promise<string> {
     }
 }
 
-const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const envApiUrl = process.env.NEXT_PUBLIC_STUDIO_PROXY === '1' && typeof window !== 'undefined'
+    ? `${window.location.origin}/api`
+    : process.env.NEXT_PUBLIC_API_URL;
 
 const CLIENT_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.17.0';
 

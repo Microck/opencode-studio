@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2026-11-12
+
+### Added
+- Draft production client build, loopback-bound Docker setup and deployment security guidance.
+- Optional authenticated HTTPS Caddy gateway and separate OpenCode server with loopback/SSH connection guidance.
+
+### Changed
+- Separate `npm run dev` from the built production `npm start` workflow.
+
+### Fixed
+- Exclude nested environment files from Docker contexts and guard shared container data with a crash-released lock.
+- Add a production browser smoke test against synthetic local configuration.
+
 ## [2.5.1] - 2026-10-24
 
 ### Fixed
